@@ -538,7 +538,7 @@ async def fetch_coinmarketcap_data(message, user_coin_name, headers, parameters)
                 "circulating_supply": circulating_supply,
                 "total_supply": total_supply,
                 "price": price,
-                "market_cap": market_cap,
+                "capitalization": market_cap,
                 "coin_fdv": coin_fdv
             }
 

@@ -260,6 +260,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     price = None
     total_supply = None
     fundraise = None
+    calculation_record = None
 
     if user_coin_name.lower() == "/exit":
         await message.answer("Завершение расчетов. Чтобы начать снова пользоваться ботом, введите команду /start.")
@@ -311,14 +312,17 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                     'Accepts': 'application/json'
                 }
 
-                (
-                    coin_name,
-                    circulating_supply,
-                    total_supply,
-                    price,
-                    capitalization,
-                    coin_fdv
-                ) = await fetch_coinmarketcap_data(message, user_coin_name, headers, parameters)
+                coin_data = await fetch_coinmarketcap_data(message, user_coin_name, headers, parameters)
+                if not coin_data:
+                    await message.answer("Ошибка: данные о монете не получены. Проверьте введённый тикер.")
+                    return
+
+                coin_name = coin_data["coin_name"]
+                circulating_supply = coin_data["circulating_supply"]
+                total_supply = coin_data["total_supply"]
+                price = coin_data["price"]
+                capitalization = coin_data["capitalization"]
+                coin_fdv = coin_data["coin_fdv"]
                 project = session.query(Project).filter_by(coin_name=project.coin_name).first()
 
                 fdv = tokenomics.fdv if tokenomics.fdv else 0
@@ -405,8 +409,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             session.commit()
 
         else:
-            existing_calculation = session.query(Calculation).filter_by(user_id=message.from_user.id,
-                                                                        project_id=new_project.id).first()
+            existing_calculation = session.query(Calculation).filter_by(user_id=message.from_user.id, project_id=new_project.id).first()
             existing_calculation.date = datetime.now()
 
         project_info = await get_user_project_info(session, user_coin_name)
@@ -569,6 +572,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             await message.answer(response_message)
             data = {
                 "user_coin_name": user_coin_name,
+                "id": calculation_record.id,
                 "category_answer": category_answer,
                 "chosen_project": chosen_project_name,
                 "new_project": new_project,
@@ -583,6 +587,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         else:
             data = {
                 "user_coin_name": user_coin_name,
+                "id": calculation_record.id,
                 "category_answer": category_answer,
                 "new_project": new_project,
                 "chosen_project": chosen_project_name,
@@ -613,6 +618,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     total_supply = None
     fundraise = None
     results = None
+    calculation_record = None
 
     user_coin_name = message.text.upper().replace(" ", "")
     if user_coin_name.lower() == "/exit":
@@ -713,6 +719,21 @@ async def receive_data(message: types.Message, state: FSMContext):
 
         new_project = process_metrics(session, user_coin_name, chosen_project, results, price, total_supply, fundraise, investors)
 
+        if new_project:
+            calculation_record = Calculation(
+                user_id=message.from_user.id,
+                project_id=new_project.id,
+                date=datetime.now()
+            )
+            session.add(calculation_record)
+            session.commit()
+
+        else:
+            existing_calculation = session.query(Calculation).filter_by(user_id=message.from_user.id,project_id=new_project.id).first()
+            existing_calculation.date = datetime.now()
+            session.add(existing_calculation)
+            session.commit()
+
         metrics_data = {
             "circ_supply": tokenomics_data.circ_supply if tokenomics_data else None,
             "total_supply": tokenomics_data.total_supply if tokenomics_data else None,
@@ -745,6 +766,7 @@ async def receive_data(message: types.Message, state: FSMContext):
             await message.answer(response_message)
             data = {
                 "new_project": new_project,
+                "id": calculation_record.id,
                 "category_answer": category_answer,
                 "chosen_project": chosen_project,
                 "twitter_name": twitter_name,
@@ -758,6 +780,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         else:
             data = {
                 "new_project": new_project,
+                "id": calculation_record.id,
                 "category_answer": category_answer,
                 "chosen_project": chosen_project,
                 "twitter_name": twitter_name,
@@ -820,6 +843,21 @@ async def receive_data(message: types.Message, state: FSMContext):
         )
         new_project = process_metrics(session, user_coin_name, chosen_project, results, price, total_supply, fundraise, investors)
 
+        if new_project:
+            calculation_record = Calculation(
+                user_id=message.from_user.id,
+                project_id=new_project.id,
+                date=datetime.now()
+            )
+            session.add(calculation_record)
+            session.commit()
+
+        else:
+            existing_calculation = session.query(Calculation).filter_by(user_id=message.from_user.id,project_id=new_project.id).first()
+            existing_calculation.date = datetime.now()
+            session.add(existing_calculation)
+            session.commit()
+
         metrics_data = {
             "circ_supply": tokenomics_data.circ_supply if tokenomics_data else None,
             "total_supply": tokenomics_data.total_supply if tokenomics_data else None,
@@ -854,11 +892,13 @@ async def receive_data(message: types.Message, state: FSMContext):
             await message.answer(response_message)
             data = {
                 "new_project": new_project,
+                "id": calculation_record.id,
                 "category_answer": category_answer,
                 "chosen_project": chosen_project,
                 "twitter_name": twitter_name,
                 "coin_name": coin_name,
                 "price": price,
+                "total_supply": total_supply
             }
 
             await state.update_data(**data)
@@ -866,11 +906,13 @@ async def receive_data(message: types.Message, state: FSMContext):
         else:
             data = {
                 "new_project": new_project,
+                "id": calculation_record.id,
                 "category_answer": category_answer,
                 "chosen_project": chosen_project,
                 "twitter_name": twitter_name,
                 "coin_name": coin_name,
                 "price": price,
+                "total_supply": total_supply
             }
 
             await state.update_data(**data)
@@ -887,6 +929,7 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
     new_project = state_data.get("new_project")
     agents_info = state_data.get("agents_info")
     twitter_link = state_data.get("twitter_name")
+    calc_id = state_data.get("id")
     chosen_project_obj = session.query(Project).filter(Project.coin_name == user_coin_name).first()
     user_input = message.text if isinstance(message, Message) else message
     updates = {}
@@ -918,8 +961,6 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
                     session.add(model_instance)
                     session.commit()
 
-    logging.info(f"updates: {updates}")
-
     try:
         project_info = await get_user_project_info(session, user_coin_name)
         project = project_info.get("project")
@@ -945,7 +986,6 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
             )
 
             comparison_results = ""
-            logging.info(f"results: {agents_info}")
             for index, coin_name, project_name, price, expected_x, fair_price in agents_info:
                 comparison_results += (
                     f"Вариант {index}\n"
@@ -959,8 +999,6 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
                 f"{comparison_results}"
             )
 
-            logging.info(
-                f"!!!!!manipulative_metrics.top_100_wallet: {manipulative_metrics.top_100_wallet, network_metrics.tvl, tokenomics_data.capitalization, network_metrics.tvl / tokenomics_data.capitalization}")
             all_data_string_for_funds_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
                 f"Доходность фондов (%): {funds_profit.distribution if funds_profit else 'N/A'}\n"
@@ -1017,19 +1055,25 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
             else:
                 flags_answer = flags_agent(topic=all_data_string_for_flags_agent, language='english')
 
-            agent_answer_record = AgentAnswer(
-                project_id=project.id,
-                answer=flags_answer,
-                language='RU' if 'RU' in user_languages.values() else 'ENG'
-            )
+            existing_answer = session.query(AgentAnswer).filter_by(project_id=project.id, language='RU' if 'RU' in user_languages.values() else 'ENG').first()
+            if not existing_answer:
+                agent_answer_record = AgentAnswer(
+                    project_id=project.id,
+                    answer=flags_answer,
+                    language='RU' if 'RU' in user_languages.values() else 'ENG'
+                )
+                session.add(agent_answer_record)
+                session.commit()
+            else:
+                agent_answer_record = existing_answer
 
             if isinstance(message, Message):
-                existing_calculation = session.query(Calculation).filter_by(user_id=message.from_user.id, project_id=new_project.id).first()
+                existing_calculation = session.query(Calculation).filter_by(calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
             elif user_id is not None:
-                existing_calculation = session.query(Calculation).filter_by(user_id=user_id, project_id=new_project.id).first()
+                existing_calculation = session.query(Calculation).filter_by(calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
@@ -1041,12 +1085,12 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
             flags_answer = existing_answer.answer
 
             if isinstance(message, Message):
-                existing_calculation = session.query(Calculation).filter_by(user_id=message.from_user.id, project_id=new_project.id).first()
+                existing_calculation = session.query(Calculation).filter_by(calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
             elif user_id is not None:
-                existing_calculation = session.query(Calculation).filter_by(user_id=user_id, project_id=new_project.id).first()
+                existing_calculation = session.query(Calculation).filter_by(calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
@@ -1107,6 +1151,7 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
     price = state_data.get("price")
     twitter_link = state_data.get("twitter_name")
     total_supply = state_data.get("total_supply")
+    calc_id = state_data.get("id")
     chosen_project_obj = session.query(Project).filter(Project.coin_name == coin_name).first()
     user_input = message.text if isinstance(message, Message) else message
     updates = {}
@@ -1411,12 +1456,12 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
             )
 
             if isinstance(message, Message):
-                existing_calculation = session.query(Calculation).filter_by(user_id=message.from_user.id, project_id=new_project.id).first()
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
             elif user_id is not None:
-                existing_calculation = session.query(Calculation).filter_by(user_id=user_id, project_id=new_project.id).first()
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
@@ -1427,12 +1472,12 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
             flags_answer = existing_answer.answer
 
             if isinstance(message, Message):
-                existing_calculation = session.query(Calculation).filter_by(user_id=message.from_user.id, project_id=new_project.id).first()
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
             elif user_id is not None:
-                existing_calculation = session.query(Calculation).filter_by(user_id=user_id, project_id=new_project.id).first()
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
@@ -1558,15 +1603,6 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
             else:
                 logging.info(f"No data to create chart for {coin_name}.")
 
-        if new_project:
-            calculation_record = Calculation(
-                user_id=message.from_user.id if isinstance(message, Message) else user_id,
-                project_id=new_project.id,
-                date=datetime.now()
-            )
-            session.add(calculation_record)
-            session.commit()
-
         workbook.close()
         output.seek(0)
 
@@ -1658,6 +1694,7 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
     twitter_link = state_data.get("twitter_name")
     price = state_data.get("price")
     total_supply = state_data.get("total_supply")
+    calc_id = state_data.get("id")
     chosen_project_obj = session.query(Project).filter(Project.coin_name == coin_name).first()
     user_input = message.text if isinstance(message, Message) else message
     row_data = []
@@ -1881,12 +1918,12 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
                 session.commit()
 
                 if isinstance(message, Message):
-                    existing_calculation = session.query(Calculation).filter_by(user_id=message.from_user.id, project_id=new_project.id).first()
+                    existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                     existing_calculation.agent_answer = flags_answer
                     session.add(existing_calculation)
                     session.commit()
                 elif user_id is not None:
-                    existing_calculation = session.query(Calculation).filter_by(user_id=user_id, project_id=new_project.id).first()
+                    existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                     existing_calculation.agent_answer = flags_answer
                     session.add(existing_calculation)
                     session.commit()
@@ -1894,12 +1931,12 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
             flags_answer = existing_answer.answer
 
             if isinstance(message, Message):
-                existing_calculation = session.query(Calculation).filter_by(user_id=message.from_user.id, project_id=new_project.id).first()
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
             elif user_id is not None:
-                existing_calculation = session.query(Calculation).filter_by(user_id=user_id, project_id=new_project.id).first()
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
@@ -2000,15 +2037,6 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
             pdf.image(pie_chart_img, x=x_pos, y=y_pos, w=chart_width, h=85)
 
             diagrams_on_page += 1
-
-        if new_project:
-            calculation_record = Calculation(
-                user_id=message.from_user.id if isinstance(message, Message) else user_id,
-                project_id=new_project.id,
-                date=datetime.now()
-            )
-            session.add(calculation_record)
-            session.commit()
 
         pdf_output = BytesIO()
         pdf.output(pdf_output)
