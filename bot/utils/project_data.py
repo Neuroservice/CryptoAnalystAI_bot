@@ -13,7 +13,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import API_KEY, COINMARKETCAP_API_URL
-from bot.data_update import update_or_create
 from bot.database.db_setup import SessionLocal
 from bot.database.models import (
     Project,
@@ -33,6 +32,10 @@ from bot.utils.consts import tickers
 
 def is_async_session(session):
     return isinstance(session, AsyncSession)
+
+
+def if_exist_instance(instance, field):
+    return instance and len(instance) > 1 and isinstance(instance[1], list) and len(instance[1]) > 0 and field is not None
 
 
 async def get_data(model, project_id, is_async, session):
