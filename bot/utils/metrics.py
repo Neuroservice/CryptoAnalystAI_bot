@@ -182,20 +182,20 @@ def generate_cells_content(
             project.coin_name,
             basic_metrics[1][0].sphere if basic_metrics[1][0].sphere else "-",
             f"{round(basic_metrics[1][0].market_price, 2)}$" if basic_metrics[1][0].market_price else 0,
-            f"{round(investing_metrics[1][0].fundraise)}$" if if_exist_instance(investing_metrics, investing_metrics[1][0].fundraise) else "0"
+            f"{round(investing_metrics[1][0].fundraise)}$" if if_exist_instance(investing_metrics, investing_metrics[1][0].fundraise if investing_metrics[1] else 0) else "0"
         ]
 
     elif header_set == headers_mapping[1]:
         cells_content = [
             project.coin_name,
-            investing_metrics[1][0].fund_level if if_exist_instance(investing_metrics, investing_metrics[1][0].fund_level) else "-"
+            investing_metrics[1][0].fund_level if if_exist_instance(investing_metrics, investing_metrics[1][0].fund_level if investing_metrics[1] else 0) else "-"
         ]
 
     elif header_set == headers_mapping[2]:
         cells_content = [
             project.coin_name,
-            str(social_metrics[1][0].twitter) if if_exist_instance(social_metrics, social_metrics[1][0].twitter) else "-",
-            str(social_metrics[1][0].twitterscore) if if_exist_instance(social_metrics, social_metrics[1][0].twitterscore) else "-"
+            str(social_metrics[1][0].twitter) if if_exist_instance(social_metrics, social_metrics[1][0].twitter if social_metrics[1] else 0) else "-",
+            str(social_metrics[1][0].twitterscore) if if_exist_instance(social_metrics, social_metrics[1][0].twitterscore if social_metrics[1] else 0) else "-"
         ]
 
     elif header_set == headers_mapping[3]:
@@ -210,19 +210,19 @@ def generate_cells_content(
     elif header_set == headers_mapping[4]:
         cells_content = [
             project.coin_name,
-            f"{round(market_metrics[1][0].fail_high * 100, 2)}%" if if_exist_instance(market_metrics, market_metrics[1][0].fail_high) else "-",
-            f"x{round(market_metrics[1][0].growth_low, 2)}" if if_exist_instance(market_metrics, market_metrics[1][0].growth_low) else "-"
+            f"{round(market_metrics[1][0].fail_high * 100, 2)}%" if if_exist_instance(market_metrics, market_metrics[1][0].fail_high if market_metrics[1] else 0) else "-",
+            f"x{round(market_metrics[1][0].growth_low, 2)}" if if_exist_instance(market_metrics, market_metrics[1][0].growth_low if market_metrics[1] else 0) else "-"
         ]
 
     elif header_set == headers_mapping[5]:
         cells_content = [
             project.coin_name,
-            str(manipulative_metrics[1][0].fdv_fundraise) if if_exist_instance(manipulative_metrics, manipulative_metrics[1][0].fdv_fundraise) else "-",
-            f"{round(manipulative_metrics[1][0].top_100_wallet * 100)}%" if if_exist_instance(manipulative_metrics, manipulative_metrics[1][0].top_100_wallet) else "-",
-            str(network_metrics[1][0].tvl) if if_exist_instance(network_metrics, network_metrics[1][0].tvl) else "-",
-            f"{round(network_metrics[1][0].tvl_fdv * 100)}%" if if_exist_instance(network_metrics, network_metrics[1][0].tvl_fdv) else "-",
-            f"{top_and_bottom[1][0].lower_threshold}$" if if_exist_instance(top_and_bottom, top_and_bottom[1][0].lower_threshold) else "-",
-            f"{top_and_bottom[1][0].upper_threshold}$" if if_exist_instance(top_and_bottom, top_and_bottom[1][0].upper_threshold) else "-"
+            str(manipulative_metrics[1][0].fdv_fundraise) if if_exist_instance(manipulative_metrics, manipulative_metrics[1][0].fdv_fundraise if manipulative_metrics[1] else 0) else "-",
+            f"{round(manipulative_metrics[1][0].top_100_wallet * 100)}%" if if_exist_instance(manipulative_metrics, manipulative_metrics[1][0].top_100_wallet if manipulative_metrics[1] else 0) else "-",
+            str(network_metrics[1][0].tvl) if if_exist_instance(network_metrics, network_metrics[1][0].tvl if network_metrics[1] else 0) else "-",
+            f"{round(network_metrics[1][0].tvl_fdv * 100)}%" if if_exist_instance(network_metrics, network_metrics[1][0].tvl_fdv if network_metrics[1] else 0) else "-",
+            f"{top_and_bottom[1][0].lower_threshold}$" if if_exist_instance(top_and_bottom, top_and_bottom[1][0].lower_threshold if top_and_bottom[1] else 0) else "-",
+            f"{top_and_bottom[1][0].upper_threshold}$" if if_exist_instance(top_and_bottom, top_and_bottom[1][0].upper_threshold if top_and_bottom[1] else 0) else "-"
         ]
 
     return cells_content
@@ -242,21 +242,21 @@ def create_project_data_row(
     return [
         project.coin_name,
         project.project_name if project.project_name else "-",
-        f"{round(basic_metrics[1][0].market_price, 2)}$" if if_exist_instance(basic_metrics, basic_metrics[1][0].market_price) else "-",
-        f"{round(investing_metrics[1][0].fundraise)}$" if if_exist_instance(investing_metrics, investing_metrics[1][0].fundraise) else "-",
-        investing_metrics[1][0].fund_level if if_exist_instance(investing_metrics, investing_metrics[1][0].fund_level) else "-",
-        social_metrics[1][0].twitter if if_exist_instance(social_metrics, social_metrics[1][0].twitter) else "-",
-        social_metrics[1][0].twitterscore if if_exist_instance(social_metrics, social_metrics[1][0].twitterscore) else "-",
+        f"{round(basic_metrics[1][0].market_price, 2)}$" if if_exist_instance(basic_metrics, basic_metrics[1][0].market_price if basic_metrics[1] else 0) else "-",
+        f"{round(investing_metrics[1][0].fundraise)}$" if if_exist_instance(investing_metrics, investing_metrics[1][0].fundraise if investing_metrics[1] else 0) else "-",
+        investing_metrics[1][0].fund_level if if_exist_instance(investing_metrics, investing_metrics[1][0].fund_level if investing_metrics[1] else 0) else "-",
+        social_metrics[1][0].twitter if if_exist_instance(social_metrics, social_metrics[1][0].twitter if social_metrics[1] else 0) else "-",
+        social_metrics[1][0].twitterscore if if_exist_instance(social_metrics, social_metrics[1][0].twitterscore if social_metrics[1] else 0) else "-",
         f"{round(tokenomics.capitalization)}$" if tokenomics.capitalization else "-",
         round(tokenomics.circ_supply, 2) if tokenomics.circ_supply else "-",
         round(tokenomics.total_supply, 2) if tokenomics.total_supply else "-",
         f"{round(tokenomics.fdv, 2)}$" if tokenomics.fdv else "-",
-        f"{round(market_metrics[1][0].fail_high * 100, 2)}%" if if_exist_instance(market_metrics, market_metrics[1][0].fail_high) else "-",
-        f"x{round(market_metrics[1][0].growth_low)}" if if_exist_instance(market_metrics, market_metrics[1][0].growth_low) else "-",
-        manipulative_metrics[1][0].fdv_fundraise if if_exist_instance(manipulative_metrics, manipulative_metrics[1][0].fdv_fundraise) else "-",
-        f"{round(manipulative_metrics[1][0].top_100_wallet * 100)}%" if if_exist_instance(manipulative_metrics, manipulative_metrics[1][0].top_100_wallet) else "-",
-        network_metrics[1][0].tvl if if_exist_instance(network_metrics, network_metrics[1][0].tvl) else "-",
-        f"{round(network_metrics[1][0].tvl_fdv * 100)}%" if if_exist_instance(network_metrics, network_metrics[1][0].tvl_fdv) else "-",
-        f"{top_and_bottom[1][0].lower_threshold}$" if if_exist_instance(top_and_bottom, top_and_bottom[1][0].lower_threshold) else "-",
-        f"{top_and_bottom[1][0].upper_threshold}$" if if_exist_instance(top_and_bottom, top_and_bottom[1][0].upper_threshold) else "-"
+        f"{round(market_metrics[1][0].fail_high * 100, 2)}%" if if_exist_instance(market_metrics, market_metrics[1][0].fail_high if market_metrics[1] else 0) else "-",
+        f"x{round(market_metrics[1][0].growth_low)}" if if_exist_instance(market_metrics, market_metrics[1][0].growth_low if market_metrics[1] else 0) else "-",
+        manipulative_metrics[1][0].fdv_fundraise if if_exist_instance(manipulative_metrics, manipulative_metrics[1][0].fdv_fundraise if manipulative_metrics[1] else 0) else "-",
+        f"{round(manipulative_metrics[1][0].top_100_wallet * 100)}%" if if_exist_instance(manipulative_metrics, manipulative_metrics[1][0].top_100_wallet if manipulative_metrics[1] else 0) else "-",
+        network_metrics[1][0].tvl if if_exist_instance(network_metrics, network_metrics[1][0].tvl if network_metrics[1] else 0) else "-",
+        f"{round(network_metrics[1][0].tvl_fdv * 100)}%" if if_exist_instance(network_metrics, network_metrics[1][0].tvl_fdv if network_metrics[1] else 0) else "-",
+        f"{top_and_bottom[1][0].lower_threshold}$" if if_exist_instance(top_and_bottom, top_and_bottom[1][0].lower_threshold if top_and_bottom[1] else 0) else "-",
+        f"{top_and_bottom[1][0].upper_threshold}$" if if_exist_instance(top_and_bottom, top_and_bottom[1][0].upper_threshold if top_and_bottom[1] else 0) else "-"
     ]
