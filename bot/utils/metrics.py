@@ -10,8 +10,8 @@ from bot.database.models import (
     SocialMetrics,
     Project
 )
-from bot.handlers.calculate import if_exist_instance
 from bot.utils.consts import tickers
+from bot.utils.project_data import if_exist_instance
 
 
 def update_project(session, user_coin_name, chosen_project):

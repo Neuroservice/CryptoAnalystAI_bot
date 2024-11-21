@@ -160,8 +160,7 @@ def analysis_type_keyboard():
     return keyboard
 
 
-@calculate_router.message(
-    lambda message: message.text == 'Расчет и анализ проектов' or message.text == 'Project Calculation & Analysis' or message.text == "Пожалуйста, выберите новый проект для расчета.")
+@calculate_router.message(lambda message: message.text == 'Расчет и анализ проектов' or message.text == 'Project Calculation & Analysis' or message.text == "Пожалуйста, выберите новый проект для расчета.")
 async def project_chosen(message: types.Message, state: FSMContext):
 
     if 'RU' in user_languages.values():
@@ -236,10 +235,6 @@ async def file_format_chosen(message: types.Message, state: FSMContext):
 
     else:
         await message.answer("Пожалуйста, выберите формат файла: PDF или Excel.")
-
-
-def if_exist_instance(instance, field):
-    return instance and len(instance) > 1 and isinstance(instance[1], list) and len(instance[1]) > 0 and field is not None
 
 
 @calculate_router.message(CalculateProject.waiting_for_excel)
