@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  crypto-bot:
+    build: .
+    volumes:
+      - .:/app
+    env_file:
+      - bot/.env
