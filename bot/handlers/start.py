@@ -76,27 +76,27 @@ async def start_command(message: types.Message, state: FSMContext):
         user = result.scalars().first()
 
         if not user:
-            new_user = User(telegram_id=message.from_user.id)
-            session.add(new_user)
+            user = User(telegram_id=message.from_user.id)
+            session.add(user)
             await session.commit()
 
-    if user.language:
-        if user.language == 'RU':
-            await message.answer(
-                "Привет! Это блок с анализом крипто-проектов. Выбери действие из меню ниже:",
-                reply_markup=main_menu_keyboard(language='RU')
-            )
+        if user.language:
+            if user.language == 'RU':
+                await message.answer(
+                    "Привет! Это блок с анализом крипто-проектов. Выбери действие из меню ниже:",
+                    reply_markup=main_menu_keyboard(language='RU')
+                )
+            else:
+                await message.answer(
+                    "Hello! This is the crypto project analysis block. Choose an action from the menu below:",
+                    reply_markup=main_menu_keyboard(language='ENG')
+                )
+            user_languages[user.language] = user.language
         else:
             await message.answer(
-                "Hello! This is the crypto project analysis block. Choose an action from the menu below:",
-                reply_markup=main_menu_keyboard(language='ENG')
+                "Please choose your language / Пожалуйста, выберите язык:",
+                reply_markup=language_keyboard()
             )
-        user_languages[user.language] = user.language
-    else:
-        await message.answer(
-            "Please choose your language / Пожалуйста, выберите язык:",
-            reply_markup=language_keyboard()
-        )
 
 
 @router.message(lambda message: message.text in ['Русский', 'English'])
@@ -111,6 +111,8 @@ async def language_choice(message: types.Message):
         if user:
             user.language = chosen_language
             await session.commit()
+
+        user_languages[user.language] = user.language
 
     if chosen_language == 'RU':
         await message.answer(

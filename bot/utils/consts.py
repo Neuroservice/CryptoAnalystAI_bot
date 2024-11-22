@@ -139,5 +139,15 @@ headers_mapping = [
     ["Монета сравнения", "FDV/Фандрейз", "Топ 100 кошельков", "TVL", "TVL/FDV", "Дно", "Хаи"]
 ]
 
-
 column_widths = [17, 15, 30, 17, 23, 26, 23, 17, 20, 22, 20, 20, 15, 10, 15, 18, 20, 15, 15, 12, 10, 10]
+
+translations = {
+    "RU": {
+        "language_changed": "Ваш язык был изменён на Русский.",
+        "user_not_found": "Пользователь не найден в базе данных.",
+    },
+    "ENG": {
+        "language_changed": "Your language has been changed to English.",
+        "user_not_found": "User not found in the database.",
+    }
+}

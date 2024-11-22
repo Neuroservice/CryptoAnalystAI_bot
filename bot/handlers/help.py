@@ -17,7 +17,7 @@ async def help_command(message: types.Message):
             "1. Нажмите на кнопку 'Расчет и анализ проектов': Это приведет вас к процессу, где вы сможете вводить необходимые данные для анализа.\n"
             "2. Выберите 'История расчетов': Здесь вы можете увидеть все свои предыдущие результаты и вернуться к ним в любое время.\n"
             "3. Используйте кнопку 'Помощь': Если у вас есть вопросы или вам нужна дополнительная информация о функциональности бота, просто нажмите на 'Помощь'. Я постараюсь ответить на ваши вопросы!\n"
-            "Также вы можете сменить язык бота, используя команду '/language'.\n"
+            "\nТакже вы можете сменить язык бота, используя команду '/language'.\n"
         )
     else:
         help_text = (
@@ -29,6 +29,6 @@ async def help_command(message: types.Message):
             "1. Click on the 'Calculate and analyze projects' button: This will take you to the calculation process where you can enter necessary data for analysis.\n"
             "2. Choose 'History of calculations': Here you can view all your previous results and return to them at any time.\n"
             "3. Use the 'Help' button: If you have questions or need additional information about the bot's functionality, just click on 'Help'. I will try to answer your questions!\n\n"
-            "You can also change the bot's language by using the '/language' command.\n"
+            "\nYou can also change the bot's language by using the '/language' command.\n"
         )
     await message.answer(help_text)
