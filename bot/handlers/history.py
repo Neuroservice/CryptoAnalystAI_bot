@@ -47,7 +47,7 @@ def format_number(value):
 
 
 @history_router.message(lambda message: message.text == 'История расчетов' or message.text == 'Calculation History')
-async def project_chosen(message: types.Message, state: FSMContext):
+async def file_format_chosen(message: types.Message, state: FSMContext):
     if 'RU' in user_languages.values():
         await message.answer(
             "Выберите формат файла: PDF или Excel?",

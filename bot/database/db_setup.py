@@ -13,7 +13,8 @@ from bot.database.models import (
     TopAndBottom,
     MarketMetrics,
     ManipulativeMetrics,
-    NetworkMetrics
+    NetworkMetrics,
+    AgentAnswer
 )
 
 DATABASE_URL = "sqlite:///./crypto_analysis.db"  # Для локалки
@@ -21,13 +22,6 @@ DATABASE_URL = "sqlite:///./crypto_analysis.db"  # Для локалки
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-# Функция для отображения созданных таблиц
-# def show_tables():
-#     inspector = inspect(engine)
-#     tables = inspector.get_table_names()
-#     print("Созданные таблицы:", tables)
 
 
 def create_db():
@@ -43,5 +37,4 @@ def create_db():
     MarketMetrics.__table__.create(bind=engine, checkfirst=True)
     ManipulativeMetrics.__table__.create(bind=engine, checkfirst=True)
     NetworkMetrics.__table__.create(bind=engine, checkfirst=True)
-
-    # show_tables()
+    AgentAnswer.__table__.create(bind=engine, checkfirst=True)

@@ -248,7 +248,7 @@ async def await_to_create_excel(message: types.Message, state: FSMContext):
 
 
 @calculate_router.message(CalculateProject.waiting_for_basic_results)
-async def await_to_create_excel(message: types.Message, state: FSMContext):
+async def await_basic_report(message: types.Message, state: FSMContext):
     await create_basic_report(state, message)
 
 
