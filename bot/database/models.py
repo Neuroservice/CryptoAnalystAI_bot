@@ -57,7 +57,6 @@ class BasicMetrics(Base):
     entry_price = Column(Float, nullable=True)
     sphere = Column(String(50), nullable=True)
     market_price = Column(Float, nullable=True)
-    base_tier = Column(String(10), nullable=True)
 
     project = relationship('Project', back_populates='basic_metrics')
 
@@ -69,7 +68,6 @@ class InvestingMetrics(Base):
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     fundraise = Column(Float, nullable=True)
     fund_level = Column(Text, nullable=True)
-    investing_tier = Column(String(10), nullable=True)
 
     project = relationship('Project', back_populates='investing_metrics')
 
@@ -81,7 +79,7 @@ class SocialMetrics(Base):
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     twitter = Column(Integer, nullable=True)
     twitterscore = Column(Integer, nullable=True)
-    social_tier = Column(String(10), nullable=True)
+
     project = relationship('Project', back_populates='social_metrics')
 
 
