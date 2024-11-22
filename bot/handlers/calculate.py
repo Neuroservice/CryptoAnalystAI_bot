@@ -228,7 +228,7 @@ async def file_format_chosen(message: types.Message, state: FSMContext):
     if file_format in ['pdf', 'excel']:
         await state.update_data(file_format=file_format)
         await message.answer(
-            "Введите тикер токена (например BTC, ETH):" if 'RU' in user_languages.values() else "Enter the token ticker (e.g. BTC, ETH):",
+            "Введите тикер токена (например STRK, SUI):" if 'RU' in user_languages.values() else "Enter the token ticker (e.g. STRK, SUI):",
             reply_markup=ReplyKeyboardRemove()
         )
         await state.set_state(CalculateProject.waiting_for_data)
