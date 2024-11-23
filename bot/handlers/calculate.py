@@ -243,7 +243,7 @@ async def await_to_create_excel(message: types.Message, state: FSMContext):
 
 
 @calculate_router.message(CalculateProject.waiting_for_pdf)
-async def await_to_create_excel(message: types.Message, state: FSMContext):
+async def await_to_create_pdf(message: types.Message, state: FSMContext):
     await create_pdf(state, message)
 
 
