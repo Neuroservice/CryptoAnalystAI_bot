@@ -977,7 +977,7 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
         if existing_answer is None:
             all_data_string_for_tier_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Категория: {project.project_name if project else 'N/A'}\n"
+                f"Категория: {project.project_category if project else 'N/A'}\n"
                 f"Капитализация: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
                 f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
                 f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
@@ -1371,7 +1371,7 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
         if existing_answer is None:
             all_data_string_for_tier_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Категория: {project.project_name if project else 'N/A'}\n"
+                f"Категория: {project.project_category if project else 'N/A'}\n"
                 f"Капитализация: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
                 f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
                 f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
@@ -1426,7 +1426,7 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
                 f"Social metrics: Количество подписчиков - {social_metrics.twitter} (twitter link: {twitter_link}), Twitter Score - {social_metrics.twitterscore}"
                 f"**Дополнительные данные, использованные для расчетов**\n"
                 f"- Project Name: {project.coin_name if project else 'N/A'}\n"
-                f"- Category: {project.project_name if project else 'N/A'}\n"
+                f"- Category: {project.project_category if project else 'N/A'}\n"
                 f"- Capitalization: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
                 f"- Fundraising: {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
                 f"- Investors Tier: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
