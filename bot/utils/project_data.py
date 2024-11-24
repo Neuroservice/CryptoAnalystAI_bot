@@ -101,11 +101,13 @@ async def get_project_and_tokenomics(session, project_name, user_coin_name):
     try:
         project_name = project_name.strip()
         if is_async_session(session):
-            project_stmt = select(Project).filter(Project.project_name == project_name)
+            project_stmt = select(Project).filter(Project.project_category == project_name)
             project_result = await session.execute(project_stmt)
             projects = project_result.scalars().all()
         else:
-            projects = session.query(Project).filter(Project.project_name.ilike(project_name)).all()
+            print(session, project_name, user_coin_name, project_name)
+            projects = session.query(Project).filter(Project.project_category.like(f"%{project_name}%")).all()
+            print(projects)
 
         tokenomics_data_list = []
         if not projects:
@@ -145,8 +147,8 @@ async def get_project_and_tokenomics(session, project_name, user_coin_name):
 
 def get_full_info(session, project_name, user_coin_name):
     try:
-        projects = session.query(Project).filter(Project.project_name == project_name).all()
-        user_project = session.query(Project).filter(Project.project_name == project_name).first()
+        projects = session.query(Project).filter(Project.project_category == project_name).all()
+        user_project = session.query(Project).filter(Project.project_category == project_name).first()
 
         if user_project and user_project not in projects:
             projects.append(user_project)
@@ -675,7 +677,7 @@ async def get_lower_name(user_coin_name):
                 if user_coin_name.upper() in data['data']:
                     lower_name = data['data'][user_coin_name.upper()].get('name', None).lower()
 
-    return lower_name
+                    return lower_name
 
 
 async def check_and_run_tasks(

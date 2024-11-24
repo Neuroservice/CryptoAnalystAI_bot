@@ -20,7 +20,7 @@ class Project(Base):
     __tablename__ = 'project'
 
     id = Column(Integer, primary_key=True, nullable=False)
-    project_name = Column(String(100), nullable=False)
+    project_category = Column(String(100), nullable=True)
     coin_name = Column(String(100), nullable=True)
 
     calculations = relationship('Calculation', back_populates='project')
