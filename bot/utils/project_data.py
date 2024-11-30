@@ -101,12 +101,12 @@ async def get_project_and_tokenomics(session, project_name, user_coin_name):
     try:
         project_name = project_name.strip()
         if is_async_session(session):
-            project_stmt = select(Project).filter(Project.project_category == project_name)
+            project_stmt = select(Project).filter(Project.category == project_name)
             project_result = await session.execute(project_stmt)
             projects = project_result.scalars().all()
         else:
             print(session, project_name, user_coin_name, project_name)
-            projects = session.query(Project).filter(Project.project_category.like(f"%{project_name}%")).all()
+            projects = session.query(Project).filter(Project.category.like(f"%{project_name}%")).all()
             print(projects)
 
         tokenomics_data_list = []
@@ -147,8 +147,8 @@ async def get_project_and_tokenomics(session, project_name, user_coin_name):
 
 def get_full_info(session, project_name, user_coin_name):
     try:
-        projects = session.query(Project).filter(Project.project_category == project_name).all()
-        user_project = session.query(Project).filter(Project.project_category == project_name).first()
+        projects = session.query(Project).filter(Project.category == project_name).all()
+        user_project = session.query(Project).filter(Project.category == project_name).first()
 
         if user_project and user_project not in projects:
             projects.append(user_project)
