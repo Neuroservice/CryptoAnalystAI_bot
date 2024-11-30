@@ -20,6 +20,7 @@ from bot.handlers.start import user_languages
 
 from bot.utils.consts import column_widths, eng_additional_headers, ru_additional_headers
 from bot.utils.metrics import create_project_data_row, generate_cells_content
+from bot.utils.pdf_worker import PDF
 from bot.utils.project_data import get_full_info, calculate_expected_x
 
 history_router = Router()
@@ -140,8 +141,10 @@ async def create_pdf_file(zip_file, calc, session):
     skip_empty_line = False
     readable_date = calc.date.strftime("%Y-%m-%d_%H-%M-%S")
     file_name = f"calculation_{readable_date}.pdf"
+    logo_path = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\bot\\fasolka.jpg" # Для локалки
+    # logo_path = "/app/bot/fasolka.jpg" # Для прода
 
-    pdf = FPDF(orientation='L')
+    pdf = PDF(logo_path=logo_path, orientation='L')
     pdf.add_page()
     pdf.add_font("DejaVu", '', 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed.ttf', uni=True)
     # pdf.add_font("DejaVu", '', '/app/fonts/DejaVuSansCondensed.ttf', uni=True)
@@ -178,28 +181,31 @@ async def create_pdf_file(zip_file, calc, session):
         network_metrics_data_list
     ) = get_full_info(session, base_project.category, base_project.coin_name)
 
+    result_index = 1
     for index, (project, tokenomics_data) in enumerate(tokenomics_data_list, start=1):
         for tokenomics in tokenomics_data:
-            fdv = tokenomics.fdv if tokenomics.fdv is not None else 0
-            calculation_result = calculate_expected_x(
-                entry_price=basic_metrics.market_price,
-                total_supply=base_tokenomics.total_supply,
-                fdv=fdv,
-            )
+            if base_project.coin_name != project.coin_name:
+                fdv = tokenomics.fdv if tokenomics.fdv is not None else 0
+                calculation_result = calculate_expected_x(
+                    entry_price=basic_metrics.market_price,
+                    total_supply=base_tokenomics.total_supply,
+                    fdv=fdv,
+                )
 
-            if "error" in calculation_result:
-                raise ValueError(calculation_result["error"])
+                if "error" in calculation_result:
+                    raise ValueError(calculation_result["error"])
 
-            fair_price = f"{calculation_result['fair_price']:.5f}" if isinstance(calculation_result['fair_price'], (int, float)) else "Ошибка в расчетах"
-            expected_x = f"{calculation_result['expected_x']:.5f}"
+                fair_price = f"{calculation_result['fair_price']:.5f}" if isinstance(calculation_result['fair_price'], (int, float)) else "Ошибка в расчетах"
+                expected_x = f"{calculation_result['expected_x']:.5f}"
 
-            row_data.append([
-                index,
-                base_project.coin_name,
-                project.coin_name,
-                expected_x,
-                fair_price
-            ])
+                row_data.append([
+                    result_index,
+                    base_project.coin_name,
+                    project.coin_name,
+                    expected_x,
+                    fair_price
+                ])
+                result_index += 1
 
     if 'RU' in user_languages.values():
         headers = [
@@ -448,8 +454,8 @@ async def create_excel_file(zip_file, calc, session):
     row_start = 32
     write_headers(worksheet, header_format, row_start)
 
-    project, basic_metrics, similar_projects, base_tokenomics = await get_project_data(calc, session)
-    row_data = await prepare_row_data(similar_projects, basic_metrics, project, base_tokenomics)
+    base_project, basic_metrics, similar_projects, base_tokenomics = await get_project_data(calc, session)
+    row_data = await prepare_row_data(similar_projects, basic_metrics, base_project, base_tokenomics)
     end_row = write_data_to_worksheet(worksheet, row_data, data_format, number_format, row_start + 1)
     merge_cells(worksheet, row_data, data_format, row_start + 1)
 
@@ -478,34 +484,38 @@ async def create_excel_file(zip_file, calc, session):
      top_and_bottom_data_list,
      market_metrics_data_list,
      manipulative_metrics_data_list,
-     network_metrics_data_list) = get_full_info(session, project.category, user_coin_name=None)
+     network_metrics_data_list) = get_full_info(session, base_project.category, user_coin_name=None)
 
+    result_index = 1
     for index, (project, tokenomics_data) in enumerate(tokenomics_data_list, start=1):
         for tokenomics in tokenomics_data:
-            basic_metrics = next((bm for bm in basic_metrics_data_list if bm[0] == project), None)
-            investing_metrics = next((im for im in invested_metrics_data_list if im[0] == project), None)
-            social_metrics = next((sm for sm in social_metrics_data_list if sm[0] == project), None)
-            funds_profit = next((fp for fp in funds_profit_data_list if fp[0] == project), None)
-            market_metrics = next((mm for mm in market_metrics_data_list if mm[0] == project), None)
-            manipulative_metrics = next((man for man in manipulative_metrics_data_list if man[0] == project), None)
-            network_metrics = next((nm for nm in network_metrics_data_list if nm[0] == project), None)
-            top_and_bottom = next((km for km in top_and_bottom_data_list if km[0] == project), None)
-            default_data.append(create_project_data_row(
-                project,
-                tokenomics,
-                basic_metrics,
-                investing_metrics,
-                social_metrics,
-                market_metrics,
-                manipulative_metrics,
-                network_metrics,
-                top_and_bottom
-            ))
+            if base_project.coin_name != project.coin_name:
+                basic_metrics = next((bm for bm in basic_metrics_data_list if bm[0] == project), None)
+                investing_metrics = next((im for im in invested_metrics_data_list if im[0] == project), None)
+                social_metrics = next((sm for sm in social_metrics_data_list if sm[0] == project), None)
+                funds_profit = next((fp for fp in funds_profit_data_list if fp[0] == project), None)
+                market_metrics = next((mm for mm in market_metrics_data_list if mm[0] == project), None)
+                manipulative_metrics = next((man for man in manipulative_metrics_data_list if man[0] == project), None)
+                network_metrics = next((nm for nm in network_metrics_data_list if nm[0] == project), None)
+                top_and_bottom = next((km for km in top_and_bottom_data_list if km[0] == project), None)
+                default_data.append(create_project_data_row(
+                    project,
+                    tokenomics,
+                    basic_metrics,
+                    investing_metrics,
+                    social_metrics,
+                    market_metrics,
+                    manipulative_metrics,
+                    network_metrics,
+                    top_and_bottom
+                ))
 
-            if len(funds_profit) > 1 and len(funds_profit[1]) > 0:
-                fund_distribution_list.append((project.coin_name, str(funds_profit[1][0].distribution) if funds_profit[1][0].distribution else "-"))
-            else:
-                fund_distribution_list.append((project.coin_name, "-"))  # или любое другое значение по умолчанию
+                if len(funds_profit) > 1 and len(funds_profit[1]) > 0:
+                    fund_distribution_list.append((project.coin_name, str(funds_profit[1][0].distribution) if funds_profit[1][0].distribution else "-"))
+                else:
+                    fund_distribution_list.append((project.coin_name, "-"))  # или любое другое значение по умолчанию
+
+                result_index += 1
 
     for row_num, row in enumerate(default_data, start=empty_row + 2):
         for col_num, value in enumerate(row):

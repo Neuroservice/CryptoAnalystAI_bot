@@ -266,7 +266,7 @@ async def update_agent_answers(session):
         market_metrics = project_info.get("market_metrics")
         manipulative_metrics = project_info.get("manipulative_metrics")
         network_metrics = project_info.get("network_metrics")
-        projects, tokenomics_data_list = await get_project_and_tokenomics(session, project.project_category, project.coin_name)
+        projects, tokenomics_data_list = await get_project_and_tokenomics(session, project.category, project.coin_name)
         top_projects = sorted(
             tokenomics_data_list,
             key=lambda item: item[1][0].capitalization if item[1][0].capitalization else 0,
@@ -287,14 +287,14 @@ async def update_agent_answers(session):
                 agents_info.append([
                     index,
                     project.coin_name,
-                    project.project_category,
+                    project.category,
                     (calculation_result['expected_x'] - 1.0) * 100,
                     fair_price
                 ])
 
         all_data_string_for_tier_agent = (
             f"Тикер монеты: {project.coin_name if project else 'N/A'}\n"
-            f"Категория: {project.project_category if project else 'N/A'}\n"
+            f"Категория: {project.category if project else 'N/A'}\n"
             f"Капитализация: {tokenomics_data[0].capitalization if tokenomics_data else 'N/A'}\n"
             f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
             f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
@@ -340,7 +340,7 @@ async def update_agent_answers(session):
         project_rating_answer = project_rating_agent(topic=all_data_string_for_project_rating_agent)
 
         all_data_string_for_flags_agent = (
-            f"Project: {project.project_category}\n"
+            f"Project: {project.category}\n"
             f"Ticker: {project.coin_name}\n"
             f"Tier agent: {tier_answer}\n",
             f"Tokemonic agent: {tokemonic_answer}\n",
@@ -350,7 +350,7 @@ async def update_agent_answers(session):
             f"Данные для расчета: {project_rating_answer}\n"
             f"**Additional Data Used for Calculations**\n"
             f"- Project Name: {project.coin_name if project else 'N/A'}\n"
-            f"- Category: {project.project_name if project else 'N/A'}\n"
+            f"- Category: {project.category if project else 'N/A'}\n"
             f"- Capitalization: {tokenomics_data[0].capitalization if tokenomics_data else 'N/A'}\n"
             f"- Fundraising: {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
             f"- Investors Tier: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
