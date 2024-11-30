@@ -142,7 +142,7 @@ def category_agent(topic):
     ]
 
     completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini-2024-07-18",
         messages=messages,
         temperature=0.1
     )
@@ -161,7 +161,7 @@ def tier_agent(topic):
     ]
 
     completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini-2024-07-18",
         messages=messages,
         temperature=0.1
     )
@@ -180,7 +180,7 @@ def tokemonic_agent(topic):
     ]
 
     completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini-2024-07-18",
         messages=messages,
         temperature=0.1
     )
@@ -199,7 +199,7 @@ def funds_agent(topic):
     ]
 
     completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini-2024-07-18",
         messages=messages,
         temperature=0.1
     )
@@ -218,7 +218,7 @@ def project_rating_agent(topic):
     ]
 
     completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini-2024-07-18",
         messages=messages,
         temperature=0.1
     )
@@ -237,7 +237,7 @@ def flags_agent(topic, language):
     ]
 
     completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini-2024-07-18",
         messages=messages,
         temperature=0.1
     )

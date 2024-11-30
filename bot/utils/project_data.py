@@ -1,11 +1,11 @@
 import asyncio
 import logging
 import re
+from urllib.parse import urljoin
+
 import aiohttp
 import httpx
 import requests
-
-from urllib.parse import urljoin
 from aiogram.types import Message
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
@@ -642,21 +642,30 @@ def extract_overall_category(category_answer: str) -> str:
 def standardize_category(overall_category: str) -> str:
     """ Преобразование общей категории в соответствующее английское название. """
     category_map = {
+        "Новые блокчейны 1 уровня": "Layer 1",
         "Новые блокчейны 1 уровня (после 2022 года)": "Layer 1",
         "Решения 2 уровня на базе Ethereum (ETH)": "Layer 2 (ETH)",
+        "Решения 2 уровня на базе Ethereum": "Layer 2 (ETH)",
         "Старые блокчейны 1 уровня (до 2022 года)": "Layer 1 (OLD)",
+        "Старые блокчейны 1 уровня": "Layer 1 (OLD)",
+        "Игры на блокчейне и метавселенные": "GameFi / Metaverse",
         "Игры на блокчейне и метавселенные (GameFi / Metaverse)": "GameFi / Metaverse",
         "Токены экосистемы TON": "TON",
         "NFT платформы / маркетплейсы": "NFT Platforms / Marketplaces",
         "Инфраструктурные проекты": "Infrastructure",
         "Искусственный интеллект (AI)": "AI",
+        "Искусственный интеллект": "AI",
         "NFT платформы / маркетплейсы (расширенные функции)": "NFT Platforms / Marketplaces",
+        "NFT платформы / маркетплейсы": "NFT Platforms / Marketplaces",
         "Реальные активы (Real World Assets)": "RWA",
+        "Реальные активы": "RWA",
         "Цифровая идентификация, сервисы": "Digital Identity",
         "Блокчейн сервисы": "Blockchain Service",
         "Финансовый сектор": "Financial sector",
         "Социальные сети на блокчейне (SocialFi)": "SocialFi",
+        "Социальные сети на блокчейне": "SocialFi",
         "Децентрализованные финансы (DeFi)": "DeFi",
+        "Децентрализованные финансы": "DeFi",
         "Модульные блокчейны": "Modular Blockchain"
     }
     return category_map.get(overall_category, "Unknown Category")
@@ -759,3 +768,21 @@ def calculate_expected_x(entry_price, total_supply, fdv):
 
     except Exception as e:
         return {"error": str(e)}
+
+
+async def send_long_message(bot_or_message, text, chat_id=None, reply_markup=None):
+    """
+    Отправляет длинные сообщения, разбивая их на части, если они превышают лимит.
+    """
+    MAX_MESSAGE_LENGTH = 4096
+
+    if isinstance(bot_or_message, Message):
+        sender = bot_or_message.answer
+    else:
+        sender = lambda text, reply_markup=None: bot_or_message.send_message(chat_id=chat_id, text=text,
+                                                                             reply_markup=reply_markup)
+
+    while text:
+        part = text[:MAX_MESSAGE_LENGTH]
+        await sender(part, reply_markup=reply_markup if len(text) <= MAX_MESSAGE_LENGTH else None)
+        text = text[MAX_MESSAGE_LENGTH:]

@@ -2,19 +2,43 @@ import logging
 import textwrap
 
 from io import BytesIO
+
+from PIL import Image
+from PIL import ImageDraw
 from fpdf import FPDF
 from matplotlib import pyplot as plt
 
 
 class PDF(FPDF):
-    def header(self):
-        self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, 'Data Report', 0, 1, 'C')
+    def __init__(self, logo_path=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.logo_path = logo_path  # Сохраняем путь к логотипу
+        self.footer_logo_path = None  # Путь для круглого логотипа в футере
+        if self.logo_path:
+            self.footer_logo_path = self._create_round_logo(self.logo_path)
+
+    def _create_round_logo(self, path):
+        """Обрезает изображение в форме круга и сохраняет его временно."""
+        img = Image.open(path).convert("RGBA")
+        size = min(img.size)  # Обрезаем до минимальной стороны для создания круга
+        mask = Image.new("L", (size, size), 0)
+        draw = ImageDraw.Draw(mask)
+        draw.ellipse((0, 0, size, size), fill=255)
+        circular_img = Image.new("RGBA", (size, size))
+        circular_img.paste(img, (0, 0, size, size), mask)
+        temp_path = "temp_footer_logo.png"
+        circular_img.save(temp_path, "PNG")
+        return temp_path
 
     def footer(self):
+        """Добавление номера страницы и маленького круглого логотипа внизу каждой страницы."""
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
-        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+        if self.footer_logo_path:
+            # Добавление маленького логотипа справа
+            logging.info(f"logo path: {self.footer_logo_path}")
+            # self.image(self.footer_logo_path, x=190, y=282, w=10)
+            self.image(self.footer_logo_path, x=280, y=193, w=10)
 
 
 def create_pdf_file(data, additional_headers):

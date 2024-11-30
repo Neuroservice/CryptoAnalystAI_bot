@@ -176,7 +176,7 @@ async def create_pdf_file(zip_file, calc, session):
         market_metrics_data_list,
         manipulative_metrics_data_list,
         network_metrics_data_list
-    ) = get_full_info(session, base_project.project_name, base_project.coin_name)
+    ) = get_full_info(session, base_project.category, base_project.coin_name)
 
     for index, (project, tokenomics_data) in enumerate(tokenomics_data_list, start=1):
         for tokenomics in tokenomics_data:
@@ -375,7 +375,7 @@ async def create_pdf_file(zip_file, calc, session):
 async def get_project_data(calc, session):
     project = session.query(Project).filter(Project.id == calc.project_id).first()
     basic_metrics = session.query(BasicMetrics).filter(BasicMetrics.project_id == project.id).first()
-    projects, similar_projects = await get_project_and_tokenomics(session, project.project_name, user_coin_name=None)
+    projects, similar_projects = await get_project_and_tokenomics(session, project.category, user_coin_name=None)
     base_tokenomics = session.query(Tokenomics).filter(Tokenomics.project_id == calc.project_id).first()
 
     return project, basic_metrics, similar_projects, base_tokenomics
@@ -478,7 +478,7 @@ async def create_excel_file(zip_file, calc, session):
      top_and_bottom_data_list,
      market_metrics_data_list,
      manipulative_metrics_data_list,
-     network_metrics_data_list) = get_full_info(session, project.project_name, user_coin_name=None)
+     network_metrics_data_list) = get_full_info(session, project.category, user_coin_name=None)
 
     for index, (project, tokenomics_data) in enumerate(tokenomics_data_list, start=1):
         for tokenomics in tokenomics_data:
