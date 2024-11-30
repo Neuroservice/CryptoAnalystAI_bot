@@ -46,7 +46,7 @@ from bot.utils.gpt import (
     flags_agent
 )
 from bot.utils.metrics import process_metrics, check_missing_fields, generate_cells_content, create_project_data_row
-from bot.utils.pdf_worker import generate_pie_chart
+from bot.utils.pdf_worker import generate_pie_chart, PDF
 from bot.utils.project_data import (
     get_project_and_tokenomics,
     get_full_info,
@@ -56,7 +56,7 @@ from bot.utils.project_data import (
     get_coin_description,
     extract_overall_category,
     standardize_category,
-    get_lower_name, check_and_run_tasks, calculate_expected_x
+    get_lower_name, check_and_run_tasks, calculate_expected_x, send_long_message
 )
 
 calculate_router = Router()
@@ -394,7 +394,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                     index,
                     user_coin_name,
                     chosen_project_name,
-                    price,
                     (calculation_result['expected_x'] - 1.0) * 100,
                     fair_price
                 ])
@@ -665,7 +664,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                 'Accepts': 'application/json'
             }
 
-            if not tokenomics_data.circ_supply or tokenomics_data.total_supply or tokenomics_data.capitalization or tokenomics_data.fdv or basic_metrics.market_price:
+            if not tokenomics_data or not tokenomics_data.circ_supply or not tokenomics_data.total_supply or not tokenomics_data.capitalization or not tokenomics_data.fdv or not basic_metrics.market_price:
                 coinmarketcap_data = await fetch_coinmarketcap_data(message, user_coin_name, headers, parameters)
                 if coinmarketcap_data:
                     coin_name = coinmarketcap_data['coin_name']
@@ -770,7 +769,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                 "category_answer": category_answer,
                 "chosen_project": chosen_project,
                 "twitter_name": twitter_name,
-                "coin_name": coin_name,
+                "coin_name": user_coin_name,
                 "price": price,
                 "total_supply": total_supply,
             }
@@ -784,7 +783,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                 "category_answer": category_answer,
                 "chosen_project": chosen_project,
                 "twitter_name": twitter_name,
-                "coin_name": coin_name,
+                "coin_name": user_coin_name,
                 "price": price,
                 "total_supply": total_supply,
             }
@@ -806,7 +805,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         twitter_name = await get_twitter_link_by_symbol(user_coin_name)
 
         try:
-            if not tokenomics_data.circ_supply or tokenomics_data.total_supply or tokenomics_data.capitalization or tokenomics_data.fdv or basic_metrics.market_price:
+            if not tokenomics_data or not tokenomics_data.circ_supply or not tokenomics_data.total_supply or not tokenomics_data.capitalization or not tokenomics_data.fdv or not basic_metrics.market_price:
                 coinmarketcap_data = await fetch_coinmarketcap_data(message, user_coin_name, headers, parameters)
                 if coinmarketcap_data:
                     coin_name = coinmarketcap_data['coin_name']
@@ -821,7 +820,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                         await message.answer(f"Error. Check that the coin entered is correct and try again.")
                         return
             else:
-                coin_name = tokenomics_data.coin_name
+                coin_name = project.coin_name
                 total_supply = tokenomics_data.total_supply
                 price = basic_metrics.market_price
 
@@ -896,7 +895,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                 "category_answer": category_answer,
                 "chosen_project": chosen_project,
                 "twitter_name": twitter_name,
-                "coin_name": coin_name,
+                "coin_name": user_coin_name,
                 "price": price,
                 "total_supply": total_supply
             }
@@ -910,7 +909,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                 "category_answer": category_answer,
                 "chosen_project": chosen_project,
                 "twitter_name": twitter_name,
-                "coin_name": coin_name,
+                "coin_name": user_coin_name,
                 "price": price,
                 "total_supply": total_supply
             }
@@ -977,7 +976,7 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
         if existing_answer is None:
             all_data_string_for_tier_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Категория: {project.project_category if project else 'N/A'}\n"
+                f"Категория: {project.category if project else 'N/A'}\n"
                 f"Капитализация: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
                 f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
                 f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
@@ -986,13 +985,17 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
             )
 
             comparison_results = ""
-            for index, coin_name, project_name, price, expected_x, fair_price in agents_info:
-                comparison_results += (
-                    f"Вариант {index}\n"
-                    f"Результаты расчета для {project.coin_name} в сравнении с {coin_name}:\n"
-                    f"Возможный прирост токена (в %): {expected_x}%\n"
-                    f"Ожидаемая цена токена: {fair_price}\n\n"
-                )
+            result_index = 1
+            for index, coin_name, project_coin, expected_x, fair_price in agents_info:
+                if project_coin != user_coin_name:
+                    comparison_results += (
+                        f"Вариант {result_index}\n"
+                        f"Результаты расчета для {project.coin_name} в сравнении с {project_coin}:\n"
+                        f"Возможный прирост токена (в %): {expected_x}%\n"
+                        f"Ожидаемая цена токена: {fair_price}\n\n"
+                    )
+                    result_index += 1
+
             all_data_string_for_tokemonic_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
                 f"**Исходные данные:**\n\n"
@@ -1023,37 +1026,64 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
             project_rating_answer = project_rating_agent(topic=all_data_string_for_project_rating_agent)
 
             all_data_string_for_flags_agent = (
-                f"Project: {project.project_name}\n"
+                f"Проект: {project.project_name}\n"
                 f"Category agent answer: {category_answer}\n",
                 f"Tier agent: {tier_answer}\n",
                 f"Tokemonic agent: {tokemonic_answer}\n",
                 f"Funds agent: {funds_answer}\n",
                 f"Project rating agent: {project_rating_answer}\n"
-                f"Social metrics: Количество подписчиков - {social_metrics.twitter} (twitter link: {twitter_link}), Twitter Score - {social_metrics.twitterscore}"
-                f"**Дополнительные данные, использованные для расчетов**\n"
-                f"- Project Name: {project.coin_name if project else 'N/A'}\n"
-                f"- Category: {project.project_name if project else 'N/A'}\n"
-                f"- Capitalization: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
-                f"- Fundraising: {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
-                f"- Investors Tier: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
-                f"- Project Name: {project.coin_name if project else 'N/A'}\n"
-                f"**Данные для расчета**\n"
-                f"- Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
-                f"- Рост стоимости токенов с минимума: x{market_metrics.growth_low if market_metrics else 'N/A'}\n"
-                f"- Падение токенов с максимума: {market_metrics.fail_high if market_metrics else 'N/A'}%\n"
-                f"- Процент нахождения монет на топ 100 кошельков блокчейна: {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics else 'N/A'}%\n"
-                f"- Заблокированные токены (TVL): {(network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'}%\n\n"
-                f"- Сумма привлечения средств: {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
-                f"- Тир проекта: {tier_answer}\n"
-                f"- Подписчики в Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
-                f"- Оценка подписчиков твиттера: {social_metrics.twitterscore if social_metrics else 'N/A'}\n"
-                f"- Оценка токеномики (сравнение с другими проектами): {tokemonic_answer if tokemonic_answer else 'N/A'}\n"
-                f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
+                f"Социальные метрики: Количество подписчиков - {social_metrics.twitter} (twitter link: {twitter_link}), Twitter Score - {social_metrics.twitterscore}"
             )
             if 'RU' in user_languages.values():
                 flags_answer = flags_agent(topic=all_data_string_for_flags_agent, language='русский')
+                flags_answer += (
+                    f"\n\nДанные для анализа\n"
+                    f"- Анализ категории: {category_answer}\n\n"
+                    f"- Тикер монеты: {project.coin_name if project else 'N/A'}\n"
+                    f"- Категория: {project.project_name if project else 'N/A'}\n"
+                    f"- Капитализация: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n"
+                    f"- Фандрейз: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
+                    f"- Количество подписчиков: {social_metrics.twitter} (Twitter: {twitter_link[0]})\n"
+                    f"- Twitter Score: {social_metrics.twitterscore}\n"
+                    f"- Тир фондов: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
+                    f"- Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
+                    f"- Рост стоимости токена с минимума: {round((market_metrics.growth_low - 1) * 10, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Падение стоимости токена с максимума: {round(market_metrics.fail_high, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Процент нахождения монет на топ 100 кошельков блокчейна: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics else 'N/A'}%\n"
+                    f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n\n"
+                    f"- Тир проекта: {tier_answer}\n"
+                    f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
+                    f"- Оценка токеномики: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
+                    f"**Данные для анализа токеномики**:\n{comparison_results}"
+                )
+                new_answer = AgentAnswer(project_id=project.id, answer=flags_answer, language='RU')
+                session.add(new_answer)
+                session.commit()
             else:
                 flags_answer = flags_agent(topic=all_data_string_for_flags_agent, language='english')
+                flags_answer += (
+                    f"\n\nData to analyze\n"
+                    f"- Category analysis: {category_answer}\n\n"
+                    f"- Coin Ticker: {project.coin_name if project else 'N/A'}\n"
+                    f"- Category: {project.project_name if project else 'N/A'}\n"
+                    f"- Capitalization: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n"
+                    f"- Fundraise: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
+                    f"- Number of Twitter subscribers: {social_metrics.twitter} (Twitter: {twitter_link[0]})\n"
+                    f"- Twitter Score: {social_metrics.twitterscore}\n"
+                    f"- Funds tier: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
+                    f"- Token allocation: {funds_profit.distribution if funds_profit else 'N/A'}\n"
+                    f"- Token value growth from a low: {round((market_metrics.growth_low - 1) * 10, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Token drop from the high: {round(market_metrics.fail_high, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Percentage of coins found on top 100 blockchain wallets: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics else 'N/A'}%\n"
+                    f"- Blocked tokens (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n"
+                    f"- Project Tier: {tier_answer}\n"
+                    f"- Estimation of fund returns: {funds_answer if funds_answer else 'N/A'}\n"
+                    f"- Tokenomics valuation: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
+                    f"Data for tokenomic analysis:\n{comparison_results}"
+                )
+                new_answer = AgentAnswer(project_id=project.id, answer=flags_answer, language='RU')
+                session.add(new_answer)
+                session.commit()
 
             existing_answer = session.query(AgentAnswer).filter_by(project_id=project.id, language='RU' if 'RU' in user_languages.values() else 'ENG').first()
             if not existing_answer:
@@ -1068,12 +1098,12 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
                 agent_answer_record = existing_answer
 
             if isinstance(message, Message):
-                existing_calculation = session.query(Calculation).filter_by(calc_id).first()
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
             elif user_id is not None:
-                existing_calculation = session.query(Calculation).filter_by(calc_id).first()
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
@@ -1085,22 +1115,24 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
             flags_answer = existing_answer.answer
 
             if isinstance(message, Message):
-                existing_calculation = session.query(Calculation).filter_by(calc_id).first()
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
             elif user_id is not None:
-                existing_calculation = session.query(Calculation).filter_by(calc_id).first()
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
 
         answer = "\n".join(results)
         answer += "\n" + flags_answer
+        answer = answer.replace('**', '')
 
         if isinstance(message, Message):
-            await message.answer(
-                f"{answer}\n",
+            await send_long_message(
+                bot_or_message=message,
+                text=f"{answer}\n"
             )
             if 'RU' in user_languages.values():
                 await message.answer(
@@ -1115,7 +1147,11 @@ async def create_basic_report(state: FSMContext, message: Optional[Union[Message
         elif user_id is not None:
             async with AiohttpSession() as session:
                 bot = Bot(token=API_TOKEN, session=session)
-                await bot.send_message(chat_id=user_id, text=f"{answer}\n")
+                await send_long_message(
+                    bot_or_message=bot,
+                    text=f"{answer}\n",
+                    chat_id=user_id
+                )
                 if 'RU' in user_languages.values():
                     await bot.send_message(
                         chat_id=user_id,
@@ -1243,30 +1279,32 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
         if "error" in projects:
             raise ValueError(projects["error"])
 
+        result_index = 1
         for index, (project, tokenomics_data) in enumerate(tokenomics_data_list, start=1):
             for tokenomics in tokenomics_data:
-                fdv = tokenomics.fdv if tokenomics.fdv is not None else 0
+                if coin_name != project.coin_name:
+                    fdv = tokenomics.fdv if tokenomics.fdv is not None else 0
 
-                calculation_result = calculate_expected_x(
-                    entry_price=price,
-                    total_supply=total_supply,
-                    fdv=fdv,
-                )
+                    calculation_result = calculate_expected_x(
+                        entry_price=price,
+                        total_supply=total_supply,
+                        fdv=fdv,
+                    )
 
-                if "error" in calculation_result:
-                    raise ValueError(calculation_result["error"])
+                    if "error" in calculation_result:
+                        raise ValueError(calculation_result["error"])
 
-                fair_price = f"{calculation_result['fair_price']:.5f}" if isinstance(calculation_result['fair_price'], (int, float)) else "Ошибка в расчетах"
-                expected_x = f"{calculation_result['expected_x']:.5f}"
+                    fair_price = f"{calculation_result['fair_price']:.5f}" if isinstance(calculation_result['fair_price'], (int, float)) else "Ошибка в расчетах"
+                    expected_x = f"{calculation_result['expected_x']:.5f}"
 
-                row_data.append([
-                    index,
-                    coin_name,
-                    project.coin_name,
-                    price,
-                    expected_x,
-                    fair_price
-                ])
+                    row_data.append([
+                        result_index,
+                        coin_name,
+                        project.coin_name,
+                        expected_x,
+                        fair_price
+                    ])
+                    result_index += 1
 
         for row_num, row in enumerate(row_data, start=1):
             for col_num, value in enumerate(row):
@@ -1371,7 +1409,7 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
         if existing_answer is None:
             all_data_string_for_tier_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Категория: {project.project_category if project else 'N/A'}\n"
+                f"Категория: {project.category if project else 'N/A'}\n"
                 f"Капитализация: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
                 f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
                 f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
@@ -1380,13 +1418,17 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
             )
 
             comparison_results = ""
-            for index, coin_name, project_name, price, expected_x, fair_price in row_data:
-                comparison_results += (
-                    f"Вариант {index}\n"
-                    f"Результаты расчета для {project.coin_name} в сравнении с {coin_name}:\n"
-                    f"Возможный прирост токена (в %): {expected_x}%\n"
-                    f"Ожидаемая цена токена: {fair_price}\n\n"
-                )
+            result_index = 1
+            for index, default_coin, project_name, price, expected_x, fair_price in row_data:
+                if coin_name != default_coin:
+                    comparison_results += (
+                        f"Вариант {index}\n"
+                        f"Результаты расчета для {project.coin_name} в сравнении с {default_coin}:\n"
+                        f"Возможный прирост токена (в %): {expected_x}%\n"
+                        f"Ожидаемая цена токена: {fair_price}\n\n"
+                    )
+                    result_index += 1
+
             all_data_string_for_tokemonic_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
                 f"**Исходные данные:**\n\n"
@@ -1417,37 +1459,64 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
             project_rating_answer = project_rating_agent(topic=all_data_string_for_project_rating_agent)
 
             all_data_string_for_flags_agent = (
-                f"Project: {project.project_name}\n"
+                f"Проект: {project.project_name}\n"
                 f"Category agent answer: {category_answer}\n",
                 f"Tier agent: {tier_answer}\n",
                 f"Tokemonic agent: {tokemonic_answer}\n",
                 f"Funds agent: {funds_answer}\n",
                 f"Project rating agent: {project_rating_answer}\n"
-                f"Social metrics: Количество подписчиков - {social_metrics.twitter} (twitter link: {twitter_link}), Twitter Score - {social_metrics.twitterscore}"
-                f"**Дополнительные данные, использованные для расчетов**\n"
-                f"- Project Name: {project.coin_name if project else 'N/A'}\n"
-                f"- Category: {project.project_category if project else 'N/A'}\n"
-                f"- Capitalization: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
-                f"- Fundraising: {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
-                f"- Investors Tier: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
-                f"- Project Name: {project.coin_name if project else 'N/A'}\n"
-                f"**Данные для расчета**\n"
-                f"- Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
-                f"- Рост стоимости токенов с минимума: x{market_metrics.growth_low if market_metrics else 'N/A'}\n"
-                f"- Падение токенов с максимума: {market_metrics.fail_high if market_metrics else 'N/A'}%\n"
-                f"- Процент нахождения монет на топ 100 кошельков блокчейна: {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics else 'N/A'}%\n"
-                f"- Заблокированные токены (TVL): {(network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'}%\n\n"
-                f"- Сумма привлечения средств: {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
-                f"- Тир проекта: {tier_answer}\n"
-                f"- Подписчики в Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
-                f"- Оценка подписчиков твиттера: {social_metrics.twitterscore if social_metrics else 'N/A'}\n"
-                f"- Оценка токеномики (сравнение с другими проектами): {tokemonic_answer if tokemonic_answer else 'N/A'}\n"
-                f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
+                f"Социальные метрики: Количество подписчиков - {social_metrics.twitter} (twitter link: {twitter_link}), Twitter Score - {social_metrics.twitterscore}"
             )
             if 'RU' in user_languages.values():
                 flags_answer = flags_agent(topic=all_data_string_for_flags_agent, language='русский')
+                flags_answer += (
+                    f"\n\nДанные для анализа\n"
+                    f"- Анализ категории: {category_answer}\n\n"
+                    f"- Тикер монеты: {project.coin_name if project else 'N/A'}\n"
+                    f"- Категория: {project.project_name if project else 'N/A'}\n"
+                    f"- Капитализация: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n"
+                    f"- Фандрейз: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
+                    f"- Количество подписчиков: {social_metrics.twitter} (Twitter: {twitter_link[0]})\n"
+                    f"- Twitter Score: {social_metrics.twitterscore}\n"
+                    f"- Тир фондов: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
+                    f"- Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
+                    f"- Рост стоимости токена с минимума: {round((market_metrics.growth_low - 1) * 10, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Падение стоимости токена с максимума: {round(market_metrics.fail_high, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Процент нахождения монет на топ 100 кошельков блокчейна: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics else 'N/A'}%\n"
+                    f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n\n"
+                    f"- Тир проекта: {tier_answer}\n"
+                    f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
+                    f"- Оценка токеномики: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
+                    f"Данные для анализа токеномики:\n{comparison_results}"
+                )
+                new_answer = AgentAnswer(project_id=project.id, answer=flags_answer, language='RU')
+                session.add(new_answer)
+                session.commit()
             else:
                 flags_answer = flags_agent(topic=all_data_string_for_flags_agent, language='english')
+                flags_answer += (
+                    f"\n\nData to analyze\n"
+                    f"- Category analysis: {category_answer}\n\n"
+                    f"- Coin Ticker: {project.coin_name if project else 'N/A'}\n"
+                    f"- Category: {project.project_name if project else 'N/A'}\n"
+                    f"- Capitalization: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n"
+                    f"- Fundraise: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
+                    f"- Number of Twitter subscribers: {social_metrics.twitter} (Twitter: {twitter_link[0]})\n"
+                    f"- Twitter Score: {social_metrics.twitterscore}\n"
+                    f"- Funds tier: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
+                    f"- Token allocation: {funds_profit.distribution if funds_profit else 'N/A'}\n"
+                    f"- Token value growth from a low: {round((market_metrics.growth_low - 1) * 10, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Token drop from the high: {round(market_metrics.fail_high, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Percentage of coins found on top 100 blockchain wallets: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics else 'N/A'}%\n"
+                    f"- Blocked tokens (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n"
+                    f"- Project Tier: {tier_answer}\n"
+                    f"- Estimation of fund returns: {funds_answer if funds_answer else 'N/A'}\n"
+                    f"- Tokenomics valuation: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
+                    f"Data for tokenomic analysis:\n{comparison_results}"
+                )
+                new_answer = AgentAnswer(project_id=project.id, answer=flags_answer, language='ENG')
+                session.add(new_answer)
+                session.commit()
 
             agent_answer_record = AgentAnswer(
                 project_id=project.id,
@@ -1611,16 +1680,18 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
             await state.set_state(None)
             await state.set_state(CalculateProject.waiting_for_data)
             if 'RU' in user_languages.values():
-                await message.answer(
-                    f"Общая оценка проекта: {flags_answer}\n",
+                await send_long_message(
+                    bot_or_message=message,
+                    text=f"Общая оценка проекта: {flags_answer}\n"
                 )
                 await message.answer(
                     "Введите тикер следующего токена (например STRK, SUI) или введите /exit для завершения:",
                     reply_markup=ReplyKeyboardRemove()
                 )
             else:
-                await message.answer(
-                    f"Overall project assessment: {flags_answer}\n",
+                await send_long_message(
+                    bot_or_message=message,
+                    text=f"Overall project assessment: {flags_answer}\n"
                 )
                 await message.answer(
                     "Enter the ticker of the next token (e.g. STRK, SUI) or enter /exit to complete:",
@@ -1634,9 +1705,10 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
                 await state.set_state(None)
                 await state.set_state(CalculateProject.waiting_for_data)
                 if 'RU' in user_languages.values():
-                    await bot.send_message(
-                        chat_id=user_id,
+                    await send_long_message(
+                        bot_or_message=bot,
                         text=f"Общая оценка проекта: \n{flags_answer}\n",
+                        chat_id=user_id
                     )
                     await bot.send_message(
                         chat_id=user_id,
@@ -1644,9 +1716,10 @@ async def create_excel(state: FSMContext, message: Optional[Union[Message, str]]
                         reply_markup=ReplyKeyboardRemove()
                     )
                 else:
-                    await bot.send_message(
-                        chat_id=user_id,
+                    await send_long_message(
+                        bot_or_message=bot,
                         text=f"Overall project assessment: \n{flags_answer}\n",
+                        chat_id=user_id
                     )
                     await bot.send_message(
                         chat_id=user_id,
@@ -1699,6 +1772,8 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
     user_input = message.text if isinstance(message, Message) else message
     row_data = []
     cells_content = None
+    # logo_path = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\bot\\fasolka.jpg" # Для локалки
+    logo_path = "/app/bot/fasolka.jpg" # Для прода
 
     updates = {}
     input_lines = user_input.split('\n')
@@ -1782,9 +1857,10 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
                     fair_price
                 ])
 
-        pdf = FPDF(orientation='L')
+        pdf = PDF(logo_path=logo_path, orientation='L')
+        # pdf = FPDF(orientation='L')
         pdf.add_page()
-        # pdf.add_font("DejaVu", '', '/app/fonts/DejaVuSansCondensed.ttf', uni=True)
+        pdf.add_font("DejaVu", '', '/app/fonts/DejaVuSansCondensed.ttf', uni=True)
         pdf.add_font("DejaVu", '', 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed.ttf', uni=True)
         pdf.set_font("DejaVu", size=8)
 
@@ -1831,7 +1907,7 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
         if existing_answer is None:
             all_data_string_for_tier_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Категория: {project.project_name if project else 'N/A'}\n"
+                f"Категория: {project.category if project else 'N/A'}\n"
                 f"Капитализация: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
                 f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
                 f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
@@ -1840,13 +1916,17 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
             )
 
             comparison_results = ""
-            for index, coin_name, project_name, expected_x, fair_price in row_data:
-                comparison_results += (
-                    f"Вариант {index}\n"
-                    f"Результаты расчета для {project.coin_name} в сравнении с {coin_name}:\n"
-                    f"Возможный прирост токена (в %): {expected_x}%\n"
-                    f"Ожидаемая цена токена: {fair_price}\n\n"
-                )
+            result_index = 1
+            for index, coin_name, project_coin, expected_x, fair_price in row_data:
+                if project_coin != coin_name:
+                    comparison_results += (
+                        f"Вариант {result_index}\n"
+                        f"Результаты расчета для {project.coin_name} в сравнении с {project_coin}:\n"
+                        f"Возможный прирост токена (в %): {expected_x}%\n"
+                        f"Ожидаемая цена токена: {fair_price}\n\n"
+                    )
+                    result_index += 1
+
             all_data_string_for_tokemonic_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
                 f"**Исходные данные:**\n\n"
@@ -1877,56 +1957,76 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
             project_rating_answer = project_rating_agent(topic=all_data_string_for_project_rating_agent)
 
             all_data_string_for_flags_agent = (
-                f"Project: {project.project_name}\n"
+                f"Проект: {project.project_name}\n"
                 f"Category agent answer: {category_answer}\n",
                 f"Tier agent: {tier_answer}\n",
                 f"Tokemonic agent: {tokemonic_answer}\n",
                 f"Funds agent: {funds_answer}\n",
                 f"Project rating agent: {project_rating_answer}\n"
-                f"Social metrics: Количество подписчиков - {social_metrics.twitter} (twitter link: {twitter_link}), Twitter Score - {social_metrics.twitterscore}"
-                f"**Дополнительные данные, использованные для расчетов**\n"
-                f"- Project Name: {project.coin_name if project else 'N/A'}\n"
-                f"- Category: {project.project_name if project else 'N/A'}\n"
-                f"- Capitalization: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
-                f"- Fundraising: {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
-                f"- Investors Tier: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
-                f"- Project Name: {project.coin_name if project else 'N/A'}\n"
-                f"**Данные для расчета**\n"
-                f"- Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
-                f"- Рост стоимости токенов с минимума: x{market_metrics.growth_low if market_metrics else 'N/A'}\n"
-                f"- Падение токенов с максимума: {market_metrics.fail_high if market_metrics else 'N/A'}%\n"
-                f"- Процент нахождения монет на топ 100 кошельков блокчейна: {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics else 'N/A'}%\n"
-                f"- Заблокированные токены (TVL): {(network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'}%\n\n"
-                f"- Сумма привлечения средств: {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
-                f"- Тир проекта: {tier_answer}\n"
-                f"- Подписчики в Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
-                f"- Оценка подписчиков твиттера: {social_metrics.twitterscore if social_metrics else 'N/A'}\n"
-                f"- Оценка токеномики (сравнение с другими проектами): {tokemonic_answer if tokemonic_answer else 'N/A'}\n"
-                f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
+                f"Социальные метрики: Количество подписчиков - {social_metrics.twitter} (twitter link: {twitter_link}), Twitter Score - {social_metrics.twitterscore}"
             )
             if 'RU' in user_languages.values():
                 flags_answer = flags_agent(topic=all_data_string_for_flags_agent, language='русский')
+                flags_answer += (
+                    f"\n\n**Данные для анализа**\n"
+                    f"- Анализ категории: {category_answer}\n\n"
+                    f"- Тикер монеты: {project.coin_name if project else 'N/A'}\n"
+                    f"- Категория: {project.project_name if project else 'N/A'}\n"
+                    f"- Капитализация: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n"
+                    f"- Фандрейз: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
+                    f"- Количество подписчиков: {social_metrics.twitter} (Twitter: {twitter_link[0]})\n"
+                    f"- Twitter Score: {social_metrics.twitterscore}\n"
+                    f"- Тир фондов: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
+                    f"- Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
+                    f"- Рост стоимости токена с минимума: {round((market_metrics.growth_low - 1) * 10, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Падение стоимости токена с максимума: {round(market_metrics.fail_high, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Процент нахождения монет на топ 100 кошельков блокчейна: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics else 'N/A'}%\n"
+                    f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n\n"
+                    f"- Тир проекта: {tier_answer}\n"
+                    f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
+                    f"- Оценка токеномики: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
+                    f"**Данные для анализа токеномики**:\n{comparison_results}"
+                )
             else:
                 flags_answer = flags_agent(topic=all_data_string_for_flags_agent, language='english')
-
-                agent_answer_record = AgentAnswer(
-                    project_id=project.id,
-                    answer=flags_answer,
-                    language='RU' if 'RU' in user_languages.values() else 'ENG'
+                flags_answer += (
+                    f"\n\nData to analyze\n"
+                    f"- Category analysis: {category_answer}\n\n"
+                    f"- Coin Ticker: {project.coin_name if project else 'N/A'}\n"
+                    f"- Category: {project.project_name if project else 'N/A'}\n"
+                    f"- Capitalization: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n"
+                    f"- Fundraise: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
+                    f"- Number of Twitter subscribers: {social_metrics.twitter} (Twitter: {twitter_link[0]})\n"
+                    f"- Twitter Score: {social_metrics.twitterscore}\n"
+                    f"- Funds tier: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
+                    f"- Token allocation: {funds_profit.distribution if funds_profit else 'N/A'}\n"
+                    f"- Token value growth from a low: {round((market_metrics.growth_low - 1) * 10, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Token drop from the high: {round(market_metrics.fail_high, 2) if market_metrics else 'N/A'}%\n"
+                    f"- Percentage of coins found on top 100 blockchain wallets: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics else 'N/A'}%\n"
+                    f"- Blocked tokens (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n"
+                    f"- Project Tier: {tier_answer}\n"
+                    f"- Estimation of fund returns: {funds_answer if funds_answer else 'N/A'}\n"
+                    f"- Tokenomics valuation: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
+                    f"Data for tokenomic analysis:\n{comparison_results}"
                 )
-                session.add(agent_answer_record)
-                session.commit()
+            agent_answer_record = AgentAnswer(
+                project_id=project.id,
+                answer=flags_answer,
+                language='RU' if 'RU' in user_languages.values() else 'ENG'
+            )
+            session.add(agent_answer_record)
+            session.commit()
 
-                if isinstance(message, Message):
-                    existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
-                    existing_calculation.agent_answer = flags_answer
-                    session.add(existing_calculation)
-                    session.commit()
-                elif user_id is not None:
-                    existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
-                    existing_calculation.agent_answer = flags_answer
-                    session.add(existing_calculation)
-                    session.commit()
+            if isinstance(message, Message):
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
+                existing_calculation.agent_answer = flags_answer
+                session.add(existing_calculation)
+                session.commit()
+            elif user_id is not None:
+                existing_calculation = session.query(Calculation).filter_by(id=calc_id).first()
+                existing_calculation.agent_answer = flags_answer
+                session.add(existing_calculation)
+                session.commit()
         else:
             flags_answer = existing_answer.answer
 
@@ -1940,6 +2040,8 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
                 existing_calculation.agent_answer = flags_answer
                 session.add(existing_calculation)
                 session.commit()
+
+        flags_answer = flags_answer.replace('**', '')
 
         investor_data_list = []
         for header_set in headers_mapping:
@@ -2047,13 +2149,13 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
             await state.set_state(None)
             await state.set_state(CalculateProject.waiting_for_data)
             if 'RU' in user_languages.values():
-                await message.answer(f"Общая оценка проекта: \n{flags_answer}\n")
+                await send_long_message(message, f"Общая оценка проекта: \n{flags_answer}\n")
                 await message.answer(
                     "Введите тикер следующего токена (например STRK, SUI) или введите /exit для завершения:",
                     reply_markup=ReplyKeyboardRemove()
                 )
             else:
-                await message.answer(f"Overall project assessment: \n{flags_answer}\n")
+                await send_long_message(message, f"Overall project assessment: \n{flags_answer}\n")
                 await message.answer(
                     "Enter the ticker of the next token (e.g. STRK, SUI) or enter /exit to complete:",
                     reply_markup=ReplyKeyboardRemove()
@@ -2066,20 +2168,14 @@ async def create_pdf(state: FSMContext, message: Optional[Union[Message, str]] =
                 await state.set_state(None)
                 await state.set_state(CalculateProject.waiting_for_data)
                 if 'RU' in user_languages.values():
-                    await bot.send_message(
-                        chat_id=user_id,
-                        text=f"Общая оценка проекта: \n{flags_answer}\n",
-                    )
+                    await send_long_message(bot, f"Общая оценка проекта: \n{flags_answer}\n", chat_id=user_id)
                     await bot.send_message(
                         chat_id=user_id,
                         text="Введите тикер следующего токена (например STRK, SUI) или введите /exit для завершения:",
                         reply_markup=ReplyKeyboardRemove()
                     )
                 else:
-                    await bot.send_message(
-                        chat_id=user_id,
-                        text=f"Overall project assessment: \n{flags_answer}\n",
-                    )
+                    await send_long_message(bot, f"Overall project assessment: \n{flags_answer}\n", chat_id=user_id)
                     await bot.send_message(
                         chat_id=user_id,
                         text="Enter the ticker of the next token (e.g. STRK, SUI) or enter /exit to complete:",

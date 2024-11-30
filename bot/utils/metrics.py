@@ -241,7 +241,7 @@ def create_project_data_row(
 ):
     return [
         project.coin_name,
-        project.project_category if project.project_name else "-",
+        project.project_category if project.category else "-",
         f"{round(basic_metrics[1][0].market_price, 2)}$" if if_exist_instance(basic_metrics, basic_metrics[1][0].market_price if basic_metrics[1] else 0) else "-",
         f"{round(investing_metrics[1][0].fundraise)}$" if if_exist_instance(investing_metrics, investing_metrics[1][0].fundraise if investing_metrics[1] else 0) else "-",
         investing_metrics[1][0].fund_level if if_exist_instance(investing_metrics, investing_metrics[1][0].fund_level if investing_metrics[1] else 0) else "-",

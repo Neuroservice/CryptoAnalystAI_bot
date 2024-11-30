@@ -31,15 +31,26 @@ def parse_periodically():
 
         while True:
             try:
-                async with SessionLocal() as session:
-                    tasks = [fetch_crypto_data()]
-                    current_time = datetime.datetime.utcnow()
+                async def fetch_task():
+                    async with SessionLocal() as session:
+                        async with session.begin():
+                            await fetch_crypto_data()
 
-                    if (current_time - last_agent_update).days >= 1:
-                        tasks.append(update_agent_answers(session))
-                        last_agent_update = current_time
+                async def agent_update_task():
+                    async with SessionLocal() as session:
+                        async with session.begin():
+                            await update_agent_answers(session)
 
-                    await asyncio.gather(*tasks)
+                tasks = [fetch_task()]
+                current_time = datetime.datetime.utcnow()
+
+                if (current_time - last_agent_update).days >= 1:
+                    tasks.append(agent_update_task())
+                    last_agent_update = current_time
+
+                # Выполнение всех задач
+                await asyncio.gather(*tasks)
+
             except Exception as e:
                 logging.error(f"Ошибка при выполнении задач: {e}", exc_info=True)
 
