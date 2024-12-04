@@ -18,7 +18,7 @@ def update_project(session, user_coin_name, chosen_project):
     if user_coin_name not in tickers:
         return update_or_create(
             session, Project,
-            defaults={'project_category': chosen_project},
+            defaults={'category': chosen_project},
             coin_name=user_coin_name
         )
     else:
