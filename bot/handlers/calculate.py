@@ -15,7 +15,6 @@ from aiogram.types import (
     ReplyKeyboardRemove,
     BufferedInputFile, Message
 )
-from fpdf import FPDF
 
 from bot.config import API_KEY, API_TOKEN
 from bot.data_update import update_or_create
@@ -36,7 +35,7 @@ from bot.database.models import (
 )
 from bot.handlers.start import user_languages
 from bot.utils.consts import tickers, field_mapping, model_mapping, checking_map, ru_additional_headers, \
-    eng_additional_headers, headers_mapping
+    eng_additional_headers, headers_mapping, stablecoins, fundamental_tokens
 from bot.utils.gpt import (
     category_agent,
     tier_agent,
@@ -136,8 +135,8 @@ def projects_menu_keyboard():
     return keyboard
 
 
-def analysis_type_keyboard():
-    if 'RU' in user_languages.values():
+def analysis_type_keyboard(user_id):
+    if 'RU' == user_languages.get(user_id):
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
                 [KeyboardButton(text='Блок ребалансировки портфеля')],
@@ -167,13 +166,13 @@ async def project_chosen(message: types.Message, state: FSMContext):
         await message.answer(
             "Если вы хотите просто рассчитать цену токена, на основании похожих проектов, выберите кнопку 'Блок ребалансировки портфеля'.\n\n"
             "Если хотите полную сравнительную характеристику по токенам и ребалансировку портфеля, выберите кнопку 'Блок анализа и оценки проектов'.",
-            reply_markup=analysis_type_keyboard()
+            reply_markup=analysis_type_keyboard(message.from_user.id)
         )
     else:
         await message.answer(
             "If you want to simply calculate the token price based on similar projects, choose the 'Block of portfolio rebalancing' button.\n\n"
             "If you want a full comparison of token characteristics, choose the 'Block of projects analysis and evaluation' button.",
-            reply_markup=analysis_type_keyboard()
+            reply_markup=analysis_type_keyboard(message.from_user.id)
         )
 
     await state.set_state(CalculateProject.choosing_analysis_type)
@@ -265,6 +264,14 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     if user_coin_name.lower() == "/exit":
         await message.answer("Завершение расчетов. Чтобы начать снова пользоваться ботом, введите команду /start.")
         await state.clear()
+        return
+
+    if user_coin_name in stablecoins:
+        await message.answer("Вы выбрали стейблкоин. Он плохо подходит для инвестирования, так как его стоимость фиксирована. Попробуйте другой токен.")
+        return
+
+    if user_coin_name in fundamental_tokens:
+        await message.answer("Вы выбрали фундаментальный токен. Он подходит для долгосрочных инвестиций на 5 лет и более.")
         return
 
     twitter_name, description, lower_name = await get_twitter_link_by_symbol(user_coin_name)
@@ -625,6 +632,14 @@ async def receive_data(message: types.Message, state: FSMContext):
         await state.clear()
         return
 
+    if user_coin_name.upper() in stablecoins:
+        await message.answer("Стейблкоины не подходят для инвестирования, так как их стоимость фиксирована. Попробуйте другой токен.")
+        return
+
+    if user_coin_name.upper() in fundamental_tokens:
+        await message.answer("Вы выбрали один из фундаментальных токенов. Они подходят для долгосрочных инвестиций на 5 лет и более.")
+        return
+
     data = await state.get_data()
     selected_format = data.get("file_format")
     session = SessionLocal()
@@ -715,6 +730,18 @@ async def receive_data(message: types.Message, state: FSMContext):
             user_coin_name=user_coin_name,
             lower_name=lower_name
         )
+
+        project_info = await get_user_project_info(session, user_coin_name)
+        project = project_info.get("project")
+        tokenomics_data = project_info.get("tokenomics_data")
+        basic_metrics = project_info.get("basic_metrics")
+        investing_metrics = project_info.get("investing_metrics")
+        social_metrics = project_info.get("social_metrics")
+        funds_profit = project_info.get("funds_profit")
+        top_and_bottom = project_info.get("top_and_bottom")
+        market_metrics = project_info.get("market_metrics")
+        manipulative_metrics = project_info.get("manipulative_metrics")
+        network_metrics = project_info.get("network_metrics")
 
         new_project = process_metrics(session, user_coin_name, chosen_project, results, price, total_supply, fundraise, investors)
 
@@ -840,6 +867,19 @@ async def receive_data(message: types.Message, state: FSMContext):
             user_coin_name=user_coin_name,
             lower_name=lower_name
         )
+
+        project_info = await get_user_project_info(session, user_coin_name)
+        project = project_info.get("project")
+        tokenomics_data = project_info.get("tokenomics_data")
+        basic_metrics = project_info.get("basic_metrics")
+        investing_metrics = project_info.get("investing_metrics")
+        social_metrics = project_info.get("social_metrics")
+        funds_profit = project_info.get("funds_profit")
+        top_and_bottom = project_info.get("top_and_bottom")
+        market_metrics = project_info.get("market_metrics")
+        manipulative_metrics = project_info.get("manipulative_metrics")
+        network_metrics = project_info.get("network_metrics")
+
         new_project = process_metrics(session, user_coin_name, chosen_project, results, price, total_supply, fundraise, investors)
 
         if new_project:
