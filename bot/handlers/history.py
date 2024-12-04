@@ -381,7 +381,7 @@ async def create_pdf_file(zip_file, calc, session):
 async def get_project_data(calc, session):
     project = session.query(Project).filter(Project.id == calc.project_id).first()
     basic_metrics = session.query(BasicMetrics).filter(BasicMetrics.project_id == project.id).first()
-    projects, similar_projects = await get_project_and_tokenomics(session, project.category, user_coin_name=None)
+    projects, similar_projects = await get_project_and_tokenomics(session, project.category, user_coin_name=project.coin_name)
     base_tokenomics = session.query(Tokenomics).filter(Tokenomics.project_id == calc.project_id).first()
 
     return project, basic_metrics, similar_projects, base_tokenomics
