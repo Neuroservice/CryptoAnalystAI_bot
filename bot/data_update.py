@@ -71,9 +71,6 @@ async def fetch_crypto_data():
     """
     Главная функция динамического парсинга
     """
-
-    basic_metrics = None
-
     for project_type in project_types:
         symbols = get_top_projects_by_capitalization(session, project_type, tickers)
 
@@ -82,35 +79,34 @@ async def fetch_crypto_data():
             continue
 
         for symbol in symbols:
-            twitter_name, description, lower_name = await get_twitter_link_by_symbol(symbol)
-            parameters = {
-                'symbol': symbol,
-                'convert': 'USD'
-            }
-            headers = {
-                'X-CMC_PRO_API_KEY': API_KEY,
-                'Accepts': 'application/json'
-            }
-
             try:
+                # --- ШАГ 1. Получение данных с CoinMarketCap ---
+                parameters = {'symbol': symbol, 'convert': 'USD'}
+                headers = {'X-CMC_PRO_API_KEY': API_KEY, 'Accepts': 'application/json'}
                 response = requests.get(COINMARKETCAP_API_URL, headers=headers, params=parameters)
-                data = json.loads(response.text)
+                response.raise_for_status()
+                data = response.json()
 
-                if "data" in data and symbol in data["data"]:
-                    crypto_data = data['data'][symbol]['quote']['USD']
-                    circulating_supply = data['data'][symbol]['circulating_supply']
-                    total_supply = data['data'][symbol]['total_supply']
-                    price = crypto_data['price']
-                    market_cap = crypto_data['market_cap']
-                    fdv = total_supply * price if price > 0 else None
+                if "data" not in data or symbol not in data["data"]:
+                    logging.warning(f"No CoinMarketCap data for {symbol}")
+                    continue
 
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
+                coin_data = data['data'][symbol]
+                circulating_supply = coin_data.get('circulating_supply')
+                total_supply = coin_data.get('total_supply')
+                price = coin_data['quote']['USD']['price']
+                market_cap = coin_data['quote']['USD']['market_cap']
+                fdv = total_supply * price if price else None
 
+                # --- ШАГ 2. Обновление данных проекта ---
+                try:
                     project = session.query(Project).filter_by(coin_name=symbol).first()
-                    tokenomics = session.query(Tokenomics).filter_by(project_id=project.id).first()
-                    twitter_name = await get_twitter_link_by_symbol(project.coin_name)
+                    if not project:
+                        logging.error(f"Project not found for {symbol}")
+                        continue
 
+                    # Обновление Tokenomics
+                    tokenomics = session.query(Tokenomics).filter_by(project_id=project.id).first()
                     if not tokenomics:
                         tokenomics = Tokenomics(
                             project_id=project.id,
@@ -123,25 +119,31 @@ async def fetch_crypto_data():
                     else:
                         tokenomics.circ_supply = circulating_supply
                         tokenomics.total_supply = total_supply
+                        tokenomics.capitalization = market_cap
                         tokenomics.fdv = fdv
-                        if current_day in update_days:
-                            tokenomics.capitalization = market_cap
+                    session.commit()
+                except Exception as db_error:
+                    logging.error(f"Error saving tokenomics data for {symbol}: {db_error}")
 
+                # --- ШАГ 3. Обновление BasicMetrics ---
+                try:
                     basic_metrics = session.query(BasicMetrics).filter_by(project_id=project.id).first()
                     if not basic_metrics:
                         basic_metrics = BasicMetrics(project_id=project.id, market_price=round(float(price), 4))
                         session.add(basic_metrics)
-                        session.commit()
                     else:
                         basic_metrics.market_price = round(float(price), 4)
-                        session.commit()
+                    session.commit()
+                except Exception as db_error:
+                    logging.error(f"Error saving basic metrics for {symbol}: {db_error}")
 
+                # --- ШАГ 4. Обновление ManipulativeMetrics ---
+                try:
                     manipulative_metrics = session.query(ManipulativeMetrics).filter_by(project_id=project.id).first()
                     investing_metrics = session.query(InvestingMetrics).filter_by(project_id=project.id).first()
-                    if manipulative_metrics:
+                    if manipulative_metrics and investing_metrics:
                         fundraise = investing_metrics.fundraise
-                        top_100_wallets = await fetch_top_100_wallets(lower_name)
-                        logging.info(f"top_100_wallets{top_100_wallets, type(top_100_wallets), fdv / fundraise}")
+                        top_100_wallets = await fetch_top_100_wallets(symbol.lower())
                         if top_100_wallets and fdv and fundraise:
                             update_or_create(
                                 session, ManipulativeMetrics,
@@ -149,13 +151,16 @@ async def fetch_crypto_data():
                                     'fdv_fundraise': fdv / fundraise,
                                     'top_100_wallet': top_100_wallets
                                 },
-                                project_id=basic_metrics.id
+                                project_id=project.id
                             )
-                            session.commit()
+                        session.commit()
+                except Exception as db_error:
+                    logging.error(f"Error updating manipulative metrics for {symbol}: {db_error}")
 
-                    tvl = await fetch_tvl_data(lower_name)
-                    logging.info(f"tvl on update: {tvl}")
-                    if tvl:
+                # --- ШАГ 5. Обновление NetworkMetrics (TVL) ---
+                try:
+                    tvl = await fetch_tvl_data(symbol.lower())
+                    if tvl and fdv:
                         update_or_create(
                             session, NetworkMetrics,
                             defaults={
@@ -164,11 +169,16 @@ async def fetch_crypto_data():
                             },
                             project_id=project.id
                         )
+                        session.commit()
+                except Exception as db_error:
+                    logging.error(f"Error updating TVL for {symbol}: {db_error}")
 
+                # --- ШАГ 6. Обновление FundsProfit ---
+                try:
                     funds_profit = session.query(FundsProfit).filter_by(project_id=project.id).first()
-                    if not funds_profit.distribution or funds_profit.distribution == '-':
-                        twitter_link, description = await get_twitter_link_by_symbol(project.coin_name)
-                        tokenomics_percentage_data = await get_percantage_data(twitter_link, project.coin_name)
+                    if not funds_profit or not funds_profit.distribution or funds_profit.distribution == '-':
+                        twitter_link, description = await get_twitter_link_by_symbol(symbol)
+                        tokenomics_percentage_data = await get_percantage_data(twitter_link, symbol)
                         output_string = '\n'.join(tokenomics_percentage_data) if tokenomics_percentage_data else '-'
                         update_or_create(
                             session, FundsProfit,
@@ -177,18 +187,18 @@ async def fetch_crypto_data():
                             },
                             project_id=project.id
                         )
+                        session.commit()
+                except Exception as db_error:
+                    logging.error(f"Error updating funds profit for {symbol}: {db_error}")
 
+                # --- ШАГ 7. Исторические данные и рыночные метрики ---
                 try:
-                    cryptocompare_params = {
-                        'fsym': symbol,
-                        'tsym': 'USD',
-                        'limit': 90
-                    }
+                    cryptocompare_params = {'fsym': symbol, 'tsym': 'USD', 'limit': 90}
                     response = requests.get("https://min-api.cryptocompare.com/data/v2/histoday", params=cryptocompare_params)
-                    project = session.query(Project).filter_by(coin_name=symbol).first()
-                    data = response.json()
-                    if 'Data' in data and 'Data' in data['Data']:
-                        daily_data = data['Data']['Data']
+                    response.raise_for_status()
+                    historical_data = response.json()
+                    if 'Data' in historical_data and 'Data' in historical_data['Data']:
+                        daily_data = historical_data['Data']['Data']
                         highs = [day['high'] for day in daily_data]
                         lows = [day['low'] for day in daily_data]
                         max_price = max(highs)
@@ -204,7 +214,6 @@ async def fetch_crypto_data():
                             },
                             project_id=project.id
                         )
-
                         update_or_create(
                             session, MarketMetrics,
                             defaults={
@@ -213,28 +222,28 @@ async def fetch_crypto_data():
                             },
                             project_id=project.id
                         )
-                    else:
-                        print("No data found.")
-
+                        session.commit()
                 except Exception as e:
-                    logging.error(f"Error fetching historical data: {e}")
+                    logging.error(f"Error fetching historical data for {symbol}: {e}")
 
-                if twitter_name:
-                    (twitter, twitterscore) = await fetch_twitter_data(twitter_name)
-                else:
-                    twitter, twitterscore = None, None
-                    logging.warning(f"Twitter name for symbol {symbol} not found.")
-
-                update_or_create(
-                    session, SocialMetrics,
-                    defaults={
-                        'twitter': twitter,
-                        'twitterscore': twitterscore
-                    },
-                    project_id=basic_metrics.id)
+                # --- ШАГ 8. Социальные метрики ---
+                try:
+                    twitter_name, description, _ = await get_twitter_link_by_symbol(symbol)
+                    twitter, twitterscore = await fetch_twitter_data(twitter_name) if twitter_name else (None, None)
+                    update_or_create(
+                        session, SocialMetrics,
+                        defaults={
+                            'twitter': twitter,
+                            'twitterscore': twitterscore
+                        },
+                        project_id=project.id
+                    )
+                    session.commit()
+                except Exception as e:
+                    logging.error(f"Error updating social metrics for {symbol}: {e}")
 
             except Exception as e:
-                logging.error(f"Error update data for {symbol}: {e}")
+                logging.error(f"General error processing {symbol}: {e}")
 
             time.sleep(5)
 
