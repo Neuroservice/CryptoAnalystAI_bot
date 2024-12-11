@@ -11,24 +11,31 @@ from bot.database.models import (
     Project
 )
 from bot.utils.consts import tickers
-from bot.utils.project_data import if_exist_instance
+from bot.utils.project_data import find_record
+from bot.utils.validations import if_exist_instance
 
 
-def update_project(session, user_coin_name, chosen_project):
+async def update_project(session, user_coin_name, chosen_project):
     if user_coin_name not in tickers:
-        return update_or_create(
+        print("+++++1+++++", user_coin_name, chosen_project)
+        instance = await update_or_create(
             session, Project,
-            defaults={'category': chosen_project},
-            coin_name=user_coin_name
+            defaults={
+                "coin_name": user_coin_name,
+                "category": chosen_project
+            },
         )
+        print(instance.coin_name)
+        return instance
     else:
-        return session.query(Project).filter_by(coin_name=user_coin_name).first()
+        print("+++++2+++++")
+        return await find_record(Project, session, coin_name=user_coin_name)
 
 
-def update_social_metrics(session, project_id, social_metrics):
+async def update_social_metrics(session, project_id, social_metrics):
     if social_metrics:
         twitter_subs, twitter_twitterscore = social_metrics[0]
-        update_or_create(
+        await update_or_create(
             session, SocialMetrics,
             defaults={
                 'twitter': twitter_subs,
@@ -38,28 +45,28 @@ def update_social_metrics(session, project_id, social_metrics):
         )
 
 
-def update_investing_metrics(session, project_id, investing_metrics, user_coin_name, investors):
+async def update_investing_metrics(session, project_id, investing_metrics, user_coin_name, investors):
     if investing_metrics:
         fundraise, fund_tier = investing_metrics[0]
         if user_coin_name not in tickers and fundraise and investors:
-            update_or_create(
+            await update_or_create(
                 session, InvestingMetrics,
                 defaults={'fundraise': fundraise, 'fund_level': investors},
                 project_id=project_id
             )
         elif fundraise:
-            update_or_create(
+            await update_or_create(
                 session, InvestingMetrics,
                 defaults={'fundraise': fundraise},
                 project_id=project_id
             )
 
 
-def update_network_metrics(session, project_id, network_metrics, price, total_supply):
+async def update_network_metrics(session, project_id, network_metrics, price, total_supply):
     if network_metrics:
         last_tvl = network_metrics[0]
         if last_tvl and price and total_supply:
-            update_or_create(
+            await update_or_create(
                 session, NetworkMetrics,
                 defaults={
                     'tvl': last_tvl,
@@ -69,10 +76,10 @@ def update_network_metrics(session, project_id, network_metrics, price, total_su
             )
 
 
-def update_manipulative_metrics(session, project_id, manipulative_metrics, price, total_supply, fundraise):
+async def update_manipulative_metrics(session, project_id, manipulative_metrics, price, total_supply, fundraise):
     if manipulative_metrics:
         top_100_wallets = manipulative_metrics[0]
-        update_or_create(
+        await update_or_create(
             session, ManipulativeMetrics,
             defaults={
                 'fdv_fundraise': (price * total_supply) / fundraise if fundraise else None,
@@ -82,33 +89,33 @@ def update_manipulative_metrics(session, project_id, manipulative_metrics, price
         )
 
 
-def update_funds_profit(session, project_id, funds_profit_data):
+async def update_funds_profit(session, project_id, funds_profit_data):
     output_string = '\n'.join(funds_profit_data[0]) if funds_profit_data and funds_profit_data[0] else ''
     if output_string:
-        update_or_create(
+        await update_or_create(
             session, FundsProfit,
             defaults={'distribution': output_string},
             project_id=project_id
         )
 
 
-def update_market_metrics(session, project_id, market_metrics):
+async def update_market_metrics(session, project_id, market_metrics):
     if market_metrics:
         fail_high, growth_low, max_price, min_price = market_metrics[0]
         if all([fail_high, growth_low, max_price, min_price]):
-            update_or_create(
+            await update_or_create(
                 session, MarketMetrics,
                 defaults={'fail_high': fail_high, 'growth_low': growth_low},
                 project_id=project_id
             )
-            update_or_create(
-                session, TopAndBottom,
+            await update_or_create(
+                TopAndBottom,
                 defaults={'lower_threshold': min_price, 'upper_threshold': max_price},
                 project_id=project_id
             )
 
 
-def process_metrics(
+async def process_metrics(
         session,
         user_coin_name,
         chosen_project,
@@ -118,9 +125,11 @@ def process_metrics(
         fundraise,
         investors
 ):
-    new_project = update_project(session, user_coin_name, chosen_project)
 
-    update_or_create(
+    print("Processing:", user_coin_name)
+    new_project = await update_project(session, user_coin_name, chosen_project)
+
+    await update_or_create(
         session, BasicMetrics,
         defaults={
             'entry_price': price,
@@ -130,12 +139,12 @@ def process_metrics(
         project_id=new_project.id
     )
 
-    update_social_metrics(session, new_project.id, results.get("social_metrics"))
-    update_investing_metrics(session, new_project.id, results.get("investing_metrics"), user_coin_name, investors)
-    update_network_metrics(session, new_project.id, results.get("network_metrics"), price, total_supply)
-    update_manipulative_metrics(session, new_project.id, results.get("manipulative_metrics"), price, total_supply, fundraise)
-    update_funds_profit(session, new_project.id, results.get("funds_profit"))
-    update_market_metrics(session, new_project.id, results.get("market_metrics"))
+    await update_social_metrics(session, new_project.id, results.get("social_metrics"))
+    await update_investing_metrics(session, new_project.id, results.get("investing_metrics"), user_coin_name, investors)
+    await update_network_metrics(session, new_project.id, results.get("network_metrics"), price, total_supply)
+    await update_manipulative_metrics(session, new_project.id, results.get("manipulative_metrics"), price, total_supply, fundraise)
+    await update_funds_profit(session, new_project.id, results.get("funds_profit"))
+    await update_market_metrics(session, new_project.id, results.get("market_metrics"))
 
     return new_project
 
