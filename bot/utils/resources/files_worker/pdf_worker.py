@@ -8,19 +8,21 @@ from PIL import ImageDraw
 from fpdf import FPDF
 from matplotlib import pyplot as plt
 
+from bot.utils.consts import dejavu_path
+
 
 class PDF(FPDF):
     def __init__(self, logo_path=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.logo_path = logo_path  # Сохраняем путь к логотипу
-        self.footer_logo_path = None  # Путь для круглого логотипа в футере
+        self.logo_path = logo_path
+        self.footer_logo_path = None
         if self.logo_path:
             self.footer_logo_path = self._create_round_logo(self.logo_path)
 
     def _create_round_logo(self, path):
         """Обрезает изображение в форме круга и сохраняет его временно."""
         img = Image.open(path).convert("RGBA")
-        size = min(img.size)  # Обрезаем до минимальной стороны для создания круга
+        size = min(img.size)
         mask = Image.new("L", (size, size), 0)
         draw = ImageDraw.Draw(mask)
         draw.ellipse((0, 0, size, size), fill=255)
@@ -45,8 +47,8 @@ def create_pdf_file(data, additional_headers):
     pdf = FPDF()
     pdf.add_page()
 
-    pdf.add_font("DejaVu", '', 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed.ttf', uni=True)
-    # pdf.add_font("DejaVu", '', '/app/fonts/DejaVuSansCondensed.ttf', uni=True)
+    pdf.add_font("DejaVu", '', dejavu_path, uni=True)
+    # pdf.add_font("DejaVu", '', dejavu_path, uni=True)
     pdf.set_font("DejaVu", size=12)
 
     for header in additional_headers:
@@ -81,7 +83,7 @@ def generate_pie_chart(distribution):
                 label = item[:item.rfind('(')].strip()
                 size_str = item[item.rfind('(') + 1:item.rfind(')')].strip('%').strip()
                 try:
-                    if size_str == '-':  # Пропускаем, если размер '-'
+                    if size_str == '-':
                         logging.warning(f"Пропущен элемент '{label}' из-за некорректного размера '{size_str}'.")
                         continue
 

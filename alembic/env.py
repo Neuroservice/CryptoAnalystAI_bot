@@ -1,3 +1,6 @@
+import os
+from dotenv import load_dotenv
+
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -10,6 +13,18 @@ from bot.database.models import User, AgentAnswer, Project
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+
+load_dotenv()
+# Получаем строку подключения из переменных окружения
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Проверка на корректность типа
+if not isinstance(SQLALCHEMY_DATABASE_URL, str):
+    raise TypeError(f"Expected a string for SQLALCHEMY_DATABASE_URL, but got {type(SQLALCHEMY_DATABASE_URL)}")
+
+# Если все в порядке, устанавливаем строку подключения
+config.set_main_option('sqlalchemy.url', SQLALCHEMY_DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

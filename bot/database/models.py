@@ -9,7 +9,7 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = 'user'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     telegram_id = Column(Integer, nullable=False)
     language = Column(Text, nullable=True)
 
@@ -19,7 +19,7 @@ class User(Base):
 class Project(Base):
     __tablename__ = 'project'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     category = Column(String(100), nullable=True)
     coin_name = Column(String(100), nullable=True)
 
@@ -39,7 +39,7 @@ class Project(Base):
 class Calculation(Base):
     __tablename__ = 'calculation'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     date = Column(DateTime, nullable=True)
@@ -52,7 +52,7 @@ class Calculation(Base):
 class BasicMetrics(Base):
     __tablename__ = 'basic_metrics'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     entry_price = Column(Float, nullable=True)
     sphere = Column(String(50), nullable=True)
@@ -64,7 +64,7 @@ class BasicMetrics(Base):
 class InvestingMetrics(Base):
     __tablename__ = 'investing_metrics'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     fundraise = Column(Float, nullable=True)
     fund_level = Column(Text, nullable=True)
@@ -75,7 +75,7 @@ class InvestingMetrics(Base):
 class SocialMetrics(Base):
     __tablename__ = 'social_metrics'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     twitter = Column(Integer, nullable=True)
     twitterscore = Column(Integer, nullable=True)
@@ -86,7 +86,7 @@ class SocialMetrics(Base):
 class Tokenomics(Base):
     __tablename__ = 'tokenomics'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     circ_supply = Column(Float, nullable=True)
     total_supply = Column(Float, nullable=True)
@@ -99,7 +99,7 @@ class Tokenomics(Base):
 class FundsProfit(Base):
     __tablename__ = 'funds_profit'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     distribution = Column(Text, nullable=True)
     average_price = Column(Float, nullable=True)
@@ -111,7 +111,7 @@ class FundsProfit(Base):
 class TopAndBottom(Base):
     __tablename__ = 'top_and_bottom'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     lower_threshold = Column(Float, nullable=True)
     upper_threshold = Column(Float, nullable=True)
@@ -122,7 +122,7 @@ class TopAndBottom(Base):
 class MarketMetrics(Base):
     __tablename__ = 'market_metrics'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     fail_high = Column(Float, nullable=True)
     growth_low = Column(Float, nullable=True)
@@ -133,7 +133,7 @@ class MarketMetrics(Base):
 class ManipulativeMetrics(Base):
     __tablename__ = 'manipulative_metrics'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     fdv_fundraise = Column(Float, nullable=True)
     top_100_wallet = Column(Float, nullable=True)
@@ -144,7 +144,7 @@ class ManipulativeMetrics(Base):
 class NetworkMetrics(Base):
     __tablename__ = 'network_metrics'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     tvl = Column(Float, nullable=True)
     tvl_fdv = Column(Float, nullable=True)
@@ -155,7 +155,7 @@ class NetworkMetrics(Base):
 class AgentAnswer(Base):
     __tablename__ = 'agentanswer'
 
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     answer = Column(Text, nullable=True)
     language = Column(Text, nullable=True)

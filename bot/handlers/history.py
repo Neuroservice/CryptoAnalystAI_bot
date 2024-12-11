@@ -1,27 +1,33 @@
 import logging
-import textwrap
 import traceback
 import zipfile
-import matplotlib
 from io import BytesIO
 
+import matplotlib
 import xlsxwriter
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import BufferedInputFile
 from fpdf import FPDF
-from matplotlib import pyplot as plt
+from sqlalchemy import select
 
-from bot.database.db_setup import SessionLocal
-from bot.database.models import Calculation, Project, BasicMetrics, Tokenomics
-from bot.handlers.calculate import get_project_and_tokenomics
+from bot.database.models import Calculation
 from bot.handlers.start import user_languages
-
-from bot.utils.consts import column_widths, eng_additional_headers, ru_additional_headers
+from bot.utils.consts import (
+    column_widths,
+    logo_path,
+    dejavu_path,
+    color_palette, SessionLocal, async_session
+)
+from bot.utils.keyboards.history_keyboards import file_format_keyboard
 from bot.utils.metrics import create_project_data_row, generate_cells_content
-from bot.utils.pdf_worker import PDF
-from bot.utils.project_data import get_full_info, calculate_expected_x
+from bot.utils.project_data import get_full_info, calculate_expected_x, get_project_data
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
+from bot.utils.resources.files_worker.pdf_worker import PDF, generate_pie_chart
+from bot.utils.resources.headers.headers import ru_results_headers, eng_results_headers, ru_additional_headers, \
+    eng_additional_headers
+from bot.utils.resources.headers.headers_handler import calculation_header_by_user, write_headers
 
 history_router = Router()
 matplotlib.use('Agg')
@@ -37,66 +43,32 @@ class HistoryState(StatesGroup):
     waiting_for_basic_data = State()
 
 
-def format_number(value):
-    """Функция для округления числа до 2 знаков после запятой и преобразования в строку."""
-    if value is None:
-        return "-"
-    try:
-        return "{:.2f}".format(round(value, 6))
-    except (TypeError, ValueError):
-        return "-"
-
-
 @history_router.message(lambda message: message.text == 'История расчетов' or message.text == 'Calculation History')
 async def file_format_chosen(message: types.Message, state: FSMContext):
-    if 'RU' in user_languages.values():
-        await message.answer(
-            "Выберите формат файла: PDF или Excel?",
-            reply_markup=types.ReplyKeyboardMarkup(
-                keyboard=[
-                    [types.KeyboardButton(text="PDF"), types.KeyboardButton(text="Excel")],
-                ],
-                resize_keyboard=True
-            )
-        )
-    else:
-        await message.answer(
-            "Choose the file format: PDF or Excel?",
-            reply_markup=types.ReplyKeyboardMarkup(
-                keyboard=[
-                    [types.KeyboardButton(text="PDF"), types.KeyboardButton(text="Excel")],
-                ],
-                resize_keyboard=True
-            )
-        )
-
+    await message.answer(phrase_by_user("file_format", message.from_user.id), reply_markup=file_format_keyboard())
     await state.set_state(HistoryState.choosing_file_format)
 
 
 @history_router.message(HistoryState.choosing_file_format)
 async def history_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
-    session = SessionLocal()
 
     file_format = message.text.lower()
     await state.update_data(file_format=file_format)
 
     try:
-        last_calculations = (
-            session.query(Calculation)
-            .filter(Calculation.user_id == user_id)
+        query = (
+            select(Calculation)
+            .filter_by(user_id=user_id)
             .order_by(Calculation.date.desc())
             .limit(5)
-            .all()
         )
+        result = await async_session.execute(query)
+        last_calculations = result.scalars().all()
 
         if not last_calculations:
-            if 'RU' in user_languages.values():
-                await message.answer("У вас еще нет расчетов.")
-                return
-            else:
-                await message.answer("You haven't made any calculations yet.")
-                return
+            phrase_by_user("no_calculations", message.from_user.id)
+            return
 
         zip_buffer = BytesIO()
 
@@ -105,49 +77,42 @@ async def history_command(message: types.Message, state: FSMContext):
                 for i, calculation in enumerate(last_calculations, start=1):
                     output = BytesIO()
                     workbook = xlsxwriter.Workbook(output)
-                    await create_excel_file(zip_archive, calculation, session)
+                    await create_excel_file(zip_archive, calculation, async_session, user_id)
                     workbook.close()
                     output.seek(0)
             elif file_format == 'pdf':
                 for i, calculation in enumerate(last_calculations, start=1):
                     pdf = FPDF(orientation='P')
                     pdf.add_page()
-                    await create_pdf_file(zip_archive, calculation, session)
+                    await create_pdf_file(zip_archive, calculation, async_session, user_id)
                     pdf_output = BytesIO()
                     pdf.output(pdf_output)
                     pdf_output.seek(0)
 
         zip_buffer.seek(0)
 
-        if 'RU' in user_languages.values():
-            await message.answer_document(BufferedInputFile(zip_buffer.read(), filename="История расчетов.zip"))
-        else:
-            await message.answer_document(BufferedInputFile(zip_buffer.read(), filename="Calculation History.zip"))
+        await message.answer_document(BufferedInputFile(zip_buffer.read(), filename=f"{phrase_by_user('calculations_history', message.from_user.id)}"))
 
-    except Exception as e:
+    except Exception:
         error_details = traceback.format_exc()
-        if 'RU' in user_languages.values():
-            await message.answer(f"Произошла ошибка: {str(e)}\n\nПодробности:\n{error_details}")
-        else:
-            await message.answer(f"Error: {str(e)}\n\nError Details:\n{error_details}")
+        await message.answer(f"{phrase_by_user('error_common', message.from_user.id)} {error_details}")
     finally:
-        session.close()
+        await async_session.close()
 
 
-async def create_pdf_file(zip_file, calc, session):
+async def create_pdf_file(zip_file, calc, session, user_id):
     cells_content = None
     row_data = []
     formatted_lines = []
     skip_empty_line = False
     readable_date = calc.date.strftime("%Y-%m-%d_%H-%M-%S")
     file_name = f"calculation_{readable_date}.pdf"
-    logo_path = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\bot\\fasolka.jpg" # Для локалки
-    # logo_path = "/app/bot/fasolka.jpg" # Для прода
 
     pdf = PDF(logo_path=logo_path, orientation='L')
     pdf.add_page()
-    pdf.add_font("DejaVu", '', 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed.ttf', uni=True)
-    # pdf.add_font("DejaVu", '', '/app/fonts/DejaVuSansCondensed.ttf', uni=True)
+    pdf.add_font("DejaVu", '', dejavu_path, uni=True)
+    # pdf.add_font("DejaVu", '', dejavu_path, uni=True)
+    headers = calculation_header_by_user(user_id)
 
     agent_answer = calc.agent_answer if calc.agent_answer else "Ответ модели отсутствует"
     pdf.set_font("DejaVu", size=8)
@@ -164,7 +129,7 @@ async def create_pdf_file(zip_file, calc, session):
             skip_empty_line = False
 
     formatted_answer = "\n".join(formatted_lines)
-    pdf.multi_cell(0, 10, f"Ответ модели по расчету:\n{formatted_answer}\n", align='L')
+    pdf.multi_cell(0, 10, f"{phrase_by_user('model_answer_for_calculations', user_id)}\n{formatted_answer}\n", align='L')
     pdf.set_font("DejaVu", size=10)
 
     base_project, basic_metrics, similar_projects, base_tokenomics = await get_project_data(calc, session)
@@ -179,7 +144,7 @@ async def create_pdf_file(zip_file, calc, session):
         market_metrics_data_list,
         manipulative_metrics_data_list,
         network_metrics_data_list
-    ) = get_full_info(session, base_project.category, base_project.coin_name)
+    ) = await get_full_info(session, base_project.category, base_project.coin_name)
 
     result_index = 1
     for index, (project, tokenomics_data) in enumerate(tokenomics_data_list, start=1):
@@ -207,24 +172,6 @@ async def create_pdf_file(zip_file, calc, session):
                 ])
                 result_index += 1
 
-    if 'RU' in user_languages.values():
-        headers = [
-            "Вариант",
-            "Монета",
-            "Расчеты относительно монеты",
-            "Прирост монеты (в %)",
-            "Ожидаемая цена монеты, $"
-        ]
-
-    else:
-        headers = [
-            "Option",
-            "Coin",
-            "Calculations relative to coin",
-            "Increase in coins (in %)",
-            "Expected market price, $"
-        ]
-
     for header in headers:
         if header == ('Вариант' or 'Option'):
             pdf.cell(30, 10, header, 1)
@@ -249,28 +196,10 @@ async def create_pdf_file(zip_file, calc, session):
         pdf.ln()
     pdf.ln()
 
-    headers_mapping_ru = [
-        ["Монета сравнения", "Сфера", "Цена Рынок", "Фандрейз"],
-        ["Монета сравнения", "Тир фондов"],
-        ["Монета сравнения", "Твиттер", "Твиттерскор"],
-        ["Монета сравнения", "Капитализация", "Circ. Supply", "Total Supply", "FDV"],
-        ["Монета сравнения", "Падение High", "Рост Low"],
-        ["Монета сравнения", "FDV/Фандрейз", "Топ 100 кошельков", "TVL", "TVL/FDV", "Дно", "Хаи"]
-    ]
-
-    headers_mapping_en = [
-        ["Comparison Coin", "Sphere", "Price Market", "Fundraise"],
-        ["Comparison Coin", "Fund Tier"],
-        ["Comparison Coin", "Twitter", "Twitter Score"],
-        ["Comparison Coin", "Market Cap", "Circ. Supply", "Total Supply", "FDV"],
-        ["Comparison Coin", "Fall High", "Growth Low"],
-        ["Comparison Coin", "FDV/Fundraise", "Top 100 wallets", "TVL", "TVL/FDV", "Bottom", "High"]
-    ]
-
-    if 'RU' in user_languages.values():
-        headers_mapping = headers_mapping_ru
+    if user_languages.get(user_id) == 'RU':
+        headers_mapping = ru_results_headers
     else:
-        headers_mapping = headers_mapping_en
+        headers_mapping = eng_results_headers
 
     investor_data_list = []
     for header_set in headers_mapping:
@@ -305,8 +234,7 @@ async def create_pdf_file(zip_file, calc, session):
                 )
 
                 if len(cells_content) != len(header_set):
-                    print(
-                        f"Ошибка: количество значений {len(cells_content)} не соответствует заголовкам {len(header_set)}.")
+                    print(f"Ошибка: количество значений {len(cells_content)} не соответствует заголовкам {len(header_set)}.")
                     continue
 
                 cell_widths = []
@@ -364,7 +292,7 @@ async def create_pdf_file(zip_file, calc, session):
 
         pdf.set_font("DejaVu", size=12)
         pdf.set_xy(x_pos, y_pos - 10)
-        pdf.cell(90, 10, f"Распределение токенов для {coin_name}", 0, 1, 'C')
+        pdf.cell(90, 10, f"{phrase_by_user('tokens_distribution', user_id)} {coin_name}", 0, 1, 'C')
 
         pie_chart_img = generate_pie_chart(distribution_data)
         pdf.image(pie_chart_img, x=x_pos, y=y_pos, w=chart_width, h=85)
@@ -378,63 +306,7 @@ async def create_pdf_file(zip_file, calc, session):
     zip_file.writestr(file_name, pdf_output.read())
 
 
-async def get_project_data(calc, session):
-    project = session.query(Project).filter(Project.id == calc.project_id).first()
-    basic_metrics = session.query(BasicMetrics).filter(BasicMetrics.project_id == project.id).first()
-    projects, similar_projects = await get_project_and_tokenomics(session, project.category, user_coin_name=project.coin_name)
-    base_tokenomics = session.query(Tokenomics).filter(Tokenomics.project_id == calc.project_id).first()
-
-    return project, basic_metrics, similar_projects, base_tokenomics
-
-
-def generate_pie_chart(distribution):
-    labels = []
-    sizes = []
-
-    try:
-        float(distribution.strip().strip('%'))
-        labels = ["Funds"]
-        sizes = [100]
-    except ValueError:
-        items = distribution.split('\n')
-
-        if len(items) == 1:
-            items = distribution.split(') ')
-            items = [item + ')' if '(' in item and ')' not in item else item for item in items]
-
-        for item in items:
-            if '(' in item and ')' in item:
-                label = item[:item.rfind('(')].strip()
-                size_str = item[item.rfind('(') + 1:item.rfind(')')].strip('%').strip()
-
-                if size_str == '-':
-                    print(f"Пропущено значение: {item}")
-                    continue
-
-                try:
-                    size = float(size_str)
-                except ValueError:
-                    raise ValueError(f"Не удалось преобразовать размер '{size_str}' в число.")
-                labels.append(label)
-                sizes.append(size)
-
-    fig, ax = plt.subplots(figsize=(13, 10))
-    wedges, texts = ax.pie(sizes, startangle=90, wedgeprops=dict(width=1))
-    wrapped_labels = [textwrap.fill(f'{label} - {size:.1f}%', width=30) for label, size in zip(labels, sizes)]
-    ax.legend(wedges, wrapped_labels, loc="center left", bbox_to_anchor=(1, 0, 0.9, 1), fontsize=25)
-
-    ax.axis('equal')
-    plt.tight_layout()
-
-    pie_chart_img = BytesIO()
-    plt.savefig(pie_chart_img, format='PNG')
-    pie_chart_img.seek(0)
-    plt.close(fig)
-
-    return pie_chart_img
-
-
-async def create_excel_file(zip_file, calc, session):
+async def create_excel_file(zip_file, calc, session, user_id):
     readable_date = calc.date.strftime("%Y-%m-%d_%H-%M-%S")
     file_name = f"calculation_{readable_date}.xlsx"
 
@@ -452,10 +324,10 @@ async def create_excel_file(zip_file, calc, session):
     worksheet.merge_range('A1:H30', agent_answer, text_format)
 
     row_start = 32
-    write_headers(worksheet, header_format, row_start)
+    write_headers(worksheet, header_format, row_start, user_id)
 
     base_project, basic_metrics, similar_projects, base_tokenomics = await get_project_data(calc, session)
-    row_data = await prepare_row_data(similar_projects, basic_metrics, base_project, base_tokenomics)
+    row_data = await prepare_row_data(similar_projects, basic_metrics, base_project, base_tokenomics, user_id)
     end_row = write_data_to_worksheet(worksheet, row_data, data_format, number_format, row_start + 1)
     merge_cells(worksheet, row_data, data_format, row_start + 1)
 
@@ -467,7 +339,7 @@ async def create_excel_file(zip_file, calc, session):
     fund_distribution_list = []
     fund_distribution_dict = {}
 
-    if 'RU' in user_languages.values():
+    if user_languages.get(user_id) == 'RU':
         additional_headers = ru_additional_headers
     else:
         additional_headers = eng_additional_headers
@@ -475,7 +347,8 @@ async def create_excel_file(zip_file, calc, session):
     for col_num, header in enumerate(additional_headers):
         worksheet.write(empty_row + 1, col_num, header, header_format)
 
-    (projects,
+    (
+     projects,
      tokenomics_data_list,
      basic_metrics_data_list,
      invested_metrics_data_list,
@@ -484,7 +357,8 @@ async def create_excel_file(zip_file, calc, session):
      top_and_bottom_data_list,
      market_metrics_data_list,
      manipulative_metrics_data_list,
-     network_metrics_data_list) = get_full_info(session, base_project.category, user_coin_name=None)
+     network_metrics_data_list
+    ) = await get_full_info(session, base_project.category, user_coin_name=base_project.coin_name)
 
     result_index = 1
     for index, (project, tokenomics_data) in enumerate(tokenomics_data_list, start=1):
@@ -513,7 +387,7 @@ async def create_excel_file(zip_file, calc, session):
                 if len(funds_profit) > 1 and len(funds_profit[1]) > 0:
                     fund_distribution_list.append((project.coin_name, str(funds_profit[1][0].distribution) if funds_profit[1][0].distribution else "-"))
                 else:
-                    fund_distribution_list.append((project.coin_name, "-"))  # или любое другое значение по умолчанию
+                    fund_distribution_list.append((project.coin_name, "-"))
 
                 result_index += 1
 
@@ -541,8 +415,6 @@ async def create_excel_file(zip_file, calc, session):
 
     x_scale = 1.2
     y_scale = 1.2
-
-    color_palette = ['#FF6633', '#FF33FF', '#00B3E6', '#E6B333', '#3366E6', '#B34D4D', '#6680B3', '#FF99E6', '#FF1A66', '#B366CC', '#4D8000', '#809900']
 
     for coin_name, distributions in fund_distribution_dict.items():
         chart_data = {
@@ -588,7 +460,6 @@ async def create_excel_file(zip_file, calc, session):
                 'points': [{'fill': {'color': color_palette[i % len(color_palette)]}} for i in range(len(chart_data["values"]))],
             })
 
-            # Устанавливаем метки для легенды
             chart.set_legend({
                 'position': 'right',
                 'layout': {'overlay': True},
@@ -622,29 +493,7 @@ def set_column_formats(worksheet, data_format):
         worksheet.set_column(col_num, col_num, width, data_format)
 
 
-def write_headers(worksheet, header_format, row_start):
-    if 'RU' in user_languages.values():
-        headers = [
-            "Вариант",
-            "Монета",
-            "Расчеты относительно монеты",
-            "Текущая цена, $",
-            "Прирост монеты (в %)",
-            "Ожидаемая цена монеты, $"
-        ]
-    else:
-        headers = [
-            "Option",
-            "Coin",
-            "Calculations relative to coin",
-            "Increase in coins (in %)",
-            "Expected market price, $"
-        ]
-    for col_num, header in enumerate(headers):
-        worksheet.write(row_start, col_num, header, header_format)
-
-
-async def prepare_row_data(similar_projects, basic_metrics, project, base_tokenomics):
+async def prepare_row_data(similar_projects, basic_metrics, project, base_tokenomics, user_id):
     row_data = []
     for index, (similar_project, tokenomics_data) in enumerate(similar_projects, start=1):
         for tokenomic in tokenomics_data:
@@ -659,7 +508,7 @@ async def prepare_row_data(similar_projects, basic_metrics, project, base_tokeno
                 raise ValueError(calculation_result["error"])
 
             fair_price = calculation_result['fair_price']
-            fair_price = f"{fair_price:.5f}" if isinstance(fair_price, (int, float)) else "Ошибка в расчетах" if 'RU' in user_languages.values() else "Error on market"
+            fair_price = f"{fair_price:.5f}" if isinstance(fair_price, (int, float)) else "Ошибка в расчетах" if user_languages.get(user_id) == 'RU' else "Error on market"
             expected_x = f"{calculation_result['expected_x']:.5f}"
 
             row_data.append([
