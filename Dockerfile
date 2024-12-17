@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y \
     libpangocairo-1.0-0 \
     libgtk-3-0 \
     libgbm-dev \
+    libpq-dev \
+    build-essential \
+    gcc \
     wget \
     curl \
     unzip \

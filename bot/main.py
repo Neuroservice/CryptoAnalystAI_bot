@@ -42,7 +42,7 @@ async def parse_periodically():
 
             if (current_time - last_agent_update).days >= 1:
                 tasks.append(agent_update_task())
-                tasks.append(backup_task())
+                # tasks.append(backup_task())
                 last_agent_update = current_time
 
             # Выполнение всех задач

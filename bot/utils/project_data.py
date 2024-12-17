@@ -1,11 +1,12 @@
 import asyncio
 import logging
 import re
+from typing import Type, Dict, Any
+from urllib.parse import urljoin
+
 import aiohttp
 import httpx
 import requests
-
-from urllib.parse import urljoin
 from aiogram.types import Message
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
@@ -13,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import COINMARKETCAP_API_URL
+from bot.data_update import update_or_create
 from bot.database.models import (
     Project,
     Tokenomics,
@@ -25,12 +27,11 @@ from bot.database.models import (
     ManipulativeMetrics,
     NetworkMetrics, AgentAnswer
 )
-from bot.handlers.start import user_languages
-from bot.utils.consts import tickers, MAX_MESSAGE_LENGTH, get_header_params, SessionLocal, get_cryptocompare_params
+from bot.utils.consts import tickers, MAX_MESSAGE_LENGTH, get_header_params, SessionLocal, get_cryptocompare_params, \
+    sync_session
 from bot.utils.gpt import agent_handler
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.utils.validations import is_async_session
-
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -38,20 +39,26 @@ logger = logging.getLogger(__name__)
 
 async def get_data(model, project_id, is_async, session):
     if is_async:
+        print("1")
+        print(project_id, model)
         info = select(model).filter(model.project_id == project_id)
         info_result = await session.execute(info)
         result = info_result.scalars().all()
+        print(result)
         if result:
             return result[0]
         return None
     else:
+        print("2")
         result = session.query(model).filter(model.project_id == project_id).all()
+        print(result)
         if result:
             return result[0]
         return None
 
 
 async def get_user_project_info(session, user_coin_name):
+
     try:
         is_async = is_async_session(session)
         if is_async:
@@ -63,6 +70,7 @@ async def get_user_project_info(session, user_coin_name):
         if not project:
             raise ValueError(f"Project '{user_coin_name}' not found.")
 
+
         tokenomics_data = await get_data(Tokenomics, project.id, is_async, session)
         basic_metrics = await get_data(BasicMetrics, project.id, is_async, session)
         investing_metrics = await get_data(InvestingMetrics, project.id, is_async, session)
@@ -72,8 +80,6 @@ async def get_user_project_info(session, user_coin_name):
         market_metrics = await get_data(MarketMetrics, project.id, is_async, session)
         manipulative_metrics = await get_data(ManipulativeMetrics, project.id, is_async, session)
         network_metrics = await get_data(NetworkMetrics, project.id, is_async, session)
-
-        print(manipulative_metrics.id, manipulative_metrics.top_100_wallet, project.id)
 
         project_info = {
             "project": project,
@@ -135,14 +141,18 @@ async def get_project_and_tokenomics(session, project_name, user_coin_name):
                     tokenomics_data = session.query(Tokenomics).filter(Tokenomics.project_id == project.id).all()
 
                 if not tokenomics_data:
-                    logger.warning(f"Нет данных по токеномике для проекта {project.coin_name}.")
-                    raise ValueError(f"No tokenomics data for project '{project.coin_name}'.")
+                    tokenomics_data = Tokenomics(project_id=project.id)
+                    session.add(tokenomics_data)
+                    await session.commit()
 
                 tokenomics_data_list.append((project, tokenomics_data))
 
         if not tokenomics_data_list:
+            if not tokenomics_data:
+                tokenomics_data = Tokenomics(project_id=project.id)
+                session.add(tokenomics_data)
+                await session.commit()
             logger.warning("Нет доступных проектов для сравнения.")
-            raise ValueError("No available projects for comparison.")
 
         logger.info(f"Проекты и токеномика успешно получены для категории {project_name}.")
         return projects, tokenomics_data_list
@@ -735,21 +745,24 @@ def fetch_binance_data(symbol):
         return None, None
 
 
-async def fetch_cryptocompare_data(cryptocompare_params, price):
+async def fetch_cryptocompare_data(cryptocompare_params, price, request_type=None):
+    max_price = None
+    min_price = None
+    fail_high = None
+    growth_low = None
+
     try:
         response = requests.get("https://min-api.cryptocompare.com/data/v2/histoday", params=cryptocompare_params)
         data = response.json()
         if 'Data' in data and 'Data' in data['Data']:
             daily_data = data['Data']['Data']
-            highs = [day['high'] for day in daily_data]
-            lows = [day['low'] for day in daily_data]
+            highs = [day['high'] for day in daily_data if day['high'] > 0]
+            lows = [day['low'] for day in daily_data if day['low'] > 0]
             max_price = max(highs)
             min_price = min(lows)
 
             fail_high = (price / max_price) - 1
             growth_low = price / min_price
-
-            return fail_high, growth_low, max_price, min_price
         else:
             logging.info("Нет данных от CryptoCompare, переключаемся на Binance API.")
             symbol = cryptocompare_params['fsym'] + cryptocompare_params['tsym']
@@ -759,11 +772,14 @@ async def fetch_cryptocompare_data(cryptocompare_params, price):
                 fail_high = (price / max_price) - 1
                 growth_low = price / min_price
 
-                print(fail_high, growth_low, max_price, min_price)
-
-                return fail_high, growth_low, max_price, min_price
-
             logging.error("Нет данных от Binance API.")
+
+        if request_type == 'top_and_bottom':
+            return max_price, min_price
+        elif request_type == 'market_metrics':
+            return fail_high, growth_low
+        else:
+            return fail_high, growth_low, max_price, min_price
 
     except AttributeError as attr_error:
         logging.error(f"Ошибка доступа к атрибутам при извлечении исторических данных: {attr_error}")
@@ -782,7 +798,7 @@ async def fetch_cryptocompare_data(cryptocompare_params, price):
 async def fetch_twitter_data(name):
     try:
         twitter_response = await get_twitter(name)
-        return twitter_response['twitter'], twitter_response['twitterscore']
+        return twitter_response['twitter'], int(twitter_response['twitterscore'])
     except AttributeError as attr_error:
         logging.error(f"Ошибка при доступе к атрибутам данных Twitter: {attr_error}")
         return None, None
@@ -841,7 +857,7 @@ async def fetch_tvl_data(coin_name):
             async with session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
-                    print("data tvl", data)
+                    # print("data tvl", coin_name.lower(), data)
 
                     if data:
                         last_tvl = data[-1]['tvl']
@@ -920,6 +936,8 @@ def get_top_projects_by_capitalization_and_category(tokenomics_data_list):
         if project.coin_name in tickers
     ]
 
+    print(filtered_projects)
+
     top_projects = sorted(
         filtered_projects,
         key=lambda item: item[1][0].capitalization if item[1][0].capitalization else 0,
@@ -934,7 +952,8 @@ async def get_top_projects_by_capitalization(project_type: str, tickers: list, t
         stmt_ticker_projects = (
             select(Project)
             .join(Tokenomics, Project.id == Tokenomics.project_id)
-            .filter(Project.category == project_type, Project.coin_name.in_(tickers))
+            .where(Project.category == project_type)
+            .where(Project.coin_name.in_(tickers))
             .order_by(Tokenomics.capitalization.desc())
             .limit(top_n_tickers)
         )
@@ -942,7 +961,8 @@ async def get_top_projects_by_capitalization(project_type: str, tickers: list, t
         stmt_other_projects = (
             select(Project)
             .join(Tokenomics, Project.id == Tokenomics.project_id)
-            .filter(Project.category == project_type, Project.coin_name.in_(tickers))
+            .where(Project.category == project_type)
+            .where(Project.coin_name.in_(tickers))
             .order_by(Tokenomics.capitalization.desc())
             .limit(top_n_other)
         )
@@ -957,6 +977,7 @@ async def get_top_projects_by_capitalization(project_type: str, tickers: list, t
 
 
 async def check_and_run_tasks(
+        project,
         price,
         lower_name,
         top_and_bottom,
@@ -967,55 +988,83 @@ async def check_and_run_tasks(
         manipulative_metrics,
         network_metrics,
         twitter_name,
-        user_coin_name
+        user_coin_name,
+        session: AsyncSession,
+        model_mapping: dict
 ):
     tasks = []
     results = {}
 
     cryptocompare_params = get_cryptocompare_params(user_coin_name)
 
-    if investing_metrics:
-        if not all([
-            investing_metrics.fundraise,
-            investing_metrics.fund_level or investing_metrics.fund_level != '-',
-        ]):
-            tasks.append((fetch_fundraise_data(lower_name), "investing_metrics"))
+    if investing_metrics and not all([
+        getattr(investing_metrics, 'fundraise', None),
+        getattr(investing_metrics, 'fund_level', None),
+        getattr(investing_metrics, 'fund_level', '-') != '-'
+    ]):
+        tasks.append((fetch_fundraise_data(lower_name), "investing_metrics"))
 
-    if social_metrics:
-        if not all([
-            social_metrics.twitter or social_metrics.twitter == '',
-            social_metrics.twitterscore or social_metrics.twitterscore == '',
-        ]):
-            tasks.append((fetch_twitter_data(twitter_name), "social_metrics"))
+    if social_metrics and not all([
+        getattr(social_metrics, 'twitter', '') != '',
+        getattr(social_metrics, 'twitterscore', '') != ''
+    ]):
+        tasks.append((fetch_twitter_data(twitter_name), "social_metrics"))
 
-    if funds_profit:
-        if not funds_profit.distribution or funds_profit.distribution == '':
-            tasks.append((get_percantage_data(lower_name, user_coin_name), "funds_profit"))
+    if funds_profit and not all([
+        getattr(funds_profit, 'distribution', None),
+        getattr(funds_profit, 'distribution', '') != ''
+    ]):
+        tasks.append((get_percantage_data(lower_name, user_coin_name), "funds_profit"))
 
-    if top_and_bottom and market_metrics and price:
-        if not all([
-            top_and_bottom.lower_threshold,
-            top_and_bottom.upper_threshold,
-            market_metrics.fail_high,
-            market_metrics.growth_low
-        ]):
-            tasks.append((fetch_cryptocompare_data(cryptocompare_params, price), "market_metrics"))
+    logging.info(f"{top_and_bottom, market_metrics, price}")
+    if not all([
+        top_and_bottom,
+        market_metrics,
+        getattr(top_and_bottom, 'lower_threshold', None),
+        getattr(top_and_bottom, 'upper_threshold', None),
+        getattr(market_metrics, 'fail_high', None),
+        getattr(market_metrics, 'growth_low', None)
+    ]) and price:
+        tasks.append((fetch_cryptocompare_data(cryptocompare_params, price, "market_metrics"), "market_metrics"))
+        tasks.append((fetch_cryptocompare_data(cryptocompare_params, price, "top_and_bottom"), "top_and_bottom"))
 
-    if manipulative_metrics:
-        if not manipulative_metrics.top_100_wallet:
-            tasks.append((fetch_top_100_wallets(lower_name), "manipulative_metrics"))
+    if manipulative_metrics and not getattr(manipulative_metrics, 'top_100_wallet', None):
+        tasks.append((fetch_top_100_wallets(lower_name), "manipulative_metrics"))
 
-    if network_metrics:
-        if not network_metrics.tvl:
-            tasks.append((fetch_tvl_data(lower_name), "network_metrics"))
+    if network_metrics and not getattr(network_metrics, 'tvl', None):
+        tasks.append((fetch_tvl_data(lower_name), "network_metrics"))
 
+    # Выполняем задачи
     if tasks:
         task_results = await asyncio.gather(*(task for task, _ in tasks))
+        logging.info(f"Результаты выполнения задач: {task_results}")
         for (result, (_, model_name)) in zip(task_results, tasks):
             if model_name not in results:
                 results[model_name] = []
             results[model_name].append(result)
 
+    print("results.items():", results.items(), tasks)
+    # Сохранение результатов в базу данных
+    for model_name, data_list in results.items():
+        model = model_mapping.get(model_name)
+        if not model:
+            logging.warning(f"Модель для {model_name} не найдена. Пропускаем.")
+            continue
+
+        for data in data_list:
+            # Преобразуем данные в формат для модели
+            data_dict = map_data_to_model_fields(model_name, data)
+            if not data_dict or "N/A" in data_dict.values():
+                logging.warning(f"Данные содержат N/A, пропускаем сохранение: {data}")
+                continue
+
+            # Добавляем project_id
+            data_dict["project_id"] = project.id
+
+            # Сохраняем в базу данных
+            await update_or_create(session, model, defaults=data_dict, project_id=project.id)
+
+    logging.info(f"Результаты сохранены: {results}")
     return results
 
 
@@ -1114,9 +1163,9 @@ async def generate_flags_answer(user_id, session, all_data_string_for_flags_agen
             f"- Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
             f"- Минимальная цена токена: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom else 'N/A'}\n"
             f"- Максимальная цена токена: ${round(top_and_bottom.upper_threshold, 2) if top_and_bottom else 'N/A'}\n"
-            f"- Рост стоимости токена с минимума: x{round(market_metrics.growth_low, 2) if market_metrics else 'N/A'}\n"
-            f"- Падение стоимости токена с максимума: {(round(market_metrics.fail_high, 2) * 100) if market_metrics else 'N/A'}%\n"
-            f"- Процент нахождения монет на топ 100 кошельков блокчейна: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics else 'N/A'}%\n"
+            f"- Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}\n"
+            f"- Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}\n"
+            f"- Процент нахождения монет на топ 100 кошельков блокчейна: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}%\n"
             f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n\n"
             f"- Тир проекта: {tier_answer}\n"
             f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
@@ -1139,9 +1188,9 @@ async def generate_flags_answer(user_id, session, all_data_string_for_flags_agen
             f"- Token allocation: {funds_profit.distribution if funds_profit else 'N/A'}\n"
             f"- Minimum token price: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom else 'N/A'}\n"
             f"- Maximum token price: ${round(top_and_bottom.upper_threshold, 2) if top_and_bottom else 'N/A'}\n"
-            f"- Token value growth from a low: x{round(market_metrics.growth_low, 2) if market_metrics else 'N/A'}\n"
-            f"- Token drop from the high: {(round(market_metrics.fail_high, 2) * 100) if market_metrics else 'N/A'}%\n"
-            f"- Percentage of coins found on top 100 blockchain wallets: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics else 'N/A'}%\n"
+            f"- Token value growth from a low: {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}%\n"
+            f"- Token drop from the high: {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}%\n"
+            f"- Percentage of coins found on top 100 blockchain wallets: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}%\n"
             f"- Blocked tokens (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n"
             f"- Project Tier: {tier_answer}\n"
             f"- Estimation of fund returns: {funds_answer if funds_answer else 'N/A'}\n"
@@ -1174,3 +1223,56 @@ async def find_records(model, session: AsyncSession, **filters):
     if records is None:
         return None
     return records
+
+
+def map_data_to_model_fields(model_name, data):
+    """
+    Сопоставляет данные из results полям модели с обработкой None значений.
+
+    :param model_name: Название модели.
+    :param data: Кортеж или список данных из results.
+    :return: Словарь с данными для записи в модель, None если значения невалидные.
+    """
+
+    def safe_value(value):
+        return value if value is not None else "N/A"
+
+    if model_name == "market_metrics":
+        return {
+            "fail_high": safe_value(data[0] if data else None),
+            "growth_low": safe_value(data[1] if data else None)
+        }
+    elif model_name == "top_and_bottom":
+        return {
+            "upper_threshold": safe_value(data[0] if data else None),
+            "lower_threshold": safe_value(data[1] if data else None)
+        }
+    elif model_name == "investing_metrics":
+        return {
+            "fundraise": safe_value(data[0] if data else None),
+            "fund_level": safe_value(data[1] if data else None)
+        }
+    elif model_name == "social_metrics":
+        return {
+            "twitter": safe_value(data[0] if data else None),
+            "twitterscore": safe_value(data[1] if data else None)
+        }
+    elif model_name == "funds_profit":
+        return {
+            "distribution": safe_value(data[0] if data else None)
+        }
+    elif model_name == "manipulative_metrics":
+        return {
+            "top_100_wallet": safe_value(data[0] if data else None)
+        }
+    elif model_name == "network_metrics":
+        return {
+            "tvl": safe_value(data[0] if data else None)
+        }
+
+    logging.warning(f"Не задано сопоставление для модели {model_name}")
+    return None
+
+
+def get_object_by_filter(model: Type, filter_conditions: Dict[str, Any]):
+    return sync_session.query(model).filter_by(**filter_conditions).first()

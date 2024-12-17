@@ -1,3 +1,5 @@
+import logging
+
 from bot.data_update import update_or_create
 from bot.database.models import (
     BasicMetrics,
@@ -15,11 +17,12 @@ from bot.utils.project_data import find_record
 from bot.utils.validations import if_exist_instance
 
 
-async def update_project(session, user_coin_name, chosen_project):
+async def update_project(session, user_coin_name, chosen_project, project):
     if user_coin_name not in tickers:
         print("+++++1+++++", user_coin_name, chosen_project)
         instance = await update_or_create(
             session, Project,
+            id=project.id,
             defaults={
                 "coin_name": user_coin_name,
                 "category": chosen_project
@@ -37,11 +40,11 @@ async def update_social_metrics(session, project_id, social_metrics):
         twitter_subs, twitter_twitterscore = social_metrics[0]
         await update_or_create(
             session, SocialMetrics,
+            project_id=project_id,
             defaults={
                 'twitter': twitter_subs,
                 'twitterscore': twitter_twitterscore
             },
-            project_id=project_id
         )
 
 
@@ -51,14 +54,14 @@ async def update_investing_metrics(session, project_id, investing_metrics, user_
         if user_coin_name not in tickers and fundraise and investors:
             await update_or_create(
                 session, InvestingMetrics,
+                project_id=project_id,
                 defaults={'fundraise': fundraise, 'fund_level': investors},
-                project_id=project_id
             )
         elif fundraise:
             await update_or_create(
                 session, InvestingMetrics,
+                project_id=project_id,
                 defaults={'fundraise': fundraise},
-                project_id=project_id
             )
 
 
@@ -68,11 +71,11 @@ async def update_network_metrics(session, project_id, network_metrics, price, to
         if last_tvl and price and total_supply:
             await update_or_create(
                 session, NetworkMetrics,
+                project_id=project_id,
                 defaults={
                     'tvl': last_tvl,
                     'tvl_fdv': last_tvl / (price * total_supply) if price * total_supply else 0
                 },
-                project_id=project_id
             )
 
 
@@ -81,11 +84,11 @@ async def update_manipulative_metrics(session, project_id, manipulative_metrics,
         top_100_wallets = manipulative_metrics[0]
         await update_or_create(
             session, ManipulativeMetrics,
+            project_id=project_id,
             defaults={
                 'fdv_fundraise': (price * total_supply) / fundraise if fundraise else None,
                 'top_100_wallet': top_100_wallets
             },
-            project_id=project_id
         )
 
 
@@ -94,30 +97,35 @@ async def update_funds_profit(session, project_id, funds_profit_data):
     if output_string:
         await update_or_create(
             session, FundsProfit,
+            project_id=project_id,
             defaults={'distribution': output_string},
-            project_id=project_id
         )
 
 
 async def update_market_metrics(session, project_id, market_metrics):
-    if market_metrics:
-        fail_high, growth_low, max_price, min_price = market_metrics[0]
-        if all([fail_high, growth_low, max_price, min_price]):
-            await update_or_create(
-                session, MarketMetrics,
-                defaults={'fail_high': fail_high, 'growth_low': growth_low},
-                project_id=project_id
-            )
-            await update_or_create(
-                TopAndBottom,
-                defaults={'lower_threshold': min_price, 'upper_threshold': max_price},
-                project_id=project_id
-            )
+    try:
+        if market_metrics:
+            fail_high, growth_low, max_price, min_price = market_metrics[0]
+            if all([fail_high, growth_low, max_price, min_price]):
+                await update_or_create(
+                    session, MarketMetrics,
+                    project_id=project_id,
+                    defaults={'fail_high': fail_high, 'growth_low': growth_low},
+                )
+                await update_or_create(
+                    session, TopAndBottom,
+                    project_id=project_id,
+                    defaults={'lower_threshold': min_price, 'upper_threshold': max_price},
+                )
+    except Exception as e:
+        logging.info(f"Error updating: {e}")
+        await session.rollback()
 
 
 async def process_metrics(
         session,
         user_coin_name,
+        project,
         chosen_project,
         results,
         price,
@@ -126,17 +134,18 @@ async def process_metrics(
         investors
 ):
 
-    print("Processing:", user_coin_name)
-    new_project = await update_project(session, user_coin_name, chosen_project)
+    new_project = await update_project(session, user_coin_name, chosen_project, project)
+
+    logging.info(f"-----------------------------------------------------------: {user_coin_name, new_project}")
 
     await update_or_create(
         session, BasicMetrics,
+        project_id=new_project.id,
         defaults={
             'entry_price': price,
             'sphere': chosen_project,
             'market_price': price
         },
-        project_id=new_project.id
     )
 
     await update_social_metrics(session, new_project.id, results.get("social_metrics"))
@@ -147,7 +156,6 @@ async def process_metrics(
     await update_market_metrics(session, new_project.id, results.get("market_metrics"))
 
     return new_project
-
 
 def check_missing_fields(metrics_data, fields_map):
     """
