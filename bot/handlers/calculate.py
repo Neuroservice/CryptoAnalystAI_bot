@@ -265,7 +265,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                         index=index,
                         user_coin_name=user_coin_name,
                         project_coin_name=project.coin_name,
-                        growth=(calculation_result['expected_x'] - 1.0) * 100,
+                        growth=round((float(calculation_result['expected_x']) - 1.0) * 100, 2),
                         fair_price=fair_price
                     ))
 
@@ -273,7 +273,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                     index,
                     user_coin_name,
                     project.coin_name,
-                    (calculation_result['expected_x'] - 1.0) * 100,
+                    round((float(calculation_result['expected_x']) - 1.0) * 100, 2),
                     fair_price
                 ])
 
@@ -297,6 +297,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         network_metrics = project_info.get("network_metrics")
 
         tasks = await check_and_run_tasks(
+            project=new_project,
             price=price,
             top_and_bottom=top_and_bottom,
             funds_profit=funds_profit,
@@ -307,29 +308,34 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             network_metrics=network_metrics,
             twitter_name=twitter_name,
             user_coin_name=user_coin_name,
-            lower_name=lower_name
+            lower_name=lower_name,
+            session=session_local,
+            model_mapping=model_mapping
         )
+
+        print("Tasks:", tasks)
 
         await session_local.commit()
         if user_coin_name not in tickers:
-            new_project = await update_or_create(
+            await update_or_create(
                 session_local, Project,
+                id=new_project.id,
                 defaults={
-                    'category': chosen_project_name
+                    'category': chosen_project_name,
+                    'coin_name': user_coin_name
                 },
-                coin_name=user_coin_name
             )
         else:
             new_project = await find_record(Project, session_local, coin_name=user_coin_name)
 
         await update_or_create(
             session_local, BasicMetrics,
+            project_id=new_project.id,
             defaults={
                 'entry_price': price,
                 'sphere': chosen_project_name,
                 'market_price': price,
             },
-            project_id=new_project.id
         )
 
         if tasks.get("social_metrics", []):
@@ -339,30 +345,31 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             if twitter and twitterscore:
                 await update_or_create(
                     session_local, SocialMetrics,
+                    project_id=new_project.id,
                     defaults={
                         'twitter': twitter,
                         'twitterscore': twitterscore
-                    },
-                    project_id=new_project.id)
+                    }
+                )
 
         if tasks.get("investing_metrics", []):
             fundraise, investors = tasks.get("investing_metrics", [])[0]
             if user_coin_name not in tickers and fundraise and investors:
                 await update_or_create(
                     session_local, InvestingMetrics,
+                    project_id=new_project.id,
                     defaults={
                         'fundraise': fundraise,
                         'fund_level': investors
                     },
-                    project_id=new_project.id
                 )
             elif fundraise:
                 await update_or_create(
                     session_local, InvestingMetrics,
+                    project_id=new_project.id,
                     defaults={
                         'fundraise': fundraise,
                     },
-                    project_id=new_project.id
                 )
 
         if tasks.get("network_metrics", []):
@@ -370,48 +377,64 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             if last_tvl and price and total_supply:
                 await update_or_create(
                     session_local, NetworkMetrics,
+                    project_id=new_project.id,
                     defaults={
                         'tvl': last_tvl if last_tvl else 0,
                         'tvl_fdv': last_tvl / (price * total_supply) if last_tvl and total_supply and price else 0
                     },
-                    project_id=new_project.id
                 )
 
         if tasks.get("manipulative_metrics", []):
             top_100_wallets = tasks.get("manipulative_metrics", [])[0]
             await update_or_create(
                 session_local, ManipulativeMetrics,
+                project_id=new_project.id,
                 defaults={
                     'fdv_fundraise': (price * total_supply) / fundraise if fundraise else None,
                     'top_100_wallet': top_100_wallets
-                },
-                project_id=new_project.id
+                }
             )
 
         funds_profit_data = tasks.get("funds_profit", [])
         output_string = '\n'.join(funds_profit_data[0]) if funds_profit_data and funds_profit_data[0] else ''
 
+        print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
         if output_string and output_string != '':
             await update_or_create(
                 session_local, FundsProfit,
+                project_id=new_project.id,
                 defaults={
                     'distribution': output_string,
-                },
-                project_id=new_project.id)
+                }
+            )
 
         if tasks.get("market_metrics", []):
-            fail_high, growth_low, max_price, min_price = tasks.get("market_metrics", [])[0]
-            if fail_high and growth_low and max_price and min_price:
-                await update_or_create(
-                    session_local, MarketMetrics,
-                    defaults={'fail_high': fail_high, 'growth_low': growth_low},
-                    project_id=new_project.id
-                )
-                await update_or_create(
-                    session_local, TopAndBottom,
-                    defaults={'lower_threshold': min_price, 'upper_threshold': max_price},
-                    project_id=new_project.id
-                )
+            fail_high, growth_low = tasks.get("market_metrics", [])[0]
+            await update_or_create(
+                session_local, MarketMetrics,
+                project_id=new_project.id,
+                defaults={'fail_high': fail_high, 'growth_low': growth_low},
+            )
+
+        if tasks.get("top_and_bottom", []):
+            max_price, min_price = tasks.get("top_and_bottom", [])[0]
+            await update_or_create(
+                session_local, TopAndBottom,
+                project_id=new_project.id,
+                defaults={'lower_threshold': min_price, 'upper_threshold': max_price},
+            )
+
+        project_info = await get_user_project_info(session_local, user_coin_name)
+        tokenomics_data = project_info.get("tokenomics_data")
+        basic_metrics = project_info.get("basic_metrics")
+        investing_metrics = project_info.get("investing_metrics")
+        social_metrics = project_info.get("social_metrics")
+        funds_profit = project_info.get("funds_profit")
+        top_and_bottom = project_info.get("top_and_bottom")
+        market_metrics = project_info.get("market_metrics")
+        manipulative_metrics = project_info.get("manipulative_metrics")
+        network_metrics = project_info.get("network_metrics")
 
         metrics_data = {
             "circ_supply": tokenomics_data.circ_supply if tokenomics_data else None,
@@ -464,6 +487,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             await create_basic_report(session_local, state, message='-', user_id=message.from_user.id)
 
     except ValueError:
+        print("Error creating")
         error_message = traceback.format_exc()
         await message.answer(f"{phrase_by_user('error_not_valid_input_data', message.from_user.id)}\n{error_message}")
 
@@ -499,9 +523,11 @@ async def receive_data(message: types.Message, state: FSMContext):
         await message.answer(phrase_by_user("error_project_inappropriate_category", message.from_user.id))
 
     project_info = await get_user_project_info(session_local, user_coin_name)
-    project = project_info.get("project")
+    base_project = project_info.get("project")
     tokenomics_data = project_info.get("tokenomics_data")
     basic_metrics = project_info.get("basic_metrics")
+    print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+    print(basic_metrics.market_price)
     investing_metrics = project_info.get("investing_metrics")
     social_metrics = project_info.get("social_metrics")
     funds_profit = project_info.get("funds_profit")
@@ -510,9 +536,11 @@ async def receive_data(message: types.Message, state: FSMContext):
     manipulative_metrics = project_info.get("manipulative_metrics")
     network_metrics = project_info.get("network_metrics")
 
+    print("--------------------еще не pdf--------------------", base_project)
+
     if selected_format == 'excel':
         try:
-            header_params = get_header_params(coin_name=None)
+            header_params = get_header_params(coin_name=user_coin_name)
 
             if not tokenomics_data or not tokenomics_data.circ_supply or not tokenomics_data.total_supply or not tokenomics_data.capitalization or not tokenomics_data.fdv or not basic_metrics.market_price:
                 coinmarketcap_data = await fetch_coinmarketcap_data(message, user_coin_name, **header_params)
@@ -525,14 +553,15 @@ async def receive_data(message: types.Message, state: FSMContext):
 
                     await update_or_create(
                         session_local, Tokenomics,
+                        project_id=base_project.id,
                         defaults={
                             'capitalization': capitalization,
                             'total_supply': total_supply,
                             'circ_supply': circulating_supply,
                             'fdv': coin_fdv
                         },
-                        project_id=project.id
                     )
+
                 else:
                     # Сообщаем пользователю, что такой токен не найден. Предлагаем ввести новый
                     await message.answer(phrase_by_user("error_input_token_from_user", message.from_user.id))
@@ -552,7 +581,8 @@ async def receive_data(message: types.Message, state: FSMContext):
             else:
                 logging.error(f"Общая ошибка при обработке данных токеномики: {e}")
 
-        results = await check_and_run_tasks(
+        tasks = await check_and_run_tasks(
+            project=base_project,
             price=price,
             top_and_bottom=top_and_bottom,
             funds_profit=funds_profit,
@@ -563,10 +593,70 @@ async def receive_data(message: types.Message, state: FSMContext):
             network_metrics=network_metrics,
             twitter_name=twitter_name,
             user_coin_name=user_coin_name,
-            lower_name=lower_name
+            lower_name=lower_name,
+            session=session_local,
+            model_mapping=model_mapping
         )
 
+        if tasks.get("social_metrics", []):
+            (twitter_subs, twitter_twitterscore) = tasks.get("social_metrics", [])[0]
+            twitter = twitter_subs
+            twitterscore = twitter_twitterscore
+            if twitter and twitterscore:
+                await update_or_create(
+                    session_local, SocialMetrics,
+                    project_id=base_project.id,
+                    defaults={
+                        'twitter': twitter,
+                        'twitterscore': twitterscore
+                    }
+                )
+
+        if tasks.get("investing_metrics", []):
+            fundraise, investors = tasks.get("investing_metrics", [])[0]
+            if user_coin_name not in tickers and fundraise and investors:
+                await update_or_create(
+                    session_local, InvestingMetrics,
+                    project_id=base_project.id,
+                    defaults={
+                        'fundraise': fundraise,
+                        'fund_level': investors
+                    },
+                )
+            elif fundraise:
+                await update_or_create(
+                    session_local, InvestingMetrics,
+                    project_id=base_project.id,
+                    defaults={
+                        'fundraise': fundraise,
+                    },
+                )
+
+        if tasks.get("network_metrics", []):
+            last_tvl = tasks.get("network_metrics", [])[0]
+            if last_tvl and price and total_supply:
+                await update_or_create(
+                    session_local, NetworkMetrics,
+                    project_id=base_project.id,
+                    defaults={
+                        'tvl': last_tvl if last_tvl else 0,
+                        'tvl_fdv': last_tvl / (price * total_supply) if last_tvl and total_supply and price else 0
+                    },
+                )
+
+        if tasks.get("manipulative_metrics", []):
+            top_100_wallets = tasks.get("manipulative_metrics", [])[0]
+            await update_or_create(
+                session_local, ManipulativeMetrics,
+                project_id=base_project.id,
+                defaults={
+                    'fdv_fundraise': (price * total_supply) / fundraise if fundraise else None,
+                    'top_100_wallet': top_100_wallets
+                }
+            )
+
         project_info = await get_user_project_info(session_local, user_coin_name)
+        base_project = project_info.get("project")
         tokenomics_data = project_info.get("tokenomics_data")
         basic_metrics = project_info.get("basic_metrics")
         investing_metrics = project_info.get("investing_metrics")
@@ -577,7 +667,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         manipulative_metrics = project_info.get("manipulative_metrics")
         network_metrics = project_info.get("network_metrics")
 
-        new_project = await process_metrics(session_local, user_coin_name, chosen_project, results, price, total_supply, fundraise, investors)
+        new_project = await process_metrics(session_local, user_coin_name, base_project, chosen_project, tasks, price, total_supply, fundraise, investors)
 
         if new_project:
             calculation_record = Calculation(
@@ -637,15 +727,41 @@ async def receive_data(message: types.Message, state: FSMContext):
             await create_excel(session_local, state, message='-', user_id=message.from_user.id)
 
     elif selected_format == 'pdf':
-        header_params = get_header_params(coin_name=None)
+
+        print("--------------------pdf pdf pdf--------------------")
+        header_params = get_header_params(coin_name=user_coin_name)
         twitter_name = await get_twitter_link_by_symbol(user_coin_name)
 
         try:
             if not tokenomics_data or not tokenomics_data.circ_supply or not tokenomics_data.total_supply or not tokenomics_data.capitalization or not tokenomics_data.fdv or not basic_metrics.market_price:
                 coinmarketcap_data = await fetch_coinmarketcap_data(message, user_coin_name, **header_params)
                 if coinmarketcap_data:
+                    circulating_supply = coinmarketcap_data['circulating_supply']
                     total_supply = coinmarketcap_data['total_supply']
                     price = coinmarketcap_data['price']
+                    print(f"price of coin {user_coin_name, price}")
+                    capitalization = coinmarketcap_data['market_cap']
+                    coin_fdv = coinmarketcap_data['coin_fdv']
+
+                    await update_or_create(
+                        session_local, Tokenomics,
+                        project_id=base_project.id,
+                        defaults={
+                            'capitalization': capitalization,
+                            'total_supply': total_supply,
+                            'circ_supply': circulating_supply,
+                            'fdv': coin_fdv
+                        },
+                    )
+
+                    await update_or_create(
+                        session_local, BasicMetrics,
+                        project_id=base_project.id,
+                        defaults={
+                            'entry_price': price,
+                            'market_price': price
+                        },
+                    )
 
                 else:
                     # Сообщаем пользователю, что такой токен не найден. Предлагаем ввести новый
@@ -664,7 +780,8 @@ async def receive_data(message: types.Message, state: FSMContext):
             else:
                 logging.error(f"Общая ошибка при обработке данных токеномики для монеты {user_coin_name}: {e}")
 
-        results = await check_and_run_tasks(
+        tasks = await check_and_run_tasks(
+            project=base_project,
             price=price,
             top_and_bottom=top_and_bottom,
             funds_profit=funds_profit,
@@ -675,10 +792,70 @@ async def receive_data(message: types.Message, state: FSMContext):
             network_metrics=network_metrics,
             twitter_name=twitter_name,
             user_coin_name=user_coin_name,
-            lower_name=lower_name
+            lower_name=lower_name,
+            session=session_local,
+            model_mapping=model_mapping
         )
 
+        if tasks.get("social_metrics", []):
+            (twitter_subs, twitter_twitterscore) = tasks.get("social_metrics", [])[0]
+            twitter = twitter_subs
+            twitterscore = twitter_twitterscore
+            if twitter and twitterscore:
+                await update_or_create(
+                    session_local, SocialMetrics,
+                    project_id=base_project.id,
+                    defaults={
+                        'twitter': twitter,
+                        'twitterscore': twitterscore
+                    }
+                )
+
+        if tasks.get("investing_metrics", []):
+            fundraise, investors = tasks.get("investing_metrics", [])[0]
+            if user_coin_name not in tickers and fundraise and investors:
+                await update_or_create(
+                    session_local, InvestingMetrics,
+                    project_id=base_project.id,
+                    defaults={
+                        'fundraise': fundraise,
+                        'fund_level': investors
+                    },
+                )
+            elif fundraise:
+                await update_or_create(
+                    session_local, InvestingMetrics,
+                    project_id=base_project.id,
+                    defaults={
+                        'fundraise': fundraise,
+                    },
+                )
+
+        if tasks.get("network_metrics", []):
+            last_tvl = tasks.get("network_metrics", [])[0]
+            if last_tvl and price and total_supply:
+                await update_or_create(
+                    session_local, NetworkMetrics,
+                    project_id=base_project.id,
+                    defaults={
+                        'tvl': last_tvl if last_tvl else 0,
+                        'tvl_fdv': last_tvl / (price * total_supply) if last_tvl and total_supply and price else 0
+                    },
+                )
+
+        if tasks.get("manipulative_metrics", []):
+            top_100_wallets = tasks.get("manipulative_metrics", [])[0]
+            await update_or_create(
+                session_local, ManipulativeMetrics,
+                project_id=base_project.id,
+                defaults={
+                    'fdv_fundraise': (price * total_supply) / fundraise if fundraise else None,
+                    'top_100_wallet': top_100_wallets
+                }
+            )
+
         project_info = await get_user_project_info(session_local, user_coin_name)
+        project = project_info.get("project")
         tokenomics_data = project_info.get("tokenomics_data")
         basic_metrics = project_info.get("basic_metrics")
         investing_metrics = project_info.get("investing_metrics")
@@ -689,7 +866,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         manipulative_metrics = project_info.get("manipulative_metrics")
         network_metrics = project_info.get("network_metrics")
 
-        new_project = await process_metrics(session_local, user_coin_name, chosen_project, results, price, total_supply, fundraise, investors)
+        new_project = await process_metrics(session_local, user_coin_name, project, chosen_project, tasks, price, total_supply, fundraise, investors)
 
         if new_project:
             calculation_record = Calculation(
@@ -780,6 +957,51 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
 
         existing_answer = await find_record(AgentAnswer, session, project_id=project.id, language=('RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'))
 
+        comparison_results = ""
+        result_index = 1
+        for index, coin_name, project_coin, expected_x, fair_price in agents_info:
+            if project_coin != user_coin_name:
+                if project.coin_name in tickers:
+                    # Добавляем проверки типов перед форматированием строки
+                    try:
+                        # Проверка и приведение переменной growth к float
+                        if isinstance(expected_x, str):
+                            growth = float(expected_x)
+                        elif not isinstance(expected_x, (float, int)):
+                            raise ValueError(f"Unexpected type for growth: {type(expected_x)}")
+
+                        # Проверка fair_price, чтобы убедиться, что это строка или число
+                        if not isinstance(fair_price, (str, int, float)):
+                            raise ValueError(f"Unexpected type for fair_price: {type(fair_price)}")
+
+                        # Проверяем типы других переменных
+                        if not isinstance(index, int):
+                            raise ValueError(f"Unexpected type for index: {type(index)}")
+                        if not isinstance(user_coin_name, str):
+                            raise ValueError(f"Unexpected type for user_coin_name: {type(user_coin_name)}")
+                        if not isinstance(project_coin, str):
+                            raise ValueError(f"Unexpected type for project_coin: {type(project_coin)}")
+
+                        # Форматируем строку
+                        comparison_results += calculations_choices[language].format(
+                            index=index,
+                            user_coin_name=user_coin_name,
+                            project_coin_name=project_coin,
+                            growth=expected_x,
+                            fair_price=fair_price
+                        )
+                        result_index += 1
+
+                    except ValueError as e:
+                        # Логируем и выводим ошибку
+                        print(f"Error: {e}")
+                        print(f"index: {index}, type: {type(index)}")
+                        print(f"user_coin_name: {user_coin_name}, type: {type(user_coin_name)}")
+                        print(f"project_coin: {project_coin}, type: {type(project_coin)}")
+                        print(f"growth: {expected_x}, type: {type(expected_x)}")
+                        print(f"fair_price: {fair_price}, type: {type(fair_price)}")
+                        raise
+
         if existing_answer is None:
             all_data_string_for_tier_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
@@ -791,21 +1013,6 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
                 f"Инвесторы: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
             )
 
-            comparison_results = ""
-            result_index = 1
-            for index, coin_name, project_coin, expected_x, fair_price in agents_info:
-                if project_coin != user_coin_name:
-
-                    if project.coin_name in tickers:
-                        comparison_results += (calculations_choices[language].format(
-                            index=index,
-                            user_coin_name=user_coin_name,
-                            project_coin_name=project_coin,
-                            growth=expected_x,
-                            fair_price=fair_price
-                        ))
-                    result_index += 1
-
             all_data_string_for_tokemonic_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
                 f"**Исходные данные:**\n\n"
@@ -815,9 +1022,9 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
             all_data_string_for_funds_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
                 f"Доходность фондов (%): {funds_profit.distribution if funds_profit else 'N/A'}\n"
-                f"Рост токена с минимальных значений (%): {market_metrics.growth_low if market_metrics else 'N/A'}\n"
-                f"Падение токена от максимальных значений (%): {market_metrics.fail_high if market_metrics else 'N/A'}\n"
-                f"Процент монет на топ 100 кошельков (%): {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics else 'N/A'}\n"
+                f"Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}\n"
+                f"Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}\n"
+                f"Процент монет на топ 100 кошельков (%): {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}\n"
                 f"Процент заблокированных токенов (%): {(network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'}\n\n"
             )
 
@@ -862,8 +1069,8 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
         existing_calculation.agent_answer = flags_answer
         session.add(existing_calculation)
 
-        answer = "\n".join(results)
-        answer += "\n" + flags_answer
+        answer = comparison_results + "\n"
+        answer += flags_answer
         answer = answer.replace('**', '')
 
         # return phrase_by_user("input_next_token_for_basic_report", message.from_user.id if isinstance(message, Message) else user_id), answer
@@ -900,6 +1107,7 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
     chosen_project_obj = await find_record(Project, session, coin_name=coin_name)
     user_input = message.text if isinstance(message, Message) else message
     input_lines = user_input.split('\n')
+    language = 'RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'
 
     if user_input != '-':
         process_and_update_models(input_lines, field_mapping, model_mapping, session, new_project, chosen_project_obj)
@@ -972,7 +1180,7 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
                         result_index,
                         coin_name,
                         project.coin_name,
-                        expected_x,
+                        round((float(expected_x) - 1.0) * 100, 2),
                         fair_price
                     ])
                     result_index += 1
@@ -1076,6 +1284,49 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
         existing_answer = await find_record(AgentAnswer, session_local, project_id=project.id, language=('RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'))
         # existing_answer = session.query(AgentAnswer).filter(AgentAnswer.project_id == project.id, AgentAnswer.language == ('RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG')).first()
 
+        comparison_results = ""
+        result_index = 1
+        for index, coin_name, project_coin, expected_x, fair_price in row_data:
+            if project_coin != coin_name:
+                if project.coin_name in tickers:
+                    try:
+                        if isinstance(expected_x, str):
+                            growth = float(expected_x)
+                        elif not isinstance(expected_x, (float, int)):
+                            raise ValueError(f"Unexpected type for expected_x: {type(expected_x)}")
+
+                        # Проверка fair_price, чтобы убедиться, что это строка или число
+                        if not isinstance(fair_price, (str, int, float)):
+                            raise ValueError(f"Unexpected type for fair_price: {type(fair_price)}")
+
+                        # Проверяем типы других переменных
+                        if not isinstance(index, int):
+                            raise ValueError(f"Unexpected type for index: {type(index)}")
+                        if not isinstance(coin_name, str):
+                            raise ValueError(f"Unexpected type for user_coin_name: {type(coin_name)}")
+                        if not isinstance(project_coin, str):
+                            raise ValueError(f"Unexpected type for project_coin: {type(project_coin)}")
+
+                        # Форматируем строку
+                        comparison_results += calculations_choices[language].format(
+                            index=index,
+                            user_coin_name=coin_name,
+                            project_coin_name=project_coin,
+                            growth=expected_x,
+                            fair_price=fair_price
+                        )
+                        result_index += 1
+
+                    except ValueError as e:
+                        # Логируем и выводим ошибку
+                        print(f"Error: {e}")
+                        print(f"index: {index}, type: {type(index)}")
+                        print(f"user_coin_name: {coin_name}, type: {type(coin_name)}")
+                        print(f"project_coin: {project_coin}, type: {type(project_coin)}")
+                        print(f"growth: {expected_x}, type: {type(expected_x)}")
+                        print(f"fair_price: {fair_price}, type: {type(fair_price)}")
+                        raise
+
         if existing_answer is None:
             all_data_string_for_tier_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
@@ -1087,18 +1338,6 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
                 f"Инвесторы: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
             )
 
-            comparison_results = ""
-            result_index = 1
-            for index, default_coin, project_name, price, expected_x, fair_price in row_data:
-                if coin_name != default_coin:
-                    comparison_results += (
-                        f"Вариант {index}\n"
-                        f"Результаты расчета для {project.coin_name} в сравнении с {default_coin}:\n"
-                        f"Возможный прирост токена (в %): {expected_x}%\n"
-                        f"Ожидаемая цена токена: {fair_price}\n\n"
-                    )
-                    result_index += 1
-
             all_data_string_for_tokemonic_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
                 f"**Исходные данные:**\n\n"
@@ -1108,9 +1347,9 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
             all_data_string_for_funds_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
                 f"Доходность фондов (%): {funds_profit.distribution if funds_profit else 'N/A'}\n"
-                f"Рост токена с минимальных значений (%): {market_metrics.growth_low if market_metrics else 'N/A'}\n"
-                f"Падение токена от максимальных значений (%): {market_metrics.fail_high if market_metrics else 'N/A'}\n"
-                f"Процент монет на топ 100 кошельков (%): {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics else 'N/A'}\n"
+                f"Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}\n"
+                f"Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}\n"
+                f"Процент монет на топ 100 кошельков (%): {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}\n"
                 f"Процент заблокированных токенов (%): {(network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'}\n\n"
             )
 
@@ -1149,6 +1388,10 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
             session.add(agent_answer_record)
         else:
             flags_answer = existing_answer.answer
+
+        answer = comparison_results + "\n"
+        answer += flags_answer
+        answer = answer.replace('**', '')
 
         existing_calculation = await find_record(Calculation, session, id=calculation_record.id)
         existing_calculation.agent_answer = flags_answer
@@ -1284,7 +1527,7 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
             await state.set_state(CalculateProject.waiting_for_data)
 
             # Отправляем сообщение с рейтингом проекта
-            await send_long_message(message, f"{phrase_by_user('overal_project_rating', user_id)} \n{flags_answer}\n")
+            await send_long_message(message, f"{phrase_by_user('overal_project_rating', user_id)} \n{answer}\n")
             await message.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", user_id), reply_markup=ReplyKeyboardRemove())
 
             # Очищаем состояние и устанавливаем новое состояние на ожидание ввода нового токена
@@ -1298,7 +1541,7 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
                 await bot.send_document(chat_id=user_id, document=BufferedInputFile(output.read(), filename="results.xlsx"))
 
                 # Отправляем сообщение с рейтингом проекта
-                await send_long_message(bot, f"{phrase_by_user('overal_project_rating', user_id)} \n{flags_answer}\n", chat_id=user_id)
+                await send_long_message(bot, f"{phrase_by_user('overal_project_rating', user_id)} \n{answer}\n", chat_id=user_id)
                 await bot.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", user_id), reply_markup=ReplyKeyboardRemove())
 
                 # Очищаем состояние и устанавливаем новое состояние на ожидание ввода нового токена
@@ -1330,6 +1573,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
     user_input = message.text if isinstance(message, Message) else message
     row_data = []
     cells_content = None
+    language = 'RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'
 
     input_lines = user_input.split('\n')
     if user_input != '-':
@@ -1370,7 +1614,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                     index,
                     coin_name,
                     project.coin_name,
-                    expected_x,
+                    round((float(expected_x) - 1.0) * 100, 2),
                     fair_price
                 ])
 
@@ -1424,6 +1668,49 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
         existing_answer = await find_record(AgentAnswer, session, project_id=project.id, language=('RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'))
 
+        comparison_results = ""
+        result_index = 1
+        for index, coin_name, project_coin, expected_x, fair_price in row_data:
+            if project_coin != coin_name:
+                if project.coin_name in tickers:
+                    try:
+                        if isinstance(expected_x, str):
+                            growth = float(expected_x)
+                        elif not isinstance(expected_x, (float, int)):
+                            raise ValueError(f"Unexpected type for growth: {type(expected_x)}")
+
+                        # Проверка fair_price, чтобы убедиться, что это строка или число
+                        if not isinstance(fair_price, (str, int, float)):
+                            raise ValueError(f"Unexpected type for fair_price: {type(fair_price)}")
+
+                        # Проверяем типы других переменных
+                        if not isinstance(index, int):
+                            raise ValueError(f"Unexpected type for index: {type(index)}")
+                        if not isinstance(coin_name, str):
+                            raise ValueError(f"Unexpected type for user_coin_name: {type(coin_name)}")
+                        if not isinstance(project_coin, str):
+                            raise ValueError(f"Unexpected type for project_coin_name: {type(project_coin)}")
+
+                        # Форматируем строку
+                        comparison_results += calculations_choices[language].format(
+                            index=index,
+                            user_coin_name=coin_name,
+                            project_coin_name=project_coin,
+                            growth=expected_x,
+                            fair_price=fair_price
+                        )
+                        result_index += 1
+
+                    except ValueError as e:
+                        # Логируем и выводим ошибку
+                        print(f"Error: {e}")
+                        print(f"index: {index}, type: {type(index)}")
+                        print(f"coin_name: {coin_name}, type: {type(coin_name)}")
+                        print(f"project_coin_name: {project_coin}, type: {type(project_coin)}")
+                        print(f"growth: {expected_x}, type: {type(expected_x)}")
+                        print(f"fair_price: {fair_price}, type: {type(fair_price)}")
+                        raise
+
         if existing_answer is None:
             all_data_string_for_tier_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
@@ -1435,18 +1722,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 f"Инвесторы: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
             )
 
-            comparison_results = ""
-            result_index = 1
-            for index, coin_name, project_coin, expected_x, fair_price in row_data:
-                if project_coin != coin_name:
-                    comparison_results += (
-                        f"Вариант {result_index}\n"
-                        f"Результаты расчета для {project.coin_name} в сравнении с {project_coin}:\n"
-                        f"Возможный прирост токена (в %): {expected_x}%\n"
-                        f"Ожидаемая цена токена: {fair_price}\n\n"
-                    )
-                    result_index += 1
-
             all_data_string_for_tokemonic_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
                 f"**Исходные данные:**\n\n"
@@ -1456,9 +1731,9 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             all_data_string_for_funds_agent = (
                 f"Название проекта: {project.coin_name if project else 'N/A'}\n"
                 f"Доходность фондов (%): {funds_profit.distribution if funds_profit else 'N/A'}\n"
-                f"Рост токена с минимальных значений (%): {market_metrics.growth_low if market_metrics else 'N/A'}\n"
-                f"Падение токена от максимальных значений (%): {market_metrics.fail_high if market_metrics else 'N/A'}\n"
-                f"Процент монет на топ 100 кошельков (%): {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics else 'N/A'}\n"
+                f"Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}\n"
+                f"Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}\n"
+                f"Процент монет на топ 100 кошельков (%): {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}\n"
                 f"Процент заблокированных токенов (%): {(network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'}\n\n"
             )
 
@@ -1504,7 +1779,9 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
         existing_calculation.agent_answer = flags_answer
         session.add(existing_calculation)
 
-        flags_answer = flags_answer.replace('**', '')
+        answer = comparison_results + "\n"
+        answer += flags_answer
+        answer = answer.replace('**', '')
 
         investor_data_list = []
         headers_mapping = results_header_by_user(user_id)
@@ -1615,7 +1892,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             await message.answer_document(BufferedInputFile(pdf_output.read(), filename="results.pdf"))
 
             # Отправляем сообщение с рейтингом проекта
-            await send_long_message(message, f"{phrase_by_user('overal_project_rating', user_id)} \n{flags_answer}\n")
+            await send_long_message(message, f"{phrase_by_user('overal_project_rating', user_id)} \n{answer}\n")
             await message.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", user_id), reply_markup=ReplyKeyboardRemove())
 
             # Очищаем состояние и устанавливаем новое состояние на ожидание ввода нового токена
@@ -1630,7 +1907,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 await bot.send_document(chat_id=user_id, document=BufferedInputFile(pdf_output.read(), filename="results.pdf"))
 
                 # Отправляем сообщение с рейтингом проекта
-                await send_long_message(bot, f"{phrase_by_user('overal_project_rating', user_id)} \n{flags_answer}\n", chat_id=user_id)
+                await send_long_message(bot, f"{phrase_by_user('overal_project_rating', user_id)} \n{answer}\n", chat_id=user_id)
                 await bot.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", user_id), reply_markup=ReplyKeyboardRemove())
 
                 # Очищаем состояние и устанавливаем новое состояние на ожидание ввода нового токена

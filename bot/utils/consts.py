@@ -33,7 +33,7 @@ MAX_MESSAGE_LENGTH = 4096
 
 # Токены и категории (типы)
 tickers = [
-    "APT", "SEI", "SUI", "KAS", "TIA", "FLR", "ARB", "OP", "IMX", "MNT", "STRK", "ZK", "POL",
+    "ME", "APT", "SEI", "SUI", "KAS", "TIA", "FLR", "ARB", "OP", "IMX", "MNT", "STRK", "ZK", "POL",
     "TON", "ADA", "AVAX", "ATOM", "NEAR", "DOT", "TRX", "APE", "XAI", "MEME", "SHRAP", "MAGIC",
     "ACE", "BIGTIME", "AGI", "ZTX", "PIXEL", "MAVIA", "FAR", "MRS", "CATS", "NOT", "HMSTR", "DOGS",
     "CATI", "BLUR", "AGLD", "WE", "MYRIA", "LOOKS", "OAS", "ULTIMA", "MPLX", "LMWR", "FLIX", "GF",
@@ -153,7 +153,7 @@ def get_cryptocompare_params(user_coin_name):
     return {
         'fsym': user_coin_name,
         'tsym': 'USD',
-        'limit': 90
+        'allData': 'true'
     }
 
 

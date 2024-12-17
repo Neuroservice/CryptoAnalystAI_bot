@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Text, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -10,7 +10,7 @@ class User(Base):
     __tablename__ = 'user'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    telegram_id = Column(Integer, nullable=False)
+    telegram_id = Column(BigInteger, unique=True, nullable=False)
     language = Column(Text, nullable=True)
 
     calculations = relationship('Calculation', back_populates='user')
@@ -40,7 +40,7 @@ class Calculation(Base):
     __tablename__ = 'calculation'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    user_id = Column(BigInteger, ForeignKey('user.telegram_id'), nullable=False)
     project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
     date = Column(DateTime, nullable=True)
     agent_answer = Column(Text, nullable=True)
@@ -53,9 +53,9 @@ class BasicMetrics(Base):
     __tablename__ = 'basic_metrics'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
+    project_id = Column(Integer, ForeignKey('project.id'), nullable=False, unique=True)
     entry_price = Column(Float, nullable=True)
-    sphere = Column(String(50), nullable=True)
+    sphere = Column(String(150), nullable=True)
     market_price = Column(Float, nullable=True)
 
     project = relationship('Project', back_populates='basic_metrics')
@@ -65,7 +65,7 @@ class InvestingMetrics(Base):
     __tablename__ = 'investing_metrics'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
+    project_id = Column(Integer, ForeignKey('project.id'), nullable=False, unique=True)
     fundraise = Column(Float, nullable=True)
     fund_level = Column(Text, nullable=True)
 
@@ -76,8 +76,8 @@ class SocialMetrics(Base):
     __tablename__ = 'social_metrics'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
-    twitter = Column(Integer, nullable=True)
+    project_id = Column(Integer, ForeignKey('project.id'), nullable=False, unique=True)
+    twitter = Column(Text, nullable=True)
     twitterscore = Column(Integer, nullable=True)
 
     project = relationship('Project', back_populates='social_metrics')
@@ -87,7 +87,7 @@ class Tokenomics(Base):
     __tablename__ = 'tokenomics'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
+    project_id = Column(Integer, ForeignKey('project.id'), nullable=False, unique=True)
     circ_supply = Column(Float, nullable=True)
     total_supply = Column(Float, nullable=True)
     capitalization = Column(Float, nullable=True)
@@ -100,7 +100,7 @@ class FundsProfit(Base):
     __tablename__ = 'funds_profit'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
+    project_id = Column(Integer, ForeignKey('project.id'), nullable=False, unique=True)
     distribution = Column(Text, nullable=True)
     average_price = Column(Float, nullable=True)
     x_value = Column(Float, nullable=True)
@@ -112,7 +112,7 @@ class TopAndBottom(Base):
     __tablename__ = 'top_and_bottom'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
+    project_id = Column(Integer, ForeignKey('project.id'), nullable=False, unique=True)
     lower_threshold = Column(Float, nullable=True)
     upper_threshold = Column(Float, nullable=True)
 
@@ -123,7 +123,7 @@ class MarketMetrics(Base):
     __tablename__ = 'market_metrics'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
+    project_id = Column(Integer, ForeignKey('project.id'), nullable=False, unique=True)
     fail_high = Column(Float, nullable=True)
     growth_low = Column(Float, nullable=True)
 
@@ -134,7 +134,7 @@ class ManipulativeMetrics(Base):
     __tablename__ = 'manipulative_metrics'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
+    project_id = Column(Integer, ForeignKey('project.id'), nullable=False, unique=True)
     fdv_fundraise = Column(Float, nullable=True)
     top_100_wallet = Column(Float, nullable=True)
 
@@ -145,7 +145,7 @@ class NetworkMetrics(Base):
     __tablename__ = 'network_metrics'
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
+    project_id = Column(Integer, ForeignKey('project.id'), nullable=False, unique=True)
     tvl = Column(Float, nullable=True)
     tvl_fdv = Column(Float, nullable=True)
 

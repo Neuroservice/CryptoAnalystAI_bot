@@ -73,7 +73,7 @@ def category_agent(topic):
     completion = client.chat.completions.create(
         model="gpt-4o-mini-2024-07-18",
         messages=messages,
-        temperature=0.1
+        temperature=0
     )
     answer = completion.choices[0].message.content
     logging.info(f"\n================================\nAnswer: {answer}\n")
@@ -92,7 +92,7 @@ def tier_agent(topic):
     completion = client.chat.completions.create(
         model="gpt-4o-mini-2024-07-18",
         messages=messages,
-        temperature=0.1
+        temperature=0
     )
     answer = completion.choices[0].message.content
     logging.info(f"\n================================\nAnswer: {answer}\n")
@@ -112,7 +112,7 @@ def tokemonic_agent(topic):
     completion = client.chat.completions.create(
         model="gpt-4o-mini-2024-07-18",
         messages=messages,
-        temperature=0.1
+        temperature=0
     )
     answer = completion.choices[0].message.content
     logging.info(f"\n================================\nAnswer: {answer}\n")
@@ -132,7 +132,7 @@ def funds_agent(topic):
     completion = client.chat.completions.create(
         model="gpt-4o-mini-2024-07-18",
         messages=messages,
-        temperature=0.1
+        temperature=0
     )
     answer = completion.choices[0].message.content
     logging.info(f"\n================================\nAnswer: {answer}\n")
@@ -152,7 +152,7 @@ def project_rating_agent(topic):
     completion = client.chat.completions.create(
         model="gpt-4o-mini-2024-07-18",
         messages=messages,
-        temperature=0.1
+        temperature=0
     )
     answer = completion.choices[0].message.content
     logging.info(f"\n================================\nAnswer: {answer}\n")
@@ -172,7 +172,7 @@ def flags_agent(topic, language):
     completion = client.chat.completions.create(
         model="gpt-4o-mini-2024-07-18",
         messages=messages,
-        temperature=0.1
+        temperature=0
     )
     answer = completion.choices[0].message.content
     logging.info(f"\n================================\nAnswer: {answer}\n")

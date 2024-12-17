@@ -58,7 +58,7 @@ async def fetch_crypto_data():
 
             print("0")
             for symbol in symbols:
-                async with SessionLocal() as async_session:  # Отдельная сессия на каждую итерацию
+                async with SessionLocal() as async_session:
                     try:
                         # ШАГ 1: Получение данных проекта
                         print("1")
@@ -84,8 +84,7 @@ async def fetch_crypto_data():
                             continue
 
                         # Проверка формата данных
-                        expected_keys = {'coin_name', 'circulating_supply', 'total_supply', 'price', 'capitalization',
-                                         'coin_fdv'}
+                        expected_keys = {'coin_name', 'circulating_supply', 'total_supply', 'price', 'capitalization', 'coin_fdv'}
                         if not all(key in data for key in expected_keys):
                             logging.warning(f"Missing required keys in data for {symbol}: {data}")
                             continue
@@ -113,12 +112,13 @@ async def fetch_crypto_data():
                                 capitalization=market_cap,
                                 fdv=fdv,
                             )
-                            async_session.add(tokenomics)
                         else:
                             tokenomics.circ_supply = circulating_supply
                             tokenomics.total_supply = total_supply
                             tokenomics.capitalization = market_cap
                             tokenomics.fdv = fdv
+
+                        async_session.add(tokenomics)
 
                         # ШАГ 4: Обновление BasicMetrics
                         print("4")
@@ -132,9 +132,10 @@ async def fetch_crypto_data():
                                 project_id=project.id,
                                 market_price=round(float(price), 4)
                             )
-                            async_session.add(basic_metrics)
                         else:
                             basic_metrics.market_price = round(float(price), 4)
+
+                        async_session.add(basic_metrics)
 
                         # ШАГ 5: Обновление ManipulativeMetrics и других метрик
                         print("5")
@@ -154,24 +155,25 @@ async def fetch_crypto_data():
                             if top_100_wallets and fdv and fundraise:
                                 await update_or_create(
                                     async_session, ManipulativeMetrics,
+                                    project_id=project.id,
                                     defaults={
                                         'fdv_fundraise': fdv / fundraise,
                                         'top_100_wallet': top_100_wallets,
                                     },
-                                    project_id=project.id,
                                 )
 
                         # ШАГ 6: Обновление NetworkMetrics (TVL)
                         print("6")
-                        tvl = await fetch_tvl_data(symbol.lower())
+                        twitter_name, description, lower_name = await get_twitter_link_by_symbol(symbol)
+                        tvl = await fetch_tvl_data(lower_name)
                         if tvl and fdv:
                             await update_or_create(
                                 async_session, NetworkMetrics,
+                                project_id=project.id,
                                 defaults={
                                     'tvl': tvl,
                                     'tvl_fdv': tvl / fdv,
                                 },
-                                project_id=project.id,
                             )
 
                         # ШАГ 7: Обновление FundsProfit
@@ -179,9 +181,7 @@ async def fetch_crypto_data():
                         funds_profit = await async_session.execute(
                             select(FundsProfit).filter_by(project_id=project.id).limit(1)
                         )
-                        print(funds_profit)
                         funds_profit = funds_profit.scalars().first()
-                        print(funds_profit)
 
                         if not funds_profit or not funds_profit.distribution or funds_profit.distribution == '-':
                             print("7.1")
@@ -193,8 +193,8 @@ async def fetch_crypto_data():
                             print("output_string: ", output_string)
                             await update_or_create(
                                 async_session, FundsProfit,
-                                defaults={'distribution': output_string},
                                 project_id=project.id,
+                                defaults={'distribution': output_string},
                             )
 
                         # Сохранение изменений
@@ -354,18 +354,93 @@ async def update_agent_answers():
             await async_session.commit()
 
 
-async def update_or_create(session, model, defaults=None, **kwargs):
+async def find_record(model, session: AsyncSession, **filters):
+    query = select(model).filter_by(**filters)
+    result = await session.execute(query)
+    record = result.scalars().first()
+
+    if record is None:
+        return None
+    return record
+
+
+async def find_records(model, session: AsyncSession, **filters):
+    query = select(model).filter_by(**filters)
+    result = await session.execute(query)
+    records = result.scalars().all()
+
+    if records is None:
+        return None
+    return records
+
+
+def map_data_to_model_fields(model_name, data):
+    """
+    Сопоставляет данные из results полям модели.
+
+    :param model_name: Название модели.
+    :param data: Кортеж или список данных из results.
+    :return: Словарь с данными для записи в модель.
+    """
+    if model_name == "market_metrics":
+        return {
+            "fail_high": data[0],
+            "growth_low": data[1]
+        }
+    elif model_name == "top_and_bottom":
+        return {
+            "upper_threshold": data[0],
+            "lower_threshold": data[1]
+        }
+    elif model_name == "investing_metrics":
+        return {
+            "fundraise": data[0],
+            "fund_level": data[1]
+        }
+    elif model_name == "social_metrics":
+        return {
+            "twitter": data[0],
+            "twitterscore": data[1]
+        }
+    elif model_name == "funds_profit":
+        return {
+            "distribution": data[0]
+        }
+    elif model_name == "manipulative_metrics":
+        return {
+            "top_100_wallet": data[0]
+        }
+    elif model_name == "network_metrics":
+        return {
+            "tvl": data[0]
+        }
+    logging.warning(f"Не задано сопоставление для модели {model_name}")
+    return None
+
+
+async def update_or_create(session, model, project_id=None, id=None, defaults=None, **kwargs):
     """ Вспомогательная функция для обновления или создания записи. """
-    result = await session.execute(select(model).filter_by(**dict(defaults)))
-    instance = result.scalars().first()
+    instance = None
+
+    if id:
+        result = await session.execute(select(model).filter_by(id=id))
+        instance = result.scalars().first()
+    else:
+        result = await session.execute(select(model).filter_by(project_id=project_id))
+        instance = result.scalars().first()
 
     if instance:
         for key, value in defaults.items():
             setattr(instance, key, value)
     else:
-        params = {**kwargs, **defaults}
-        instance = model(**params)
-        session.add(instance)
+        if id:
+            params = {**kwargs, **defaults}
+            instance = model(id=id, **params)
+            session.add(instance)
+        else:
+            params = {**kwargs, **defaults}
+            instance = model(project_id=project_id, **params)
+            session.add(instance)
 
     await session.commit()
     return instance
@@ -373,3 +448,4 @@ async def update_or_create(session, model, defaults=None, **kwargs):
 
 def get_object_by_filter(model: Type, filter_conditions: Dict[str, Any]):
     return sync_session.query(model).filter_by(**filter_conditions).first()
+
