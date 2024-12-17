@@ -125,7 +125,7 @@ async def project_chosen(message: types.Message):
     await message.answer(phrase_by_user("file_format", message.from_user.id), reply_markup=file_format_keyboard())
 
 
-@calculate_router.message(lambda message: message.text == 'Расчет и анализ проектов' or message.text == 'Project Calculation & Analysis' or message.text == "Пожалуйста, выберите новый проект для расчета.")
+@calculate_router.message(lambda message: message.text == 'Анализ проектов' or message.text == 'Project analysis' or message.text == "Пожалуйста, выберите новый проект для расчета.")
 async def project_chosen(message: types.Message, state: FSMContext):
     await message.answer(phrase_by_user("calculation_type_choice", message.from_user.id), reply_markup=analysis_type_keyboard(message.from_user.id))
     await state.set_state(CalculateProject.choosing_analysis_type)

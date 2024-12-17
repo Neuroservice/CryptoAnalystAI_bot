@@ -3,7 +3,7 @@ button_strings_dict = {
         "help_button": "Помощь",
         "start_calculate_button": "Расчет и анализ проектов",
         "start_history_button": "История расчетов",
-        "donate": "Оформить донат",
+        "donate": "Донат",
         "rebalancing_block": "Блок ребалансировки портфеля",
         "analysis_block": "Блок анализа и оценки проектов",
         "listing_price_block": "Блок анализа цены на листинге (бета)",
