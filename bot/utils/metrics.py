@@ -1,6 +1,5 @@
 import logging
 
-from bot.data_update import update_or_create
 from bot.database.models import (
     BasicMetrics,
     TopAndBottom,
@@ -13,7 +12,7 @@ from bot.database.models import (
     Project
 )
 from bot.utils.consts import tickers
-from bot.utils.project_data import find_record
+from bot.utils.project_data import find_record, update_or_create
 from bot.utils.validations import if_exist_instance
 
 

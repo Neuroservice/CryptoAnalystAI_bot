@@ -1,4 +1,6 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton
+from aiogram.types.inline_keyboard_markup import InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.utils.resources.buttons.button_strings_handler import button_text_by_language
 
@@ -10,6 +12,7 @@ def main_menu_keyboard(language):
                 KeyboardButton(text=button_text_by_language("help_button", language=language)),
                 KeyboardButton(text=button_text_by_language("start_calculate_button", language=language)),
                 KeyboardButton(text=button_text_by_language("start_history_button", language=language)),
+                KeyboardButton(text=button_text_by_language("donate", language=language)),
             ],
         ],
         resize_keyboard=True,

@@ -17,6 +17,7 @@ phrase_dict = {
         "calculations_history": "История расчетов.zip",
         "model_answer_for_calculations": "Ответ модели по расчету:",
         "tokens_distribution": "Распределение токенов для: ",
+        "donate": "Задонатить на развитие проекта можно на наш кошелек:\n\nСети: BNB, ARB, OP, ERC20\n\n",
 
         ## Ошибки
         "error_input_token_from_user": "Ошибка. Проверьте правильность введенного тикера токена и попробуйте еще раз.",
@@ -66,6 +67,7 @@ phrase_dict = {
         "calculations_history": "Calculation History.zip",
         "model_answer_for_calculations": "Model response by calculation:",
         "tokens_distribution": "Distribution of tokens for: ",
+        "donate": "You can donate for the development of the project on our wallet:\n\nNetworks: BNB, ARB, OP, ERC20\n\n",
 
         ## Ошибки
         "error_input_token_from_user": "Error. Check if the coin entered is correct and try again.",

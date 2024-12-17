@@ -27,7 +27,7 @@ from bot.utils.project_data import (
     get_user_project_info,
     get_project_and_tokenomics,
     calculate_expected_x,
-    get_top_projects_by_capitalization, fetch_coinmarketcap_data, fetch_coingecko_data
+    get_top_projects_by_capitalization, fetch_coinmarketcap_data, fetch_coingecko_data, update_or_create
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -416,34 +416,6 @@ def map_data_to_model_fields(model_name, data):
         }
     logging.warning(f"Не задано сопоставление для модели {model_name}")
     return None
-
-
-async def update_or_create(session, model, project_id=None, id=None, defaults=None, **kwargs):
-    """ Вспомогательная функция для обновления или создания записи. """
-    instance = None
-
-    if id:
-        result = await session.execute(select(model).filter_by(id=id))
-        instance = result.scalars().first()
-    else:
-        result = await session.execute(select(model).filter_by(project_id=project_id))
-        instance = result.scalars().first()
-
-    if instance:
-        for key, value in defaults.items():
-            setattr(instance, key, value)
-    else:
-        if id:
-            params = {**kwargs, **defaults}
-            instance = model(id=id, **params)
-            session.add(instance)
-        else:
-            params = {**kwargs, **defaults}
-            instance = model(project_id=project_id, **params)
-            session.add(instance)
-
-    await session.commit()
-    return instance
 
 
 def get_object_by_filter(model: Type, filter_conditions: Dict[str, Any]):

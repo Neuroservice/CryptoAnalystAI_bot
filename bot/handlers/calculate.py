@@ -16,7 +16,6 @@ from aiogram.types import (
 )
 
 from bot.config import API_TOKEN
-from bot.data_update import update_or_create
 from bot.database.models import (
     Project,
     Tokenomics,
@@ -65,7 +64,7 @@ from bot.utils.project_data import (
     calculate_expected_x,
     send_long_message,
     get_top_projects_by_capitalization_and_category,
-    process_and_update_models, fetch_coingecko_data, generate_flags_answer, find_record
+    process_and_update_models, fetch_coingecko_data, generate_flags_answer, find_record, update_or_create
 )
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.utils.resources.files_worker.pdf_worker import generate_pie_chart, PDF

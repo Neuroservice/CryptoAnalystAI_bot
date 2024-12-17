@@ -13,7 +13,7 @@ from bot.config import API_TOKEN, engine_url
 from bot.database.backups import create_backup
 from bot.database.db_setup import create_db
 from bot.data_update import fetch_crypto_data, update_agent_answers
-from bot.handlers import history, select_language
+from bot.handlers import history, select_language, donate
 
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
@@ -74,6 +74,7 @@ async def main():
             dp.include_router(calculate.calculate_router)
             dp.include_router(history.history_router)
             dp.include_router(select_language.change_language_router)
+            dp.include_router(donate.donate_router)
 
             # Запускаем асинхронно задачи для парсинга и обновлений
             asyncio.create_task(parse_periodically())
