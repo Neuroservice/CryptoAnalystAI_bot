@@ -31,6 +31,10 @@ dejavu_path = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed.ttf'  # Дл�
 MAX_MESSAGE_LENGTH = 4096
 
 
+# Адрес кошелька
+WALLET_ADDRESS = "0x1D99EdC1431f27cF26FF8a464A814Ba2Bb757602"
+
+
 # Токены и категории (типы)
 tickers = [
     "ME", "APT", "SEI", "SUI", "KAS", "TIA", "FLR", "ARB", "OP", "IMX", "MNT", "STRK", "ZK", "POL",
