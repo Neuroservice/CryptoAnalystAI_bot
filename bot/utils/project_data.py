@@ -174,7 +174,7 @@ async def get_project_data(calc, session):
     project = await find_record(Project, session, id=calc.project_id)
     basic_metrics = await find_record(BasicMetrics, session, project_id=project.id)
     projects, similar_projects = await get_project_and_tokenomics(session, project.category, user_coin_name=project.coin_name)
-    base_tokenomics = await find_record(Tokenomics, session, project_id=calc.id)
+    base_tokenomics = await find_record(Tokenomics, session, project_id=project.id)
 
     return project, basic_metrics, similar_projects, base_tokenomics
 
