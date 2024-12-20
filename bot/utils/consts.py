@@ -27,6 +27,11 @@ dejavu_path = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed.ttf'  # Дл�
 # dejavu_path = '/app/fonts/DejaVuSansCondensed.ttf'  # Для прода
 
 
+# Путь к файлу состояний
+STATE_FILE = r'C:\Users\dimak\PycharmProjects\Crypto-Analyst\bot\database\user_states.json'
+# STATE_FILE = "/app/data/user_states.json"
+
+
 # Числовые константы
 MAX_MESSAGE_LENGTH = 4096
 

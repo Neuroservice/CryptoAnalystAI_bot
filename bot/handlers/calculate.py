@@ -30,7 +30,7 @@ from bot.database.models import (
     TopAndBottom,
     AgentAnswer
 )
-from bot.handlers.start import user_languages
+from bot.utils.consts import user_languages
 from bot.utils.consts import (
     tickers,
     field_mapping,
@@ -70,7 +70,7 @@ from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.utils.resources.files_worker.pdf_worker import generate_pie_chart, PDF
 from bot.utils.resources.headers.headers import ru_additional_headers, eng_additional_headers
 from bot.utils.resources.headers.headers_handler import results_header_by_user, calculation_header_by_user
-from bot.utils.validations import validate_user_input, extract_overall_category
+from bot.utils.validations import validate_user_input, extract_overall_category, save_execute
 
 calculate_router = Router()
 logging.basicConfig(level=logging.INFO)
@@ -158,6 +158,11 @@ async def file_format_chosen(message: types.Message, state: FSMContext):
 
 @calculate_router.message(CalculateProject.waiting_for_basic_data)
 async def receive_basic_data(message: types.Message, state: FSMContext):
+    print(f"Обработчик сработал для сообщения: {message.text} от пользователя {message.from_user.id}")
+    current_state = await state.get_state()
+    print(f"Текущее состояние пользователя: {current_state}")
+
+
     user_coin_name = message.text.upper().replace(" ", "")
     new_project = None
     price = None
@@ -543,11 +548,12 @@ async def receive_data(message: types.Message, state: FSMContext):
 
             if not tokenomics_data or not tokenomics_data.circ_supply or not tokenomics_data.total_supply or not tokenomics_data.capitalization or not tokenomics_data.fdv or not basic_metrics.market_price:
                 coinmarketcap_data = await fetch_coinmarketcap_data(message, user_coin_name, **header_params)
+                print(f"DATA DATA DATA: {coinmarketcap_data}")
                 if coinmarketcap_data:
                     circulating_supply = coinmarketcap_data['circulating_supply']
                     total_supply = coinmarketcap_data['total_supply']
                     price = coinmarketcap_data['price']
-                    capitalization = coinmarketcap_data['market_cap']
+                    capitalization = coinmarketcap_data['capitalization']
                     coin_fdv = coinmarketcap_data['coin_fdv']
 
                     await update_or_create(
@@ -735,12 +741,14 @@ async def receive_data(message: types.Message, state: FSMContext):
             if not tokenomics_data or not tokenomics_data.circ_supply or not tokenomics_data.total_supply or not tokenomics_data.capitalization or not tokenomics_data.fdv or not basic_metrics.market_price:
                 coinmarketcap_data = await fetch_coinmarketcap_data(message, user_coin_name, **header_params)
                 if coinmarketcap_data:
+                    print(f"price of coin {user_coin_name, coinmarketcap_data}")
                     circulating_supply = coinmarketcap_data['circulating_supply']
                     total_supply = coinmarketcap_data['total_supply']
                     price = coinmarketcap_data['price']
-                    print(f"price of coin {user_coin_name, price}")
-                    capitalization = coinmarketcap_data['market_cap']
+                    capitalization = coinmarketcap_data['capitalization']
                     coin_fdv = coinmarketcap_data['coin_fdv']
+
+                    print(f"price of coin {user_coin_name, price, circulating_supply, total_supply, capitalization, coin_fdv}")
 
                     await update_or_create(
                         session_local, Tokenomics,
@@ -925,6 +933,7 @@ async def receive_data(message: types.Message, state: FSMContext):
             await create_pdf(session_local, state, message='-', user_id=message.from_user.id)
 
 
+@save_execute
 async def create_basic_report(session, state: FSMContext, message: Optional[Union[Message, str]] = None, user_id: Optional[int] = None):
     state_data = await state.get_data()
     user_coin_name = state_data.get("user_coin_name")
@@ -1093,6 +1102,7 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
             await bot.send_message(chat_id=user_id, text=f"{phrase_by_user('error_not_valid_input_data', message.from_user.id)}\n{error_message}")
 
 
+@save_execute
 async def create_excel(session, state: FSMContext, message: Optional[Union[Message, str]] = None, user_id: Optional[int] = None):
     state_data = await state.get_data()
     chosen_project = state_data.get("chosen_project")
@@ -1557,6 +1567,7 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
             await bot.send_message(chat_id=user_id, text=f"{phrase_by_user('error_not_valid_input_data', message.from_user.id)}\n{error_message}")
 
 
+@save_execute
 async def create_pdf(session, state: FSMContext, message: Optional[Union[Message, str]] = None, user_id: Optional[int] = None):
     state_data = await state.get_data()
     logging.info(f"state data {state_data}")

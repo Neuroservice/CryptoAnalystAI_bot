@@ -12,7 +12,7 @@ from aiogram.types import BufferedInputFile
 from fpdf import FPDF
 from sqlalchemy import select
 
-from bot.database.models import Calculation
+from bot.database.models import Calculation, User
 from bot.handlers.start import user_languages
 from bot.utils.consts import (
     column_widths,
@@ -28,6 +28,7 @@ from bot.utils.resources.files_worker.pdf_worker import PDF, generate_pie_chart
 from bot.utils.resources.headers.headers import ru_results_headers, eng_results_headers, ru_additional_headers, \
     eng_additional_headers
 from bot.utils.resources.headers.headers_handler import calculation_header_by_user, write_headers
+from bot.utils.validations import save_execute
 
 history_router = Router()
 matplotlib.use('Agg')
@@ -45,8 +46,20 @@ class HistoryState(StatesGroup):
 
 @history_router.message(lambda message: message.text == 'История расчетов' or message.text == 'Calculation History')
 async def file_format_chosen(message: types.Message, state: FSMContext):
-    await message.answer(phrase_by_user("file_format", message.from_user.id), reply_markup=file_format_keyboard())
-    await state.set_state(HistoryState.choosing_file_format)
+    async with SessionLocal() as session:
+        result = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
+        user = result.scalars().first()
+
+        if not user:
+            user = User(telegram_id=message.from_user.id)
+            session.add(user)
+            await session.commit()
+
+        if user.language:
+            user_languages[message.from_user.id] = user.language
+
+        await message.answer(phrase_by_user("file_format", message.from_user.id), reply_markup=file_format_keyboard())
+        await state.set_state(HistoryState.choosing_file_format)
 
 
 @history_router.message(HistoryState.choosing_file_format)

@@ -1,7 +1,7 @@
 button_strings_dict = {
     "RU": {
         "help_button": "Помощь",
-        "start_calculate_button": "Расчет и анализ проектов",
+        "start_calculate_button": "Анализ проектов",
         "start_history_button": "История расчетов",
         "donate": "Донат",
         "rebalancing_block": "Блок ребалансировки портфеля",
@@ -10,7 +10,7 @@ button_strings_dict = {
     },
     "ENG": {
         "help_button": "Help",
-        "start_calculate_button": "Project Calculation & Analysis",
+        "start_calculate_button": "Project a nalysis",
         "start_history_button": "Calculation History",
         "donate": "Donate",
         "rebalancing_block": "Block of portfolio rebalancing",

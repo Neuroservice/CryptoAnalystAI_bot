@@ -17,6 +17,7 @@ from bot.database.models import (
     AgentAnswer,
 )
 from bot.utils.consts import engine
+from bot.utils.validations import save_execute
 
 
 async def create_db():

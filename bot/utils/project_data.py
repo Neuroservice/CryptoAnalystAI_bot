@@ -30,12 +30,13 @@ from bot.utils.consts import tickers, MAX_MESSAGE_LENGTH, get_header_params, Ses
     sync_session
 from bot.utils.gpt import agent_handler
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
-from bot.utils.validations import is_async_session
+from bot.utils.validations import is_async_session, save_execute
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
+@save_execute
 async def get_data(model, project_id, is_async, session):
     if is_async:
         print("1")
@@ -56,6 +57,7 @@ async def get_data(model, project_id, is_async, session):
         return None
 
 
+@save_execute
 async def get_user_project_info(session, user_coin_name):
 
     try:
@@ -105,6 +107,7 @@ async def get_user_project_info(session, user_coin_name):
         return {"error": f"Общая ошибка при обработке данных проекта: {e}"}
 
 
+@save_execute
 async def get_project_and_tokenomics(session, project_name, user_coin_name):
     try:
         logger.info(f"Поиск проектов для категории: {project_name}")
@@ -170,6 +173,7 @@ async def get_project_and_tokenomics(session, project_name, user_coin_name):
         return [], {"error": f"Общая ошибка при обработке данных проекта: {e}"}
 
 
+@save_execute
 async def get_project_data(calc, session):
     project = await find_record(Project, session, id=calc.project_id)
     basic_metrics = await find_record(BasicMetrics, session, project_id=project.id)
@@ -179,6 +183,7 @@ async def get_project_data(calc, session):
     return project, basic_metrics, similar_projects, base_tokenomics
 
 
+@save_execute
 async def get_full_info(session, project_name, user_coin_name):
     try:
         query = select(Project).filter_by(category=project_name)
@@ -261,6 +266,7 @@ async def get_twitter_link_by_symbol(symbol):
     header_params = get_header_params(coin_name=None)
 
     async with aiohttp.ClientSession() as session:
+
         async with session.get(url, headers=header_params["headers"]) as response:
             if response.status == 200:
                 data = await response.json()
@@ -683,7 +689,7 @@ async def fetch_coinmarketcap_data(message=None, user_coin_name=None, headers=No
         data = data.json()
         if "data" in data:
             coin_name = data['data'][user_coin_name]['name'].lower()
-            # logging.info(f"{coin_name, data['data'][user_coin_name]['name']}")
+            logging.info(f"{coin_name, data['data'][user_coin_name]['name']}")
 
             crypto_data = data['data'][user_coin_name]['quote']['USD']
             circulating_supply = data['data'][user_coin_name]['circulating_supply']
@@ -829,6 +835,7 @@ async def fetch_top_100_wallets(coin_name):
         return None
 
 
+@save_execute
 async def fetch_fundraise_data(user_coin_name):
     try:
         clean_data, investors = await get_fundraise(user_coin_name)
@@ -856,7 +863,7 @@ async def fetch_tvl_data(coin_name):
             async with session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
-                    # print("data tvl", coin_name.lower(), data)
+                    print("data tvl", coin_name.lower(), data)
 
                     if data:
                         last_tvl = data[-1]['tvl']
@@ -1204,6 +1211,7 @@ async def generate_flags_answer(user_id, session, all_data_string_for_flags_agen
     return flags_answer
 
 
+@save_execute
 async def find_record(model, session: AsyncSession, **filters):
     query = select(model).filter_by(**filters)
     result = await session.execute(query)
@@ -1214,6 +1222,7 @@ async def find_record(model, session: AsyncSession, **filters):
     return record
 
 
+@save_execute
 async def find_records(model, session: AsyncSession, **filters):
     query = select(model).filter_by(**filters)
     result = await session.execute(query)
@@ -1277,6 +1286,7 @@ def get_object_by_filter(model: Type, filter_conditions: Dict[str, Any]):
     return sync_session.query(model).filter_by(**filter_conditions).first()
 
 
+@save_execute
 async def update_or_create(session, model, project_id=None, id=None, defaults=None, **kwargs):
     """ Вспомогательная функция для обновления или создания записи. """
     instance = None

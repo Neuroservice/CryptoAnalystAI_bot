@@ -2,7 +2,8 @@ import logging
 import re
 
 import requests
-from openai import OpenAI
+# from openai import OpenAI
+from langchain_openai import ChatOpenAI
 
 from bot.config import GPT_SECRET_KEY_FASOLKAAI
 
@@ -60,146 +61,72 @@ def load_document_for_flags_agent() -> str:
                          "Примечание, весы (не обращай внимание):")
 
 
+def create_agent_response(system_content: str, user_prompt: str) -> str:
+    """Создает ответ от агента на основе системного сообщения и пользовательского запроса."""
+    llm = ChatOpenAI(api_key=GPT_SECRET_KEY_FASOLKAAI, model="gpt-4o-mini-2024-07-18", temperature=0)
+    response = llm.invoke([{"role": "system", "content": system_content},
+                           {"role": "user", "content": user_prompt}])
+    return response.content
+
+
 def category_agent(topic):
     system = load_document_for_category_agent()
-    client = OpenAI(api_key=GPT_SECRET_KEY_FASOLKAAI)
-    logging.info(f"topic {topic, system}")
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user",
-         "content": f"Определи к какой категории относится данный проект.\nВот текстовое описание проекта: {topic}"}
-    ]
-
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini-2024-07-18",
-        messages=messages,
-        temperature=0
-    )
-    answer = completion.choices[0].message.content
-    logging.info(f"\n================================\nAnswer: {answer}\n")
-    return answer
+    user_prompt = f"Определи к какой категории относится данный проект.\nВот текстовое описание проекта: {topic}"
+    return create_agent_response(system, user_prompt)
 
 
 def tier_agent(topic):
     system = load_document_for_tier_agent()
-    client = OpenAI(api_key=GPT_SECRET_KEY_FASOLKAAI)
-    logging.info(f"topic {topic, system}")
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": f"Определи к какому Тиру относится проект.\nВот критерии для оценки: {topic}"}
-    ]
-
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini-2024-07-18",
-        messages=messages,
-        temperature=0
-    )
-    answer = completion.choices[0].message.content
-    logging.info(f"\n================================\nAnswer: {answer}\n")
-    return answer
+    user_prompt = f"Определи к какому Тиру относится проект.\nВот критерии для оценки: {topic}"
+    return create_agent_response(system, user_prompt)
 
 
 def tokemonic_agent(topic):
     system = load_document_for_tokemonic_agent()
-    client = OpenAI(api_key=GPT_SECRET_KEY_FASOLKAAI)
-    logging.info(f"topic {topic, system}")
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user",
-         "content": f"Внимательно следуй инструкции которую тебе дали. Не придумывай ничего от себя. Сравни криптопроект с другими проектами в той же категории и рассчитай его оценку в баллах на основе возможного прироста токена по сравнению с этими проектами. Предоставь результаты в заданном в инструкции формате и ничего более.\nПеременные для вычислений: {topic}"}
-    ]
-
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini-2024-07-18",
-        messages=messages,
-        temperature=0
-    )
-    answer = completion.choices[0].message.content
-    logging.info(f"\n================================\nAnswer: {answer}\n")
-    return answer
+    user_prompt = (f"Сравни криптопроект с другими проектами в той же категории и рассчитай его оценку "
+                   f"в баллах на основе возможного прироста токена по сравнению с этими проектами.\n"
+                   f"Переменные для вычислений: {topic}")
+    return create_agent_response(system, user_prompt)
 
 
 def funds_agent(topic):
     system = load_document_for_funds_agent()
-    client = OpenAI(api_key=GPT_SECRET_KEY_FASOLKAAI)
-    logging.info(f"topic {topic, system}")
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user",
-         "content": f"Внимательно следуй инструкции которую тебе дали. Не придумывай ничего от себя. Вычисли количество набранных баллов по каждому показателю и предоставь результаты в заданном в инструкции формате и ничего более.\nПеременные для вычислений: {topic}"}
-    ]
-
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini-2024-07-18",
-        messages=messages,
-        temperature=0
-    )
-    answer = completion.choices[0].message.content
-    logging.info(f"\n================================\nAnswer: {answer}\n")
-    return answer
+    user_prompt = (f"Вычисли количество набранных баллов по каждому показателю "
+                   f"и предоставь результаты в заданном в инструкции формате.\n"
+                   f"Переменные для вычислений: {topic}")
+    return create_agent_response(system, user_prompt)
 
 
 def project_rating_agent(topic):
     system = load_document_for_project_rating_agent()
-    client = OpenAI(api_key=GPT_SECRET_KEY_FASOLKAAI)
-    logging.info(f"topic {topic, system}")
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user",
-         "content": f"Внимательно следуй инструкции которую тебе дали. Не придумывай ничего от себя. Рассчитай общее количество баллов для криптопроекта на основе предоставленных переменных и предоставь результаты в заданном в инструкции формате и ничего более.\nПеременные для вычислений: {topic}"}
-    ]
-
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini-2024-07-18",
-        messages=messages,
-        temperature=0
-    )
-    answer = completion.choices[0].message.content
-    logging.info(f"\n================================\nAnswer: {answer}\n")
-    return answer
+    user_prompt = (f"Рассчитай общее количество баллов для криптопроекта на основе предоставленных переменных "
+                   f"и предоставь результаты в заданном в инструкции формате.\n"
+                   f"Переменные для вычислений: {topic}")
+    return create_agent_response(system, user_prompt)
 
 
 def flags_agent(topic, language):
     system = load_document_for_flags_agent()
-    client = OpenAI(api_key=GPT_SECRET_KEY_FASOLKAAI)
-    logging.info(f"topic {language, topic, system}")
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user",
-         "content": f"Ответь на языке: {language}. Не упоминай о том, что тебя попросили ответить на конкретном языке. Переменные для анализа: {topic}"}
-    ]
-
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini-2024-07-18",
-        messages=messages,
-        temperature=0
-    )
-    answer = completion.choices[0].message.content
-    logging.info(f"\n================================\nAnswer: {answer}\n")
-    return answer
+    user_prompt = (f"Ответь на языке: {language}. Не упоминай о том, что тебя попросили ответить на конкретном языке.\n"
+                   f"Переменные для анализа: {topic}")
+    return create_agent_response(system, user_prompt)
 
 
 def agent_handler(agent_type, topic, language=None):
-    """
-    Обработчик для вызова различных агентов в зависимости от типа агента.
-    """
-
-    # Словарь с функциями для различных агентов
+    """Обработчик для вызова различных агентов в зависимости от типа агента."""
     agent_functions = {
         "category": category_agent,
         "tier_agent": tier_agent,
         "tokemonic_agent": tokemonic_agent,
         "funds_agent": funds_agent,
         "rating": project_rating_agent,
-        "flags": lambda topic: flags_agent(topic, language)
+        "flags": lambda t: flags_agent(t, language),
     }
 
-    # Проверка, существует ли такой агент
     if agent_type not in agent_functions:
         logging.error(f"Неизвестный тип агента: {agent_type}")
         return None
 
-    # Вызов нужной функции для агента
     try:
         return agent_functions[agent_type](topic)
     except Exception as e:
