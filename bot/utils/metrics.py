@@ -13,9 +13,10 @@ from bot.database.models import (
 )
 from bot.utils.consts import tickers
 from bot.utils.project_data import find_record, update_or_create
-from bot.utils.validations import if_exist_instance
+from bot.utils.validations import if_exist_instance, save_execute
 
 
+@save_execute
 async def update_project(session, user_coin_name, chosen_project, project):
     if user_coin_name not in tickers:
         print("+++++1+++++", user_coin_name, chosen_project)
@@ -34,6 +35,7 @@ async def update_project(session, user_coin_name, chosen_project, project):
         return await find_record(Project, session, coin_name=user_coin_name)
 
 
+@save_execute
 async def update_social_metrics(session, project_id, social_metrics):
     if social_metrics:
         twitter_subs, twitter_twitterscore = social_metrics[0]
@@ -47,6 +49,7 @@ async def update_social_metrics(session, project_id, social_metrics):
         )
 
 
+@save_execute
 async def update_investing_metrics(session, project_id, investing_metrics, user_coin_name, investors):
     if investing_metrics:
         fundraise, fund_tier = investing_metrics[0]
@@ -64,6 +67,7 @@ async def update_investing_metrics(session, project_id, investing_metrics, user_
             )
 
 
+@save_execute
 async def update_network_metrics(session, project_id, network_metrics, price, total_supply):
     if network_metrics:
         last_tvl = network_metrics[0]
@@ -78,6 +82,7 @@ async def update_network_metrics(session, project_id, network_metrics, price, to
             )
 
 
+@save_execute
 async def update_manipulative_metrics(session, project_id, manipulative_metrics, price, total_supply, fundraise):
     if manipulative_metrics:
         top_100_wallets = manipulative_metrics[0]
@@ -91,6 +96,7 @@ async def update_manipulative_metrics(session, project_id, manipulative_metrics,
         )
 
 
+@save_execute
 async def update_funds_profit(session, project_id, funds_profit_data):
     output_string = '\n'.join(funds_profit_data[0]) if funds_profit_data and funds_profit_data[0] else ''
     if output_string:
@@ -101,6 +107,7 @@ async def update_funds_profit(session, project_id, funds_profit_data):
         )
 
 
+@save_execute
 async def update_market_metrics(session, project_id, market_metrics):
     try:
         if market_metrics:
@@ -121,6 +128,7 @@ async def update_market_metrics(session, project_id, market_metrics):
         await session.rollback()
 
 
+@save_execute
 async def process_metrics(
         session,
         user_coin_name,

@@ -29,11 +29,13 @@ from bot.utils.project_data import (
     calculate_expected_x,
     get_top_projects_by_capitalization, fetch_coinmarketcap_data, fetch_coingecko_data, update_or_create
 )
+from bot.utils.validations import save_execute
 
 logging.basicConfig(level=logging.INFO)
 current_day = datetime.datetime.utcnow().day
 
 
+@save_execute
 async def fetch_project(symbol: str, async_session: AsyncSession):
     async with async_session.begin():
         result = await async_session.execute(
@@ -354,6 +356,7 @@ async def update_agent_answers():
             await async_session.commit()
 
 
+@save_execute
 async def find_record(model, session: AsyncSession, **filters):
     query = select(model).filter_by(**filters)
     result = await session.execute(query)
@@ -364,6 +367,7 @@ async def find_record(model, session: AsyncSession, **filters):
     return record
 
 
+@save_execute
 async def find_records(model, session: AsyncSession, **filters):
     query = select(model).filter_by(**filters)
     result = await session.execute(query)

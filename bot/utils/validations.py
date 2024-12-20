@@ -1,9 +1,21 @@
 import re
+import logging
 
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from bot.utils.consts import stablecoins, fundamental_tokens
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
+
+
+def save_execute(f):
+    async def wrapper(session: AsyncSession, *args, **kwargs):
+        try:
+            return await f(session, *args, **kwargs)
+        except Exception as e:
+            await session.rollback()
+            logging.error(e)
+
+    return wrapper
 
 
 async def validate_user_input(user_coin_name, message, state):

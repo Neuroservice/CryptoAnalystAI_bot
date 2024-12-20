@@ -13,6 +13,7 @@ class User(Base):
     telegram_id = Column(BigInteger, unique=True, nullable=False)
     language = Column(Text, nullable=True)
 
+
     calculations = relationship('Calculation', back_populates='user')
 
 

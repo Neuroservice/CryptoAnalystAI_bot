@@ -1,7 +1,6 @@
 import asyncio
 import datetime
 import logging
-import threading
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -10,13 +9,14 @@ from aiogram.types import BotCommand
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from bot.config import API_TOKEN, engine_url
-from bot.database.backups import create_backup
-from bot.database.db_setup import create_db
 from bot.data_update import fetch_crypto_data, update_agent_answers
+from bot.database.backups import create_backup
 from bot.handlers import history, select_language, donate
+from bot.utils.consts import STATE_FILE
+from bot.utils.middlewares import RestoreStateMiddleware
+from bot.utils.resources.files_worker.bot_states import restore_states, save_all_states
 
-storage = MemoryStorage()
-dp = Dispatcher(storage=storage)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 engine = create_async_engine(engine_url, echo=False, pool_timeout=60, connect_args={"timeout": 60})
@@ -65,6 +65,9 @@ async def main():
     try:
         # await create_db()
         async with AiohttpSession() as aiohttp_session:
+            storage = MemoryStorage()
+            dp = Dispatcher(storage=storage)
+
             bot = Bot(token=API_TOKEN, session=aiohttp_session)
             await bot.set_my_commands([BotCommand(command="/start", description="Запустить бота")])
 
@@ -76,11 +79,16 @@ async def main():
             dp.include_router(select_language.change_language_router)
             dp.include_router(donate.donate_router)
 
+            dp.update.middleware(RestoreStateMiddleware())
+
             # Запускаем асинхронно задачи для парсинга и обновлений
             asyncio.create_task(parse_periodically())
 
-            # Запуск бота
+            await restore_states(storage, bot, dp)
+            logger.info("Состояния восстановлены.")
+
             await dp.start_polling(bot)
+
     except AttributeError as attr_error:
         logging.error(f"Ошибка доступа к атрибуту: {attr_error}", exc_info=True)
         return {"error": f"Ошибка при попытке получить доступ к атрибуту: {attr_error}"}
@@ -94,6 +102,9 @@ async def main():
         logging.error(f"Общая ошибка при выполнении операции: {e}", exc_info=True)
         return {"error": f"Неизвестная ошибка: {e}"}
     finally:
+        await save_all_states(storage)
+        logger.info("Состояния сохранены.")
+
         logger.info("Завершение работы бота.")
 
 
