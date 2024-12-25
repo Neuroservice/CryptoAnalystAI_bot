@@ -189,7 +189,7 @@ def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_p
 
         funds_result = f"По данному показателю проект получает {round(funds_score, 2)} баллов.\n"
     else:
-        funds_result = "Данные для расчета средней цены и доходности фондов отсутствуют.\n"
+        funds_result = "Данные для расчета средней цены и доходности фондов отсутствуют. 0 баллов.\n"
 
     if growth_percentage != 'N/A' and fall_percentage != 'N/A':
         growth_and_fall_score = fall_percentage - growth_percentage
@@ -197,19 +197,19 @@ def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_p
             growth_and_fall_score = -50
         growth_and_fall_result = f"Проект {'потерял' if growth_and_fall_score < 0 else 'получил'} {round(abs(growth_and_fall_score), 2)} баллов по показателю роста от минимальных значений и падения от максимальных значений.\n"
     else:
-        growth_and_fall_result = "Данные для расчета роста и падения отсутствуют.\n"
+        growth_and_fall_result = "Данные для расчета роста и падения отсутствуют. 0 баллов.\n"
 
     if top_100_percentage != 'N/A':
         top_100_score = max(0, int(top_100_percentage) - 70)
         top_100_result = f"Проект {'потерял' if top_100_score == 0 else 'получил'} {top_100_score} баллов по показателю процента монет на топ 100 кошельков.\n"
     else:
-        top_100_result = "Данные для расчета процента монет на топ 100 кошельков отсутствуют.\n"
+        top_100_result = "Данные для расчета процента монет на топ 100 кошельков отсутствуют. 0 баллов.\n"
 
     if tvl_percentage != 'N/A':
         tvl_score = int(tvl_percentage)
         tvl_result = f"Проект {'потерял' if tvl_score == 0 else 'получил'} {tvl_score} баллов по показателю процента заблокированных монет.\n"
     else:
-        tvl_result = "Данные для расчета процента заблокированных монет отсутствуют.\n"
+        tvl_result = "Данные для расчета процента заблокированных монет отсутствуют. 0 баллов.\n"
 
     report = funds_result + growth_and_fall_result + top_100_result + tvl_result
     print(tvl_score + top_100_score + growth_and_fall_score + funds_score)
