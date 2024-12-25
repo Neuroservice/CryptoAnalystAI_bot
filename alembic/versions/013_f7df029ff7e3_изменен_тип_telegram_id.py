@@ -49,7 +49,6 @@ def upgrade() -> None:
                existing_type=sa.TEXT(),
                type_=sa.String(length=150),
                existing_nullable=True)
-    op.drop_index('idx_17123_basic_metrics_pkey', table_name='basic_metrics')
     op.create_foreign_key(None, 'basic_metrics', 'project', ['project_id'], ['id'])
     op.alter_column('calculation', 'id',
                existing_type=sa.BIGINT(),
@@ -69,7 +68,6 @@ def upgrade() -> None:
                existing_type=postgresql.TIMESTAMP(timezone=True),
                type_=sa.DateTime(),
                existing_nullable=True)
-    op.drop_index('idx_17118_calculation_pkey', table_name='calculation')
     op.create_foreign_key(None, 'calculation', 'user', ['user_id'], ['id'])
     op.create_foreign_key(None, 'calculation', 'project', ['project_id'], ['id'])
     op.alter_column('funds_profit', 'id',
@@ -140,7 +138,6 @@ def upgrade() -> None:
                existing_type=sa.TEXT(),
                type_=sa.String(length=100),
                existing_nullable=True)
-    op.drop_index('unique_coin_name', table_name='project')
     op.alter_column('social_metrics', 'id',
                existing_type=sa.BIGINT(),
                type_=sa.Integer(),
@@ -186,7 +183,6 @@ def upgrade() -> None:
     op.alter_column('user', 'telegram_id',
                existing_type=sa.BIGINT(),
                nullable=False)
-    op.drop_index('idx_17108_user_pkey', table_name='user')
     # ### end Alembic commands ###
 
 

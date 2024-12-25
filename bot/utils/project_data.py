@@ -329,6 +329,51 @@ def clean_fundraise_data(fundraise_str):
         return None, None
 
 
+def clean_twitter_subs(twitter_subs):
+    try:
+        # Если входное значение уже является числом, возвращаем его
+        if isinstance(twitter_subs, (int, float)):
+            return float(twitter_subs)
+
+        # Удаляем символы и обрабатываем строку
+        clean_str = twitter_subs.strip()
+        parts = clean_str.split()
+        amount = 1
+
+        for part in parts:
+            clean_part = part
+
+            if clean_part[-1] in ['B', 'M', 'K']:
+                suffix = clean_part[-1]
+                if suffix == 'B':
+                    amount = float(clean_part[:-1]) * 1e9
+                elif suffix == 'M':
+                    amount = float(clean_part[:-1]) * 1e6
+                elif suffix == 'K':
+                    amount = float(clean_part[:-1]) * 1e3
+            else:
+                amount = float(clean_part)
+
+        return amount
+
+    except AttributeError as attr_error:
+        logging.error(f"Ошибка доступа к атрибутам одного из объектов: {attr_error}")
+        return None
+    except KeyError as key_error:
+        logging.error(f"Ошибка при извлечении данных из словаря: отсутствует ключ {key_error}")
+        return None
+    except TypeError as type_error:
+        logging.error(f"Ошибка типов данных при обработке: {type_error}")
+        return None
+    except ValueError as value_error:
+        logging.error(f"Ошибка преобразования данных в число: {value_error}")
+        return None
+    except Exception as e:
+        logging.error(f"Общая ошибка при обработке данных проекта: {e}")
+        return None
+
+
+
 async def get_twitter(name):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -708,7 +753,9 @@ async def fetch_coinmarketcap_data(message=None, user_coin_name=None, headers=No
             }
 
         else:
-            phrase_by_user("error_input_token_from_user", message.from_user.id)
+            if message:
+                phrase_by_user("error_input_token_from_user", message.from_user.id)
+            logging.info("Ошибка: данные о монете не получены. Проверьте введённый тикер.")
             return
     except AttributeError as attr_error:
         logging.error(f"Ошибка доступа к атрибутам данных монеты {user_coin_name}: {attr_error}")
@@ -1151,14 +1198,16 @@ def process_and_update_models(input_lines, field_mapping, model_mapping, session
 
 
 async def generate_flags_answer(user_id, session, all_data_string_for_flags_agent, user_languages, project, tokenomics_data, investing_metrics, social_metrics,
-                                 funds_profit, market_metrics, manipulative_metrics, network_metrics, tier_answer,
-                                 funds_answer, tokemonic_answer, comparison_results, category_answer, twitter_link, top_and_bottom):
+                                 funds_profit, market_metrics, manipulative_metrics, network_metrics,
+                                 funds_answer, tokemonic_answer, comparison_results, category_answer, twitter_link, top_and_bottom, tier):
+    print("project:", project)
     if user_languages.get(user_id) == 'RU':
         language = 'RU'
         flags_answer = agent_handler("flags", topic=all_data_string_for_flags_agent, language=language)
         flags_answer += (
             f"\n\nДанные для анализа\n"
             f"- Анализ категории: {category_answer}\n\n"
+            f"- Тир проекта (из функции): {tier}\n"
             f"- Тикер монеты: {project.coin_name if project else 'N/A'}\n"
             f"- Категория: {project.category if project else 'N/A'}\n"
             f"- Капитализация: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n"
@@ -1173,7 +1222,6 @@ async def generate_flags_answer(user_id, session, all_data_string_for_flags_agen
             f"- Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}\n"
             f"- Процент нахождения монет на топ 100 кошельков блокчейна: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}%\n"
             f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n\n"
-            f"- Тир проекта: {tier_answer}\n"
             f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
             f"- Оценка токеномики: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
             f"**Данные для анализа токеномики**:\n{comparison_results}"
@@ -1198,7 +1246,6 @@ async def generate_flags_answer(user_id, session, all_data_string_for_flags_agen
             f"- Token drop from the high: {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}%\n"
             f"- Percentage of coins found on top 100 blockchain wallets: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}%\n"
             f"- Blocked tokens (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n"
-            f"- Project Tier: {tier_answer}\n"
             f"- Estimation of fund returns: {funds_answer if funds_answer else 'N/A'}\n"
             f"- Tokenomics valuation: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
             f"Data for tokenomic analysis:\n{comparison_results}"

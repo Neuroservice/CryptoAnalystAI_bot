@@ -28,9 +28,9 @@ from bot.database.models import (
     FundsProfit,
     MarketMetrics,
     TopAndBottom,
-    AgentAnswer
+    AgentAnswer, User
 )
-from bot.utils.consts import user_languages
+from bot.utils.consts import user_languages, prepare_ru_data_for_analysis
 from bot.utils.consts import (
     tickers,
     field_mapping,
@@ -51,6 +51,8 @@ from bot.utils.metrics import (
     generate_cells_content,
     create_project_data_row
 )
+from bot.utils.metrics_evaluation import determine_project_tier, calculate_tokenomics_score, analyze_project_metrics, \
+    calculate_project_score
 from bot.utils.project_data import (
     get_project_and_tokenomics,
     get_full_info,
@@ -101,11 +103,6 @@ async def await_to_create_pdf(message: types.Message, state: FSMContext):
 @calculate_router.message(CalculateProject.waiting_for_basic_results)
 async def await_basic_report(message: types.Message, state: FSMContext):
     await create_basic_report(session_local, state, message)
-    # bot_phrase, next_action = await create_basic_report(session, state, message)
-    #
-    # bot = Bot(token=API_TOKEN, session=session)
-    # await send_long_message(bot_or_message=bot, text=f"{answer}\n", chat_id=user_id)
-    # await bot.send_message(chat_id=message.from_user.id, text=phrase_by_user("input_next_token_for_basic_report", message.from_user.id), reply_markup=ReplyKeyboardRemove())
 
 
 @calculate_router.message(CalculateProject.waiting_for_next_action)
@@ -158,11 +155,6 @@ async def file_format_chosen(message: types.Message, state: FSMContext):
 
 @calculate_router.message(CalculateProject.waiting_for_basic_data)
 async def receive_basic_data(message: types.Message, state: FSMContext):
-    print(f"Обработчик сработал для сообщения: {message.text} от пользователя {message.from_user.id}")
-    current_state = await state.get_state()
-    print(f"Текущее состояние пользователя: {current_state}")
-
-
     user_coin_name = message.text.upper().replace(" ", "")
     new_project = None
     price = None
@@ -192,7 +184,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
     try:
         projects, tokenomics_data_list = await get_project_and_tokenomics(async_session, chosen_project_name, user_coin_name)
-        print(projects, tokenomics_data_list)
         top_projects = get_top_projects_by_capitalization_and_category(tokenomics_data_list)
 
         results = []
@@ -201,7 +192,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             for tokenomics in tokenomics_data:
                 header_params = get_header_params(user_coin_name)
 
-                # Передача распакованных параметров в fetch_coinmarketcap_data
                 coin_data = await fetch_coinmarketcap_data(message, user_coin_name, **header_params)
                 if not coin_data:
                     coin_data = await fetch_coingecko_data(user_coin_name)
@@ -317,8 +307,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             model_mapping=model_mapping
         )
 
-        print("Tasks:", tasks)
-
         await session_local.commit()
         if user_coin_name not in tickers:
             await update_or_create(
@@ -402,8 +390,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         funds_profit_data = tasks.get("funds_profit", [])
         output_string = '\n'.join(funds_profit_data[0]) if funds_profit_data and funds_profit_data[0] else ''
 
-        print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-
         if output_string and output_string != '':
             await update_or_create(
                 session_local, FundsProfit,
@@ -466,10 +452,10 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
         data = {
             "user_coin_name": user_coin_name,
-            "calculation_record": calculation_record,
+            "calculation_record": calculation_record.to_dict(),
             "category_answer": category_answer,
             "chosen_project": chosen_project_name,
-            "new_project": new_project,
+            "new_project": new_project.to_dict(),
             "results": results,
             "agents_info": agents_info,
             "missing_fields": missing_fields,
@@ -530,8 +516,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     base_project = project_info.get("project")
     tokenomics_data = project_info.get("tokenomics_data")
     basic_metrics = project_info.get("basic_metrics")
-    print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
-    print(basic_metrics.market_price)
+
     investing_metrics = project_info.get("investing_metrics")
     social_metrics = project_info.get("social_metrics")
     funds_profit = project_info.get("funds_profit")
@@ -540,15 +525,12 @@ async def receive_data(message: types.Message, state: FSMContext):
     manipulative_metrics = project_info.get("manipulative_metrics")
     network_metrics = project_info.get("network_metrics")
 
-    print("--------------------еще не pdf--------------------", base_project)
-
     if selected_format == 'excel':
         try:
             header_params = get_header_params(coin_name=user_coin_name)
 
             if not tokenomics_data or not tokenomics_data.circ_supply or not tokenomics_data.total_supply or not tokenomics_data.capitalization or not tokenomics_data.fdv or not basic_metrics.market_price:
                 coinmarketcap_data = await fetch_coinmarketcap_data(message, user_coin_name, **header_params)
-                print(f"DATA DATA DATA: {coinmarketcap_data}")
                 if coinmarketcap_data:
                     circulating_supply = coinmarketcap_data['circulating_supply']
                     total_supply = coinmarketcap_data['total_supply']
@@ -704,7 +686,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         }
         data = {
             "new_project": project_info,
-            "calculation_record": calculation_record,
+            "calculation_record": calculation_record.to_dict(),
             "category_answer": category_answer,
             "chosen_project": chosen_project,
             "twitter_name": twitter_name,
@@ -733,7 +715,6 @@ async def receive_data(message: types.Message, state: FSMContext):
 
     elif selected_format == 'pdf':
 
-        print("--------------------pdf pdf pdf--------------------")
         header_params = get_header_params(coin_name=user_coin_name)
         twitter_name = await get_twitter_link_by_symbol(user_coin_name)
 
@@ -741,14 +722,11 @@ async def receive_data(message: types.Message, state: FSMContext):
             if not tokenomics_data or not tokenomics_data.circ_supply or not tokenomics_data.total_supply or not tokenomics_data.capitalization or not tokenomics_data.fdv or not basic_metrics.market_price:
                 coinmarketcap_data = await fetch_coinmarketcap_data(message, user_coin_name, **header_params)
                 if coinmarketcap_data:
-                    print(f"price of coin {user_coin_name, coinmarketcap_data}")
                     circulating_supply = coinmarketcap_data['circulating_supply']
                     total_supply = coinmarketcap_data['total_supply']
                     price = coinmarketcap_data['price']
                     capitalization = coinmarketcap_data['capitalization']
                     coin_fdv = coinmarketcap_data['coin_fdv']
-
-                    print(f"price of coin {user_coin_name, price, circulating_supply, total_supply, capitalization, coin_fdv}")
 
                     await update_or_create(
                         session_local, Tokenomics,
@@ -905,7 +883,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         }
         data = {
             "new_project": new_project,
-            "calculation_record": calculation_record,
+            "calculation_record": calculation_record.to_dict(),
             "category_answer": category_answer,
             "chosen_project": chosen_project,
             "twitter_name": twitter_name,
@@ -954,6 +932,7 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
     try:
         project_info = await get_user_project_info(session, user_coin_name)
         project = project_info.get("project")
+        basic_metrics = project_info.get("basic_metrics")
         tokenomics_data = project_info.get("tokenomics_data")
         investing_metrics = project_info.get("investing_metrics")
         social_metrics = project_info.get("social_metrics")
@@ -1011,44 +990,49 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
                         raise
 
         if existing_answer is None:
-            all_data_string_for_tier_agent = (
-                f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Категория: {project.category if project else 'N/A'}\n"
-                f"Капитализация: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
-                f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
-                f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
-                f"Twitter Score: {social_metrics.twitterscore if social_metrics else 'N/A'}\n"
-                f"Инвесторы: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
+            tier_answer = determine_project_tier(
+                capitalization=tokenomics_data.capitalization if tokenomics_data else 'N/A',
+                fundraising=investing_metrics.fundraise if investing_metrics else 'N/A',
+                twitter_followers=social_metrics.twitter if social_metrics else 'N/A',
+                twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
+                category=project.category if project else 'N/A',
+                investors=investing_metrics.fund_level if investing_metrics else 'N/A',
             )
 
-            all_data_string_for_tokemonic_agent = (
-                f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"**Исходные данные:**\n\n"
-                f"{comparison_results}"
-            )
+            data_for_tokenomics = []
+            for index, coin_name, project_coin, expected_x, fair_price in agents_info:
+                ticker = project_coin
+                growth_percent = expected_x
+                data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
+            tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
 
             all_data_string_for_funds_agent = (
-                f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Доходность фондов (%): {funds_profit.distribution if funds_profit else 'N/A'}\n"
-                f"Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}\n"
-                f"Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}\n"
-                f"Процент монет на топ 100 кошельков (%): {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}\n"
-                f"Процент заблокированных токенов (%): {(network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'}\n\n"
+                f"Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
+            )
+            funds_agent_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
+
+            funds_answer, funds_scores = analyze_project_metrics(
+                funds_agent_answer,
+                investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
+                tokenomics_data.total_supply if tokenomics_data and tokenomics_data.total_supply else 'N/A',
+                basic_metrics.market_price if basic_metrics and basic_metrics.market_price else 'N/A',
+                round((market_metrics.growth_low - 100) * 100, 2) if market_metrics else 'N/A',
+                round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A',
+                manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A',
+                (
+                            network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'
             )
 
-            tier_answer = agent_handler("tier_agent", topic=all_data_string_for_tier_agent)
-            tokemonic_answer = agent_handler("tokemonic_agent", topic=all_data_string_for_tokemonic_agent)
-            funds_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
-
-            all_data_string_for_project_rating_agent = (
-                f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n",
-                f"Тир проекта: {tier_answer}\n",
-                f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
-                f"Twitter Score: {social_metrics.twitterscore if social_metrics else 'N/A'}\n"
-                f"Оценка токемоники (нужна общая оценка проекта в баллах): {tokemonic_answer if tokemonic_answer else 'N/A'}\n"
-                f"Оценка прибыльности фондов: {funds_answer if funds_answer else 'N/A'}\n"
+            project_rating_result = calculate_project_score(
+                investing_metrics.fundraise if investing_metrics else 'N/A',
+                tier_answer,
+                social_metrics.twitter if social_metrics else 'N/A',
+                social_metrics.twitterscore if social_metrics else 'N/A',
+                tokemonic_score if tokemonic_answer else 'N/A',
+                funds_scores if funds_answer else 'N/A'
             )
-            project_rating_answer = agent_handler("rating", topic=all_data_string_for_project_rating_agent)
+
+            project_rating_answer = project_rating_result["calculations_summary"]
 
             all_data_string_for_flags_agent = (
                 f"Проект: {project.category}\n"
@@ -1059,9 +1043,10 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
                 f"Project rating agent: {project_rating_answer}\n"
                 f"Социальные метрики: Количество подписчиков - {social_metrics.twitter} (twitter link: {twitter_link}), Twitter Score - {social_metrics.twitterscore}"
             )
+
             flags_answer = await generate_flags_answer(message.from_user.id if isinstance(message, Message) else user_id, async_session, all_data_string_for_flags_agent, user_languages, project, tokenomics_data, investing_metrics, social_metrics,
-                                        funds_profit, market_metrics, manipulative_metrics, network_metrics, tier_answer,
-                                        funds_answer, tokemonic_answer, comparison_results, category_answer, twitter_link, top_and_bottom)
+                                        funds_profit, market_metrics, manipulative_metrics, network_metrics,
+                                        funds_answer, tokemonic_answer, comparison_results, category_answer, twitter_link, top_and_bottom, tier_answer)
 
             agent_answer_record = AgentAnswer(
                 project_id=project.id,
@@ -1073,15 +1058,13 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
         else:
             flags_answer = existing_answer.answer
 
-        existing_calculation = await find_record(Calculation, session, id=calculation_record.id)
+        existing_calculation = await find_record(Calculation, session, id=calculation_record["id"])
         existing_calculation.agent_answer = flags_answer
         session.add(existing_calculation)
 
         answer = comparison_results + "\n"
         answer += flags_answer
         answer = answer.replace('**', '')
-
-        # return phrase_by_user("input_next_token_for_basic_report", message.from_user.id if isinstance(message, Message) else user_id), answer
 
         if isinstance(message, Message):
             await send_long_message(bot_or_message=message, text=f"{answer}\n")
@@ -1337,44 +1320,49 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
                         raise
 
         if existing_answer is None:
-            all_data_string_for_tier_agent = (
-                f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Категория: {project.category if project else 'N/A'}\n"
-                f"Капитализация: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
-                f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
-                f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
-                f"Twitter Score: {social_metrics.twitterscore if social_metrics else 'N/A'}\n"
-                f"Инвесторы: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
+            tier_answer = determine_project_tier(
+                capitalization=tokenomics_data.capitalization if tokenomics_data else 'N/A',
+                fundraising=investing_metrics.fundraise if investing_metrics else 'N/A',
+                twitter_followers=social_metrics.twitter if social_metrics else 'N/A',
+                twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
+                category=project.category if project else 'N/A',
+                investors=investing_metrics.fund_level if investing_metrics else 'N/A',
             )
 
-            all_data_string_for_tokemonic_agent = (
-                f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"**Исходные данные:**\n\n"
-                f"{comparison_results}"
-            )
+            data_for_tokenomics = []
+            for index, coin_name, project_coin, expected_x, fair_price in row_data:
+                ticker = project_coin
+                growth_percent = expected_x
+                data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
+            tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
 
             all_data_string_for_funds_agent = (
-                f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Доходность фондов (%): {funds_profit.distribution if funds_profit else 'N/A'}\n"
-                f"Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}\n"
-                f"Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}\n"
-                f"Процент монет на топ 100 кошельков (%): {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}\n"
-                f"Процент заблокированных токенов (%): {(network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'}\n\n"
+                f"Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
+            )
+            funds_agent_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
+
+            funds_answer, funds_scores = analyze_project_metrics(
+                funds_agent_answer,
+                investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
+                tokenomics_data.total_supply if tokenomics_data and tokenomics_data.total_supply else 'N/A',
+                basic_metrics.market_price if basic_metrics and basic_metrics.market_price else 'N/A',
+                round((market_metrics.growth_low - 100) * 100, 2) if market_metrics else 'N/A',
+                round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A',
+                manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A',
+                (
+                            network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'
             )
 
-            tier_answer = agent_handler("tier_agent", topic=all_data_string_for_tier_agent)
-            tokemonic_answer = agent_handler("tokemonic_agent", topic=all_data_string_for_tokemonic_agent)
-            funds_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
-
-            all_data_string_for_project_rating_agent = (
-                f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n",
-                f"Тир проекта: {tier_answer}\n",
-                f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
-                f"Twitter Score: {social_metrics.twitterscore if social_metrics else 'N/A'}\n"
-                f"Оценка токемоники (нужна общая оценка проекта в баллах): {tokemonic_answer if tokemonic_answer else 'N/A'}\n"
-                f"Оценка прибыльности фондов: {funds_answer if funds_answer else 'N/A'}\n"
+            project_rating_result = calculate_project_score(
+                investing_metrics.fundraise if investing_metrics else 'N/A',
+                tier_answer,
+                social_metrics.twitter if social_metrics else 'N/A',
+                social_metrics.twitterscore if social_metrics else 'N/A',
+                tokemonic_score if tokemonic_answer else 'N/A',
+                funds_scores if funds_answer else 'N/A'
             )
-            project_rating_answer = agent_handler("rating", topic=all_data_string_for_project_rating_agent)
+
+            project_rating_answer = project_rating_result["calculations_summary"]
 
             all_data_string_for_flags_agent = (
                 f"Проект: {project.category}\n"
@@ -1402,7 +1390,7 @@ async def create_excel(session, state: FSMContext, message: Optional[Union[Messa
         answer += flags_answer
         answer = answer.replace('**', '')
 
-        existing_calculation = await find_record(Calculation, session, id=calculation_record.id)
+        existing_calculation = await find_record(Calculation, session, id=calculation_record["id"])
         existing_calculation.agent_answer = flags_answer
         session.add(existing_calculation)
 
@@ -1722,44 +1710,48 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         raise
 
         if existing_answer is None:
-            all_data_string_for_tier_agent = (
-                f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Категория: {project.category if project else 'N/A'}\n"
-                f"Капитализация: {tokenomics_data.capitalization if tokenomics_data else 'N/A'}\n"
-                f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n"
-                f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
-                f"Twitter Score: {social_metrics.twitterscore if social_metrics else 'N/A'}\n"
-                f"Инвесторы: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
+            tier_answer = determine_project_tier(
+                capitalization=tokenomics_data.capitalization if tokenomics_data else 'N/A',
+                fundraising=investing_metrics.fundraise if investing_metrics else 'N/A',
+                twitter_followers=social_metrics.twitter if social_metrics else 'N/A',
+                twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
+                category=project.category if project else 'N/A',
+                investors=investing_metrics.fund_level if investing_metrics else 'N/A',
             )
 
-            all_data_string_for_tokemonic_agent = (
-                f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"**Исходные данные:**\n\n"
-                f"{comparison_results}"
-            )
+            data_for_tokenomics = []
+            for index, coin_name, project_coin, expected_x, fair_price in row_data:
+                ticker = project_coin
+                growth_percent = expected_x
+                data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
+            tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
 
             all_data_string_for_funds_agent = (
-                f"Название проекта: {project.coin_name if project else 'N/A'}\n"
-                f"Доходность фондов (%): {funds_profit.distribution if funds_profit else 'N/A'}\n"
-                f"Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}\n"
-                f"Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}\n"
-                f"Процент монет на топ 100 кошельков (%): {manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}\n"
-                f"Процент заблокированных токенов (%): {(network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'}\n\n"
+                f"Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
+            )
+            funds_agent_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
+
+            funds_answer, funds_scores = analyze_project_metrics(
+                funds_agent_answer,
+                investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
+                tokenomics_data.total_supply if tokenomics_data and tokenomics_data.total_supply else 'N/A',
+                basic_metrics.market_price if basic_metrics and basic_metrics.market_price else 'N/A',
+                round((market_metrics.growth_low - 100) * 100, 2) if market_metrics else 'N/A',
+                round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A',
+                manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A',
+                (network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'
             )
 
-            tier_answer = agent_handler("tier_agent", topic=all_data_string_for_tier_agent)
-            tokemonic_answer = agent_handler("tokemonic_agent", topic=all_data_string_for_tokemonic_agent)
-            funds_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
-
-            all_data_string_for_project_rating_agent = (
-                f"Сумма сбора средств от инвесторов (Fundraising): {investing_metrics.fundraise if investing_metrics else 'N/A'}\n",
-                f"Тир проекта: {tier_answer}\n",
-                f"Количество подписчиков на Twitter: {social_metrics.twitter if social_metrics else 'N/A'}\n"
-                f"Twitter Score: {social_metrics.twitterscore if social_metrics else 'N/A'}\n"
-                f"Оценка токемоники (нужна общая оценка проекта в баллах): {tokemonic_answer if tokemonic_answer else 'N/A'}\n"
-                f"Оценка прибыльности фондов: {funds_answer if funds_answer else 'N/A'}\n"
+            project_rating_result = calculate_project_score(
+                investing_metrics.fundraise if investing_metrics else 'N/A',
+                tier_answer,
+                social_metrics.twitter if social_metrics else 'N/A',
+                social_metrics.twitterscore if social_metrics else 'N/A',
+                tokemonic_score if tokemonic_answer else 'N/A',
+                funds_scores if funds_answer else 'N/A'
             )
-            project_rating_answer = agent_handler("rating", topic=all_data_string_for_project_rating_agent)
+
+            project_rating_answer = project_rating_result["calculations_summary"]
 
             all_data_string_for_flags_agent = (
                 f"Проект: {project.category}\n"

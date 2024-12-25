@@ -10,7 +10,7 @@ button_strings_dict = {
     },
     "ENG": {
         "help_button": "Help",
-        "start_calculate_button": "Project a nalysis",
+        "start_calculate_button": "Project analysis",
         "start_history_button": "Calculation History",
         "donate": "Donate",
         "rebalancing_block": "Block of portfolio rebalancing",

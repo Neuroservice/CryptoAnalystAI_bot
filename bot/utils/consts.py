@@ -193,9 +193,66 @@ session_local = SessionLocal()
 
 
 engine = create_engine(DATABASE_URL)
+async_engine = create_async_engine(DATABASE_URL, echo=True)
 Session = sessionmaker(bind=engine)
 sync_session = Session()
 async_session = SessionLocal()
 
 # Папка сохранения бэкапов
 BACKUP_FOLDER = "fasolka_backups"
+
+
+# Данные для ответов:
+def prepare_eng_data_for_analysis(
+    category_answer, project, tokenomics_data, investing_metrics, social_metrics,
+    twitter_link, funds_profit, top_and_bottom, market_metrics, manipulative_metrics,
+    network_metrics, tier_answer, funds_answer, tokemonic_answer, comparison_results, tier
+):
+    return f"\n\nData to analyze\n" \
+           f"- Category analysis: {category_answer}\n\n" \
+           f"- Tier of project (from function): {tier}\n" \
+           f"- Coin Ticker: {project.coin_name if project else 'N/A'}\n" \
+           f"- Category: {project.category if project else 'N/A'}\n" \
+           f"- Capitalization: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n" \
+           f"- Fundraise: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n" \
+           f"- Number of Twitter subscribers: {social_metrics.twitter} (Twitter: {twitter_link[0]})\n" \
+           f"- Twitter Score: {social_metrics.twitterscore}\n" \
+           f"- Funds tier: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n" \
+           f"- Token allocation: {funds_profit.distribution if funds_profit else 'N/A'}\n" \
+           f"- Minimum token price: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom else 'N/A'}\n" \
+           f"- Maximum token price: ${round(top_and_bottom.upper_threshold, 2) if top_and_bottom else 'N/A'}\n" \
+           f"- Token value growth from a low: {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}%\n" \
+           f"- Token drop from the high: {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}%\n" \
+           f"- Percentage of coins found on top 100 blockchain wallets: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}%\n" \
+           f"- Blocked tokens (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n" \
+           f"- Project Tier: {tier_answer}\n" \
+           f"- Estimation of fund returns: {funds_answer if funds_answer else 'N/A'}\n" \
+           f"- Tokenomics valuation: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n" \
+           f"Data for tokenomic analysis:\n{comparison_results}"
+
+
+def prepare_ru_data_for_analysis(
+    category_answer, project, tokenomics_data, investing_metrics, social_metrics,
+    twitter_link, funds_profit, top_and_bottom, market_metrics, manipulative_metrics,
+    network_metrics, tier_answer, funds_answer, tokemonic_answer, comparison_results, tier):
+    return f"\n\nДанные для анализа\n" \
+           f"- Анализ категории: {category_answer}\n\n" \
+           f"- Тир проекта (из функции): {tier}\n" \
+           f"- Тикер монеты: {project.coin_name if project else 'N/A'}\n" \
+           f"- Категория: {project.category if project else 'N/A'}\n" \
+           f"- Капитализация: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n" \
+           f"- Фандрейз: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n" \
+           f"- Количество подписчиков: {social_metrics.twitter} (Twitter: {twitter_link[0]})\n" \
+           f"- Twitter Score: {social_metrics.twitterscore}\n" \
+           f"- Тир фондов: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n" \
+           f"- Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n" \
+           f"- Минимальная цена токена: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom else 'N/A'}\n" \
+           f"- Максимальная цена токена: ${round(top_and_bottom.upper_threshold, 2) if top_and_bottom else 'N/A'}\n" \
+           f"- Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}\n" \
+           f"- Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}\n" \
+           f"- Процент нахождения монет на топ 100 кошельков блокчейна: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}%\n" \
+           f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n\n" \
+           f"- Тир проекта: {tier_answer}\n" \
+           f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n" \
+           f"- Оценка токеномики: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n" \
+           f"**Данные для анализа токеномики**:\n{comparison_results}"
