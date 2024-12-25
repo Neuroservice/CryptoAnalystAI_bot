@@ -54,7 +54,7 @@ async def language_choice(message: types.Message):
 
         user_languages[user.telegram_id] = user.language
 
-    await message.answer(phrase_by_user("hello_phrase", user.telegram_id))
+    await message.answer(phrase_by_user("hello_phrase", user.telegram_id), reply_markup=main_menu_keyboard())
 
 
 async def handle_first_message(message: types.Message, storage: FSMContext):

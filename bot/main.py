@@ -2,15 +2,18 @@ import asyncio
 import datetime
 import logging
 
+import redis.asyncio as redis
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from aiogram.fsm.storage.redis import RedisStorage
 
-from bot.config import API_TOKEN, engine_url
+from bot.config import API_TOKEN, engine_url, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, REDIS_PORT, REDIS_HOST
 from bot.data_update import fetch_crypto_data, update_agent_answers
 from bot.database.backups import create_backup
+from bot.database.db_setup import create_db
 from bot.handlers import history, select_language, donate
 from bot.utils.consts import STATE_FILE
 from bot.utils.middlewares import RestoreStateMiddleware
@@ -21,7 +24,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 engine = create_async_engine(engine_url, echo=False, pool_timeout=60, connect_args={"timeout": 60})
 SessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=DB_PASSWORD, db=0, decode_responses=True)
 
+
+async def check_redis_connection():
+    try:
+        await redis_client.ping()
+        print("Подключение к Redis успешно!")
+    except redis.exceptions.ConnectionError:
+        print("Не удалось подключиться к Redis!")
+        raise Exception("Не удалось подключиться к Redis!")
 
 async def parse_periodically():
     last_agent_update = datetime.datetime.utcnow() - datetime.timedelta(days=1)
@@ -63,9 +75,11 @@ def start_parse_periodically():
 
 async def main():
     try:
+        await check_redis_connection()
         # await create_db()
         async with AiohttpSession() as aiohttp_session:
-            storage = MemoryStorage()
+            # storage = MemoryStorage()
+            storage = RedisStorage(redis_client)
             dp = Dispatcher(storage=storage)
 
             bot = Bot(token=API_TOKEN, session=aiohttp_session)
@@ -81,11 +95,7 @@ async def main():
 
             dp.update.middleware(RestoreStateMiddleware())
 
-            # Запускаем асинхронно задачи для парсинга и обновлений
             asyncio.create_task(parse_periodically())
-
-            await restore_states(storage, bot, dp)
-            logger.info("Состояния восстановлены.")
 
             await dp.start_polling(bot)
 
@@ -102,9 +112,6 @@ async def main():
         logging.error(f"Общая ошибка при выполнении операции: {e}", exc_info=True)
         return {"error": f"Неизвестная ошибка: {e}"}
     finally:
-        await save_all_states(storage)
-        logger.info("Состояния сохранены.")
-
         logger.info("Завершение работы бота.")
 
 

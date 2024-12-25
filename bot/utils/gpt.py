@@ -48,7 +48,7 @@ def load_document_for_tokemonic_agent() -> str:
 
 
 def load_document_for_funds_agent() -> str:
-    return load_document("4. Прибыль фондов + рост/падение + топ 100 кошельков + заблокированные токены (TVL)",
+    return load_document("4.1 от 23.12.2024 Определение процента токенов фондов",
                          "5. Агент подсчета общего рейтинга")
 
 
@@ -91,9 +91,9 @@ def tokemonic_agent(topic):
 
 def funds_agent(topic):
     system = load_document_for_funds_agent()
-    user_prompt = (f"Вычисли количество набранных баллов по каждому показателю "
+    user_prompt = (f"Вычисли процент, который получают 'инвесторы'"
                    f"и предоставь результаты в заданном в инструкции формате.\n"
-                   f"Переменные для вычислений: {topic}")
+                   f"Распределение токенов для анализа: {topic}")
     return create_agent_response(system, user_prompt)
 
 

@@ -2,9 +2,9 @@ from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Tex
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from datetime import datetime
 
 Base = declarative_base()
-
 
 class User(Base):
     __tablename__ = 'user'
@@ -13,8 +13,14 @@ class User(Base):
     telegram_id = Column(BigInteger, unique=True, nullable=False)
     language = Column(Text, nullable=True)
 
-
     calculations = relationship('Calculation', back_populates='user')
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "telegram_id": self.telegram_id,
+            "language": self.language
+        }
 
 
 class Project(Base):
@@ -36,6 +42,13 @@ class Project(Base):
     network_metrics = relationship('NetworkMetrics', back_populates='project')
     agentanswer = relationship('AgentAnswer', back_populates='project')
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "category": self.category,
+            "coin_name": self.coin_name
+        }
+
 
 class Calculation(Base):
     __tablename__ = 'calculation'
@@ -49,6 +62,15 @@ class Calculation(Base):
     user = relationship('User', back_populates='calculations')
     project = relationship('Project', back_populates='calculations')
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "project_id": self.project_id,
+            "date": self.date.isoformat() if self.date else None,
+            "agent_answer": self.agent_answer
+        }
+
 
 class BasicMetrics(Base):
     __tablename__ = 'basic_metrics'
@@ -61,6 +83,15 @@ class BasicMetrics(Base):
 
     project = relationship('Project', back_populates='basic_metrics')
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "entry_price": self.entry_price,
+            "sphere": self.sphere,
+            "market_price": self.market_price
+        }
+
 
 class InvestingMetrics(Base):
     __tablename__ = 'investing_metrics'
@@ -72,6 +103,14 @@ class InvestingMetrics(Base):
 
     project = relationship('Project', back_populates='investing_metrics')
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "fundraise": self.fundraise,
+            "fund_level": self.fund_level
+        }
+
 
 class SocialMetrics(Base):
     __tablename__ = 'social_metrics'
@@ -82,6 +121,14 @@ class SocialMetrics(Base):
     twitterscore = Column(Integer, nullable=True)
 
     project = relationship('Project', back_populates='social_metrics')
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "twitter": self.twitter,
+            "twitterscore": self.twitterscore
+        }
 
 
 class Tokenomics(Base):
@@ -96,6 +143,16 @@ class Tokenomics(Base):
 
     project = relationship('Project', back_populates='tokenomics')
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "circ_supply": self.circ_supply,
+            "total_supply": self.total_supply,
+            "capitalization": self.capitalization,
+            "fdv": self.fdv
+        }
+
 
 class FundsProfit(Base):
     __tablename__ = 'funds_profit'
@@ -108,6 +165,15 @@ class FundsProfit(Base):
 
     project = relationship('Project', back_populates='funds_profit')
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "distribution": self.distribution,
+            "average_price": self.average_price,
+            "x_value": self.x_value
+        }
+
 
 class TopAndBottom(Base):
     __tablename__ = 'top_and_bottom'
@@ -118,6 +184,14 @@ class TopAndBottom(Base):
     upper_threshold = Column(Float, nullable=True)
 
     project = relationship('Project', back_populates='top_and_bottom')
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "lower_threshold": self.lower_threshold,
+            "upper_threshold": self.upper_threshold
+        }
 
 
 class MarketMetrics(Base):
@@ -130,6 +204,14 @@ class MarketMetrics(Base):
 
     project = relationship('Project', back_populates='market_metrics')
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "fail_high": self.fail_high,
+            "growth_low": self.growth_low
+        }
+
 
 class ManipulativeMetrics(Base):
     __tablename__ = 'manipulative_metrics'
@@ -140,6 +222,14 @@ class ManipulativeMetrics(Base):
     top_100_wallet = Column(Float, nullable=True)
 
     project = relationship('Project', back_populates='manipulative_metrics')
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "fdv_fundraise": self.fdv_fundraise,
+            "top_100_wallet": self.top_100_wallet
+        }
 
 
 class NetworkMetrics(Base):
@@ -152,6 +242,14 @@ class NetworkMetrics(Base):
 
     project = relationship('Project', back_populates='network_metrics')
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "tvl": self.tvl,
+            "tvl_fdv": self.tvl_fdv
+        }
+
 
 class AgentAnswer(Base):
     __tablename__ = 'agentanswer'
@@ -163,3 +261,12 @@ class AgentAnswer(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     project = relationship('Project', back_populates='agentanswer')
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "answer": self.answer,
+            "language": self.language,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
