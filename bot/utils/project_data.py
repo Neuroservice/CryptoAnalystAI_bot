@@ -39,19 +39,14 @@ logger = logging.getLogger(__name__)
 @save_execute
 async def get_data(model, project_id, is_async, session):
     if is_async:
-        print("1")
-        print(project_id, model)
         info = select(model).filter(model.project_id == project_id)
         info_result = await session.execute(info)
         result = info_result.scalars().all()
-        print(result)
         if result:
             return result[0]
         return None
     else:
-        print("2")
         result = session.query(model).filter(model.project_id == project_id).all()
-        print(result)
         if result:
             return result[0]
         return None
@@ -259,35 +254,33 @@ async def get_full_info(session, project_name, user_coin_name):
         logging.error(f"Общая ошибка при обработке данных проекта: {e}")
         return None, None
 
-
-async def get_twitter_link_by_symbol(symbol):
+@save_execute
+async def get_twitter_link_by_symbol(session, symbol):
     url = f'https://pro-api.coinmarketcap.com/v1/cryptocurrency/info?symbol={symbol}'
 
     header_params = get_header_params(coin_name=None)
 
-    async with aiohttp.ClientSession() as session:
+    async with session.get(url, headers=header_params["headers"]) as response:
+        if response.status == 200:
+            data = await response.json()
 
-        async with session.get(url, headers=header_params["headers"]) as response:
-            if response.status == 200:
-                data = await response.json()
-
-                if symbol in data['data']:
-                    description = data['data'][symbol].get('description', None)
-                    lower_name = data['data'][symbol].get('name', None)
-                    urls = data['data'][symbol].get('urls', {})
-                    twitter_links = urls.get('twitter', [])
-                    if twitter_links and description:
-                        twitter_link = twitter_links[0].lower()
-                        return twitter_link, description, lower_name.lower()
-                    else:
-                        print(f"Twitter link for '{symbol}' not found.")
-                        return None, None, None
+            if symbol in data['data']:
+                description = data['data'][symbol].get('description', None)
+                lower_name = data['data'][symbol].get('name', None)
+                urls = data['data'][symbol].get('urls', {})
+                twitter_links = urls.get('twitter', [])
+                if twitter_links and description:
+                    twitter_link = twitter_links[0].lower()
+                    return twitter_link, description, lower_name.lower()
                 else:
-                    print(f"Cryptocurrency with symbol '{symbol}' not found.")
+                    print(f"Twitter link for '{symbol}' not found.")
                     return None, None, None
             else:
-                print(f"Error retrieving data: {response.status}, {await response.text()}")
+                print(f"Cryptocurrency with symbol '{symbol}' not found.")
                 return None, None, None
+        else:
+            print(f"Error retrieving data: {response.status}, {await response.text()}")
+            return None, None, None
 
 
 def clean_fundraise_data(fundraise_str):
@@ -371,7 +364,6 @@ def clean_twitter_subs(twitter_subs):
     except Exception as e:
         logging.error(f"Общая ошибка при обработке данных проекта: {e}")
         return None
-
 
 
 async def get_twitter(name):
@@ -468,17 +460,16 @@ def extract_tokenomics(data):
     return tokenomics_data
 
 
-async def get_percantage_data(lower_name, user_coin_name):
+async def get_percantage_data(session_local, lower_name, user_coin_name):
     tokenomics_data = []
 
     try:
-        async with SessionLocal() as async_session:
-            project = await async_session.execute(
+            project = await session_local.execute(
                 select(Project).filter_by(coin_name=user_coin_name)
             )
             project = project.scalars().first()
             if project:
-                funds_profit = await async_session.execute(
+                funds_profit = await session_local.execute(
                     select(FundsProfit).filter_by(project_id=project.id)
                 )
                 user_tokenomics = funds_profit.scalars().first()
@@ -900,39 +891,38 @@ async def fetch_fundraise_data(user_coin_name):
         logging.error(f"Общая ошибка при обработке данных фандрейза: {e}")
         return None
 
-
-async def fetch_tvl_data(coin_name):
+@save_execute
+async def fetch_tvl_data(session, coin_name):
     base_url = "https://api.llama.fi/v2/historicalChainTvl/"
     url = f"{base_url}{coin_name.lower()}"
 
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    print("data tvl", coin_name.lower(), data)
+    try:
+        async with session.get(url) as response:
+            if response.status == 200:
+                data = await response.json()
+                print("data tvl", coin_name.lower(), data)
 
-                    if data:
-                        last_tvl = data[-1]['tvl']
-                        return last_tvl
-                    else:
-                        logging.error(f"No TVL data found for {coin_name}.")
-                        return None
+                if data:
+                    last_tvl = data[-1]['tvl']
+                    return last_tvl
                 else:
-                    logging.error(f"Failed to fetch TVL data. Status code: {response.status}")
+                    logging.error(f"No TVL data found for {coin_name}.")
                     return None
-        except AttributeError as attr_error:
-            logging.error(f"Ошибка доступа к атрибутам данных TVL для {coin_name}: {attr_error}")
-            return None
-        except KeyError as key_error:
-            logging.error(f"Ошибка при извлечении данных TVL для {coin_name}: отсутствует ключ {key_error}")
-            return None
-        except ValueError as value_error:
-            logging.error(f"Ошибка при обработке значений TVL для {coin_name}: {value_error}")
-            return None
-        except Exception as e:
-            logging.error(f"Общая ошибка при извлечении данных TVL для {coin_name}: {e}")
-            return None
+            else:
+                logging.error(f"Failed to fetch TVL data. Status code: {response.status}")
+                return None
+    except AttributeError as attr_error:
+        logging.error(f"Ошибка доступа к атрибутам данных TVL для {coin_name}: {attr_error}")
+        return None
+    except KeyError as key_error:
+        logging.error(f"Ошибка при извлечении данных TVL для {coin_name}: отсутствует ключ {key_error}")
+        return None
+    except ValueError as value_error:
+        logging.error(f"Ошибка при обработке значений TVL для {coin_name}: {value_error}")
+        return None
+    except Exception as e:
+        logging.error(f"Общая ошибка при извлечении данных TVL для {coin_name}: {e}")
+        return None
 
 
 def standardize_category(overall_category: str) -> str:
@@ -966,20 +956,19 @@ def standardize_category(overall_category: str) -> str:
     }
     return category_map.get(overall_category, "Unknown Category")
 
-
-async def get_lower_name(user_coin_name):
+@save_execute
+async def get_lower_name(session_local, user_coin_name):
     url = f'https://pro-api.coinmarketcap.com/v1/cryptocurrency/info?symbol={user_coin_name.upper()}'
     header_params = get_header_params(coin_name=None)  # Передаем None, так как символ здесь не используется
 
-    async with aiohttp.ClientSession() as session_local:
-        async with session_local.get(url, headers=header_params["headers"]) as response:
-            if response.status == 200:
-                data = await response.json()
-                logging.info(f"{data['data']}")
-                if user_coin_name.upper() in data['data']:
-                    lower_name = data['data'][user_coin_name.upper()].get('name', None).lower()
+    async with session_local.get(url, headers=header_params["headers"]) as response:
+        if response.status == 200:
+            data = await response.json()
+            logging.info(f"{data['data']}")
+            if user_coin_name.upper() in data['data']:
+                lower_name = data['data'][user_coin_name.upper()].get('name', None).lower()
 
-                    return lower_name
+                return lower_name
 
 
 def get_top_projects_by_capitalization_and_category(tokenomics_data_list):
@@ -988,8 +977,6 @@ def get_top_projects_by_capitalization_and_category(tokenomics_data_list):
         for project, tokenomics_data in tokenomics_data_list
         if project.coin_name in tickers
     ]
-
-    print(filtered_projects)
 
     top_projects = sorted(
         filtered_projects,
@@ -1000,35 +987,36 @@ def get_top_projects_by_capitalization_and_category(tokenomics_data_list):
     return top_projects
 
 
-async def get_top_projects_by_capitalization(project_type: str, tickers: list, top_n_tickers=5, top_n_other=10):
-    async with SessionLocal() as session:
-        stmt_ticker_projects = (
-            select(Project)
-            .join(Tokenomics, Project.id == Tokenomics.project_id)
-            .where(Project.category == project_type)
-            .where(Project.coin_name.in_(tickers))
-            .order_by(Tokenomics.capitalization.desc())
-            .limit(top_n_tickers)
-        )
+@save_execute
+async def get_top_projects_by_capitalization(session: SessionLocal, project_type: str, tickers: list, top_n_tickers=5, top_n_other=10):
+    stmt_ticker_projects = (
+        select(Project)
+        .join(Tokenomics, Project.id == Tokenomics.project_id)
+        .where(Project.category == project_type)
+        .where(Project.coin_name.in_(tickers))
+        .order_by(Tokenomics.capitalization.desc())
+        .limit(top_n_tickers)
+    )
 
-        stmt_other_projects = (
-            select(Project)
-            .join(Tokenomics, Project.id == Tokenomics.project_id)
-            .where(Project.category == project_type)
-            .where(Project.coin_name.in_(tickers))
-            .order_by(Tokenomics.capitalization.desc())
-            .limit(top_n_other)
-        )
+    stmt_other_projects = (
+        select(Project)
+        .join(Tokenomics, Project.id == Tokenomics.project_id)
+        .where(Project.category == project_type)
+        .where(Project.coin_name.in_(tickers))
+        .order_by(Tokenomics.capitalization.desc())
+        .limit(top_n_other)
+    )
 
-        result_ticker_projects = await session.execute(stmt_ticker_projects)
-        result_other_projects = await session.execute(stmt_other_projects)
+    result_ticker_projects = await session.execute(stmt_ticker_projects)
+    result_other_projects = await session.execute(stmt_other_projects)
 
-        top_ticker_projects = result_ticker_projects.scalars().all()
-        top_other_projects = result_other_projects.scalars().all()
+    top_ticker_projects = result_ticker_projects.scalars().all()
+    top_other_projects = result_other_projects.scalars().all()
 
-        return [project.coin_name for project in list(top_ticker_projects) + list(top_other_projects)]
+    return [project.coin_name for project in list(top_ticker_projects) + list(top_other_projects)]
 
 
+@save_execute
 async def check_and_run_tasks(
         project,
         price,
@@ -1196,11 +1184,11 @@ def process_and_update_models(input_lines, field_mapping, model_mapping, session
 
     session.commit()
 
-
+@save_execute
 async def generate_flags_answer(user_id, session, all_data_string_for_flags_agent, user_languages, project, tokenomics_data, investing_metrics, social_metrics,
                                  funds_profit, market_metrics, manipulative_metrics, network_metrics,
                                  funds_answer, tokemonic_answer, comparison_results, category_answer, twitter_link, top_and_bottom, tier):
-    print("project:", project)
+
     if user_languages.get(user_id) == 'RU':
         language = 'RU'
         flags_answer = agent_handler("flags", topic=all_data_string_for_flags_agent, language=language)
@@ -1327,10 +1315,6 @@ def map_data_to_model_fields(model_name, data):
 
     logging.warning(f"Не задано сопоставление для модели {model_name}")
     return None
-
-
-def get_object_by_filter(model: Type, filter_conditions: Dict[str, Any]):
-    return sync_session.query(model).filter_by(**filter_conditions).first()
 
 
 @save_execute

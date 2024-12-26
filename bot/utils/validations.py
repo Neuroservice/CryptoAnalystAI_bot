@@ -8,7 +8,7 @@ from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 
 
 def save_execute(f):
-    async def wrapper(session: AsyncSession, *args, **kwargs):
+    async def wrapper(session, *args, **kwargs):
         try:
             return await f(session, *args, **kwargs)
         except Exception as e:

@@ -18,29 +18,29 @@ logger = logging.getLogger(__name__)
 
 
 @change_language_router.message(Command("language"))
-async def change_language(message: types.Message):
+@save_execute
+async def change_language(session: SessionLocal(), message: types.Message):
     user_id = message.from_user.id
 
     try:
-        async with SessionLocal() as session:
-            result = await session.execute(select(User).where(User.telegram_id == user_id))
-            user = result.scalars().first()
+        result = await session.execute(select(User).where(User.telegram_id == user_id))
+        user = result.scalars().first()
 
-            if not user:
-                user = User(telegram_id=message.from_user.id)
-                session.add(user)
+        if not user:
+            user = User(telegram_id=message.from_user.id)
+            session.add(user)
 
-            if user:
-                new_language = 'ENG' if user.language == 'RU' else 'RU'
-                user.language = new_language
-                user_languages.clear()
-                user_languages[user_id] = new_language
-                session.add(user)
-            await session.commit()
+        if user:
+            new_language = 'ENG' if user.language == 'RU' else 'RU'
+            user.language = new_language
+            user_languages.clear()
+            user_languages[user_id] = new_language
+            session.add(user)
+        await session.commit()
 
-            new_keyboard = main_menu_keyboard(new_language)
+        new_keyboard = main_menu_keyboard(new_language)
 
-            # Отправляем сообщение с новой клавиатурой
-            await message.answer(phrase_by_user("language_changed", user.telegram_id), reply_markup=new_keyboard)
+        # Отправляем сообщение с новой клавиатурой
+        await message.answer(phrase_by_user("language_changed", user.telegram_id), reply_markup=new_keyboard)
     except Exception as e:
         logging.error(f"Ошибка при изменении языка: {e}")

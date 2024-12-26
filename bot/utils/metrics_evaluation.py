@@ -170,9 +170,11 @@ def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_p
     funds_score = 0
 
     if fundraise != 'N/A' and total_supply != 'N/A':
-        avg_price = float(fundraise) / (float(total_supply) * float(fund_distribution.replace('%', '').strip()))
+        avg_price = (float(fundraise) / (float(total_supply) * float(fund_distribution.replace('%', '').strip()))) * 100
         x_funds = round(float(market_price) / avg_price, 2)
         percente_of_funds_profit = (x_funds * 100) - 100
+
+        print(fundraise, total_supply, avg_price, x_funds, percente_of_funds_profit, fund_distribution)
 
         if percente_of_funds_profit <= 200:
             funds_score = percente_of_funds_profit / 20
@@ -186,6 +188,8 @@ def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_p
         elif percente_of_funds_profit > 5000:
             funds_score = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + (2000 / 100) * (-1.5) + (
                         (percente_of_funds_profit - 5000) / 100) * (-2)
+
+        funds_score = max(funds_score, -50)
 
         funds_result = f"По данному показателю проект получает {round(funds_score, 2)} баллов.\n"
     else:
