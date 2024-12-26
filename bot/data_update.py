@@ -17,7 +17,7 @@ from bot.database.models import (
     FundsProfit,
     AgentAnswer
 )
-from bot.utils.consts import tickers, project_types, get_header_params, SessionLocal, sync_session
+from bot.utils.consts import tickers, project_types, get_header_params, SessionLocal, sync_session, client_session
 from bot.utils.gpt import agent_handler
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
@@ -45,14 +45,14 @@ async def fetch_project(symbol: str, async_session: AsyncSession):
         return project
 
 
-async def fetch_crypto_data():
+async def fetch_crypto_data(async_session):
     """
     Асинхронный эндпоинт для получения данных о криптопроектах.
     """
     try:
         for project_type in project_types:
             # Получение топовых проектов
-            symbols = await get_top_projects_by_capitalization(project_type, tickers)
+            symbols = await get_top_projects_by_capitalization(async_session, project_type, tickers)
 
             if not symbols:
                 logging.info(f"No projects found for type: {project_type}")
@@ -60,152 +60,152 @@ async def fetch_crypto_data():
 
             print("0")
             for symbol in symbols:
-                async with SessionLocal() as async_session:
-                    try:
-                        # ШАГ 1: Получение данных проекта
-                        print("1")
-                        project = await fetch_project(symbol, async_session)
+                try:
+                    # ШАГ 1: Получение данных проекта
+                    print("1")
+                    project = await fetch_project(symbol, async_session)
 
-                        if not project:
-                            logging.error(f"Project not found for {symbol}")
-                            continue
-                        header_params = get_header_params(symbol)
+                    if not project:
+                        logging.error(f"Project not found for {symbol}")
+                        continue
+                    header_params = get_header_params(symbol)
 
-                        # ШАГ 2: Получение данных с CoinMarketCap
-                        print("2")
-                        data = await fetch_coinmarketcap_data(user_coin_name=symbol, **header_params)
+                    # ШАГ 2: Получение данных с CoinMarketCap
+                    print("2")
+                    data = await fetch_coinmarketcap_data(user_coin_name=symbol, **header_params)
 
-                        if not data:
-                            # Если данные с CoinMarketCap не получены, пробуем получить данные с CoinGecko
-                            logging.info(f"Trying to fetch data from CoinGecko for {symbol}")
-                            data = await fetch_coingecko_data(symbol)
+                    if not data:
+                        # Если данные с CoinMarketCap не получены, пробуем получить данные с CoinGecko
+                        logging.info(f"Trying to fetch data from CoinGecko for {symbol}")
+                        data = await fetch_coingecko_data(symbol)
 
-                        print("2.1")
-                        if not data or not isinstance(data, dict):
-                            logging.error(f"Invalid data returned for {symbol}: {data}")
-                            continue
+                    print("2.1")
+                    if not data or not isinstance(data, dict):
+                        logging.error(f"Invalid data returned for {symbol}: {data}")
+                        continue
 
-                        # Проверка формата данных
-                        expected_keys = {'coin_name', 'circulating_supply', 'total_supply', 'price', 'capitalization', 'coin_fdv'}
-                        if not all(key in data for key in expected_keys):
-                            logging.warning(f"Missing required keys in data for {symbol}: {data}")
-                            continue
+                    # Проверка формата данных
+                    expected_keys = {'coin_name', 'circulating_supply', 'total_supply', 'price', 'capitalization',
+                                     'coin_fdv'}
+                    if not all(key in data for key in expected_keys):
+                        logging.warning(f"Missing required keys in data for {symbol}: {data}")
+                        continue
 
-                        print("2.3")
-                        coin_data = data
-                        circulating_supply = coin_data.get('circulating_supply')
-                        total_supply = coin_data.get('total_supply')
-                        price = coin_data.get('price')
-                        market_cap = coin_data.get('capitalization')
-                        fdv = coin_data.get('coin_fdv')
+                    print("2.3")
+                    coin_data = data
+                    circulating_supply = coin_data.get('circulating_supply')
+                    total_supply = coin_data.get('total_supply')
+                    price = coin_data.get('price')
+                    market_cap = coin_data.get('capitalization')
+                    fdv = coin_data.get('coin_fdv')
 
-                        # ШАГ 3: Обновление Tokenomics
-                        print("3")
-                        tokenomics = await async_session.execute(
-                            select(Tokenomics).filter_by(project_id=project.id)
+                    # ШАГ 3: Обновление Tokenomics
+                    print("3")
+                    tokenomics = await async_session.execute(
+                        select(Tokenomics).filter_by(project_id=project.id)
+                    )
+                    tokenomics = tokenomics.scalars().first()
+
+                    if not tokenomics:
+                        tokenomics = Tokenomics(
+                            project_id=project.id,
+                            circ_supply=circulating_supply,
+                            total_supply=total_supply,
+                            capitalization=market_cap,
+                            fdv=fdv,
                         )
-                        tokenomics = tokenomics.scalars().first()
+                    else:
+                        tokenomics.circ_supply = circulating_supply
+                        tokenomics.total_supply = total_supply
+                        tokenomics.capitalization = market_cap
+                        tokenomics.fdv = fdv
 
-                        if not tokenomics:
-                            tokenomics = Tokenomics(
-                                project_id=project.id,
-                                circ_supply=circulating_supply,
-                                total_supply=total_supply,
-                                capitalization=market_cap,
-                                fdv=fdv,
-                            )
-                        else:
-                            tokenomics.circ_supply = circulating_supply
-                            tokenomics.total_supply = total_supply
-                            tokenomics.capitalization = market_cap
-                            tokenomics.fdv = fdv
+                    async_session.add(tokenomics)
 
-                        async_session.add(tokenomics)
+                    # ШАГ 4: Обновление BasicMetrics
+                    print("4")
+                    basic_metrics = await async_session.execute(
+                        select(BasicMetrics).filter_by(project_id=project.id)
+                    )
+                    basic_metrics = basic_metrics.scalars().first()
 
-                        # ШАГ 4: Обновление BasicMetrics
-                        print("4")
-                        basic_metrics = await async_session.execute(
-                            select(BasicMetrics).filter_by(project_id=project.id)
+                    if not basic_metrics:
+                        basic_metrics = BasicMetrics(
+                            project_id=project.id,
+                            market_price=round(float(price), 4)
                         )
-                        basic_metrics = basic_metrics.scalars().first()
+                    else:
+                        basic_metrics.market_price = round(float(price), 4)
 
-                        if not basic_metrics:
-                            basic_metrics = BasicMetrics(
-                                project_id=project.id,
-                                market_price=round(float(price), 4)
-                            )
-                        else:
-                            basic_metrics.market_price = round(float(price), 4)
+                    async_session.add(basic_metrics)
 
-                        async_session.add(basic_metrics)
+                    # ШАГ 5: Обновление ManipulativeMetrics и других метрик
+                    print("5")
+                    investing_metrics = await async_session.execute(
+                        select(InvestingMetrics).filter_by(project_id=project.id)
+                    )
+                    investing_metrics = investing_metrics.scalars().first()
 
-                        # ШАГ 5: Обновление ManipulativeMetrics и других метрик
-                        print("5")
-                        investing_metrics = await async_session.execute(
-                            select(InvestingMetrics).filter_by(project_id=project.id)
-                        )
-                        investing_metrics = investing_metrics.scalars().first()
+                    manipulative_metrics = await async_session.execute(
+                        select(ManipulativeMetrics).filter_by(project_id=project.id)
+                    )
+                    manipulative_metrics = manipulative_metrics.scalars().first()
 
-                        manipulative_metrics = await async_session.execute(
-                            select(ManipulativeMetrics).filter_by(project_id=project.id)
-                        )
-                        manipulative_metrics = manipulative_metrics.scalars().first()
-
-                        if manipulative_metrics and investing_metrics:
-                            fundraise = investing_metrics.fundraise
-                            top_100_wallets = await fetch_top_100_wallets(symbol.lower())
-                            if top_100_wallets and fdv and fundraise:
-                                await update_or_create(
-                                    async_session, ManipulativeMetrics,
-                                    project_id=project.id,
-                                    defaults={
-                                        'fdv_fundraise': fdv / fundraise,
-                                        'top_100_wallet': top_100_wallets,
-                                    },
-                                )
-
-                        # ШАГ 6: Обновление NetworkMetrics (TVL)
-                        print("6")
-                        twitter_name, description, lower_name = await get_twitter_link_by_symbol(symbol)
-                        tvl = await fetch_tvl_data(lower_name)
-                        if tvl and fdv:
+                    if manipulative_metrics and investing_metrics:
+                        fundraise = investing_metrics.fundraise
+                        top_100_wallets = await fetch_top_100_wallets(symbol.lower())
+                        if top_100_wallets and fdv and fundraise:
                             await update_or_create(
-                                async_session, NetworkMetrics,
+                                async_session, ManipulativeMetrics,
                                 project_id=project.id,
                                 defaults={
-                                    'tvl': tvl,
-                                    'tvl_fdv': tvl / fdv,
+                                    'fdv_fundraise': fdv / fundraise,
+                                    'top_100_wallet': top_100_wallets,
                                 },
                             )
 
-                        # ШАГ 7: Обновление FundsProfit
-                        print("7")
-                        funds_profit = await async_session.execute(
-                            select(FundsProfit).filter_by(project_id=project.id).limit(1)
+                    # ШАГ 6: Обновление NetworkMetrics (TVL)
+                    print("6")
+                    twitter_name, description, lower_name = await get_twitter_link_by_symbol(client_session, symbol)
+                    tvl = await fetch_tvl_data(client_session, lower_name)
+                    if tvl and fdv:
+                        await update_or_create(
+                            async_session, NetworkMetrics,
+                            project_id=project.id,
+                            defaults={
+                                'tvl': tvl,
+                                'tvl_fdv': tvl / fdv,
+                            },
                         )
-                        funds_profit = funds_profit.scalars().first()
 
-                        if not funds_profit or not funds_profit.distribution or funds_profit.distribution == '-':
-                            print("7.1")
-                            twitter_link, description, lower_name = await get_twitter_link_by_symbol(symbol)
-                            print(twitter_link, description, lower_name)
-                            tokenomics_percentage_data = await get_percantage_data(twitter_link, symbol)
-                            print(tokenomics_percentage_data)
-                            output_string = '\n'.join(tokenomics_percentage_data) if tokenomics_percentage_data else '-'
-                            print("output_string: ", output_string)
-                            await update_or_create(
-                                async_session, FundsProfit,
-                                project_id=project.id,
-                                defaults={'distribution': output_string},
-                            )
+                    # ШАГ 7: Обновление FundsProfit
+                    print("7")
+                    funds_profit = await async_session.execute(
+                        select(FundsProfit).filter_by(project_id=project.id).limit(1)
+                    )
+                    funds_profit = funds_profit.scalars().first()
 
-                        # Сохранение изменений
-                        print("8")
-                        await async_session.commit()
+                    if not funds_profit or not funds_profit.distribution or funds_profit.distribution == '-':
+                        print("7.1")
+                        twitter_link, description, lower_name = await get_twitter_link_by_symbol(client_session, symbol)
+                        print(twitter_link, description, lower_name)
+                        tokenomics_percentage_data = await get_percantage_data(async_session, twitter_link, symbol)
+                        print(tokenomics_percentage_data)
+                        output_string = '\n'.join(tokenomics_percentage_data) if tokenomics_percentage_data else '-'
+                        print("output_string: ", output_string)
+                        await update_or_create(
+                            async_session, FundsProfit,
+                            project_id=project.id,
+                            defaults={'distribution': output_string},
+                        )
 
-                    except Exception as error:
-                        logging.error(f"Error processing {symbol}: {error}")
-                        await async_session.rollback()  # Откат транзакции при ошибке
+                    # Сохранение изменений
+                    print("8")
+                    await async_session.commit()
+
+                except Exception as error:
+                    logging.error(f"Error processing {symbol}: {error}")
+                    await async_session.rollback()  # Откат транзакции при ошибке
 
         return {"status": "Data fetching completed"}
     except Exception as e:
@@ -235,7 +235,7 @@ async def update_agent_answers():
                 continue
 
             project_info = await get_user_project_info(async_session, project.coin_name)
-            twitter_link = await get_twitter_link_by_symbol(project.coin_name)
+            twitter_link = await get_twitter_link_by_symbol(client_session, project.coin_name)
             tokenomics_data = project_info.get("tokenomics_data")
             basic_metrics = project_info.get("basic_metrics")
             investing_metrics = project_info.get("investing_metrics")

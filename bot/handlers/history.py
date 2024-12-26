@@ -45,25 +45,25 @@ class HistoryState(StatesGroup):
 
 
 @history_router.message(lambda message: message.text == 'История расчетов' or message.text == 'Calculation History')
-async def file_format_chosen(message: types.Message, state: FSMContext):
-    async with SessionLocal() as session:
-        result = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
-        user = result.scalars().first()
+async def file_format_chosen(session: SessionLocal(), message: types.Message, state: FSMContext):
+    result = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
+    user = result.scalars().first()
 
-        if not user:
-            user = User(telegram_id=message.from_user.id)
-            session.add(user)
-            await session.commit()
+    if not user:
+        user = User(telegram_id=message.from_user.id)
+        session.add(user)
+        await session.commit()
 
-        if user.language:
-            user_languages[message.from_user.id] = user.language
+    if user.language:
+        user_languages[message.from_user.id] = user.language
 
-        await message.answer(phrase_by_user("file_format", message.from_user.id), reply_markup=file_format_keyboard())
-        await state.set_state(HistoryState.choosing_file_format)
+    await message.answer(phrase_by_user("file_format", message.from_user.id), reply_markup=file_format_keyboard())
+    await state.set_state(HistoryState.choosing_file_format)
 
 
 @history_router.message(HistoryState.choosing_file_format)
-async def history_command(message: types.Message, state: FSMContext):
+@save_execute
+async def history_command(async_session: SessionLocal(), message: types.Message, state: FSMContext):
     user_id = message.from_user.id
 
     file_format = message.text.lower()
@@ -112,7 +112,7 @@ async def history_command(message: types.Message, state: FSMContext):
     finally:
         await async_session.close()
 
-
+@save_execute
 async def create_pdf_file(zip_file, calc, session, user_id):
     cells_content = None
     row_data = []
@@ -318,7 +318,7 @@ async def create_pdf_file(zip_file, calc, session, user_id):
 
     zip_file.writestr(file_name, pdf_output.read())
 
-
+@save_execute
 async def create_excel_file(zip_file, calc, session, user_id):
     readable_date = calc.date.strftime("%Y-%m-%d_%H-%M-%S")
     file_name = f"calculation_{readable_date}.xlsx"

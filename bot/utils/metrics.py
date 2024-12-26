@@ -19,7 +19,6 @@ from bot.utils.validations import if_exist_instance, save_execute
 @save_execute
 async def update_project(session, user_coin_name, chosen_project, project):
     if user_coin_name not in tickers:
-        print("+++++1+++++", user_coin_name, chosen_project)
         instance = await update_or_create(
             session, Project,
             id=project.id,
@@ -28,10 +27,8 @@ async def update_project(session, user_coin_name, chosen_project, project):
                 "category": chosen_project
             },
         )
-        print(instance.coin_name)
         return instance
     else:
-        print("+++++2+++++")
         return await find_record(Project, session, coin_name=user_coin_name)
 
 
@@ -143,8 +140,6 @@ async def process_metrics(
 
     new_project = await update_project(session, user_coin_name, chosen_project, project)
 
-    logging.info(f"-----------------------------------------------------------: {user_coin_name, new_project}")
-
     await update_or_create(
         session, BasicMetrics,
         project_id=new_project.id,
@@ -163,6 +158,7 @@ async def process_metrics(
     await update_market_metrics(session, new_project.id, results.get("market_metrics"))
 
     return new_project
+
 
 def check_missing_fields(metrics_data, fields_map):
     """

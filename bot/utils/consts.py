@@ -1,3 +1,4 @@
+from aiohttp import ClientSession
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -191,6 +192,8 @@ SessionLocal = sessionmaker(
 )
 session_local = SessionLocal()
 
+
+client_session = ClientSession()
 
 engine = create_engine(DATABASE_URL)
 async_engine = create_async_engine(DATABASE_URL, echo=True)

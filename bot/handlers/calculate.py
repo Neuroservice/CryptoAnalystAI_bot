@@ -30,7 +30,7 @@ from bot.database.models import (
     TopAndBottom,
     AgentAnswer, User
 )
-from bot.utils.consts import user_languages, prepare_ru_data_for_analysis
+from bot.utils.consts import user_languages, prepare_ru_data_for_analysis, client_session
 from bot.utils.consts import (
     tickers,
     field_mapping,
@@ -152,8 +152,8 @@ async def file_format_chosen(message: types.Message, state: FSMContext):
     else:
         await message.answer(phrase_by_user("error_file_format_message", message.from_user.id), reply_markup=file_format_keyboard())
 
-
 @calculate_router.message(CalculateProject.waiting_for_basic_data)
+@save_execute
 async def receive_basic_data(message: types.Message, state: FSMContext):
     user_coin_name = message.text.upper().replace(" ", "")
     new_project = None
@@ -166,9 +166,9 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     if await validate_user_input(user_coin_name, message, state):
         return
 
-    twitter_name, description, lower_name = await get_twitter_link_by_symbol(user_coin_name)
+    twitter_name, description, lower_name = await get_twitter_link_by_symbol(client_session, user_coin_name)
     if not lower_name:
-        lower_name = await get_lower_name(user_coin_name)
+        lower_name = await get_lower_name(client_session, user_coin_name)
 
     coin_description = await get_coin_description(lower_name)
     if description:
@@ -500,7 +500,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     data = await state.get_data()
     selected_format = data.get("file_format")
 
-    twitter_name, description, lower_name = await get_twitter_link_by_symbol(user_coin_name)
+    twitter_name, description, lower_name = await get_twitter_link_by_symbol(client_session, user_coin_name)
     coin_description = await get_coin_description(lower_name)
     if description:
         coin_description += description
@@ -716,7 +716,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     elif selected_format == 'pdf':
 
         header_params = get_header_params(coin_name=user_coin_name)
-        twitter_name = await get_twitter_link_by_symbol(user_coin_name)
+        twitter_name = await get_twitter_link_by_symbol(client_session, user_coin_name)
 
         try:
             if not tokenomics_data or not tokenomics_data.circ_supply or not tokenomics_data.total_supply or not tokenomics_data.capitalization or not tokenomics_data.fdv or not basic_metrics.market_price:

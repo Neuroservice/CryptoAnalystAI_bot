@@ -15,10 +15,10 @@ from bot.data_update import fetch_crypto_data, update_agent_answers
 from bot.database.backups import create_backup
 from bot.database.db_setup import create_db
 from bot.handlers import history, select_language, donate
-from bot.utils.consts import STATE_FILE
+from bot.utils.consts import STATE_FILE, session_local
 from bot.utils.middlewares import RestoreStateMiddleware
 from bot.utils.resources.files_worker.bot_states import restore_states, save_all_states
-
+from bot.utils.validations import save_execute
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,13 +35,14 @@ async def check_redis_connection():
         print("Не удалось подключиться к Redis!")
         raise Exception("Не удалось подключиться к Redis!")
 
-async def parse_periodically():
+@save_execute
+async def parse_periodically(session_local):
     last_agent_update = datetime.datetime.utcnow() - datetime.timedelta(days=1)
 
     while True:
         try:
             async def fetch_task():
-                await fetch_crypto_data()
+                await fetch_crypto_data(session_local)
 
             async def agent_update_task():
                 await update_agent_answers()
@@ -65,39 +66,31 @@ async def parse_periodically():
 
         await asyncio.sleep(3600)
 
-
-def start_parse_periodically():
-    # Создаем новый цикл событий для этого потока
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(parse_periodically())
-
-
-async def main():
+@save_execute
+async def main(aiohttp_session: AiohttpSession):
     try:
         await check_redis_connection()
         # await create_db()
-        async with AiohttpSession() as aiohttp_session:
-            # storage = MemoryStorage()
-            storage = RedisStorage(redis_client)
-            dp = Dispatcher(storage=storage)
+        # storage = MemoryStorage()
+        storage = RedisStorage(redis_client)
+        dp = Dispatcher(storage=storage)
 
-            bot = Bot(token=API_TOKEN, session=aiohttp_session)
-            await bot.set_my_commands([BotCommand(command="/start", description="Запустить бота")])
+        bot = Bot(token=API_TOKEN, session=aiohttp_session)
+        await bot.set_my_commands([BotCommand(command="/start", description="Запустить бота")])
 
-            from bot.handlers import start, help, calculate
-            dp.include_router(start.router)
-            dp.include_router(help.help_router)
-            dp.include_router(calculate.calculate_router)
-            dp.include_router(history.history_router)
-            dp.include_router(select_language.change_language_router)
-            dp.include_router(donate.donate_router)
+        from bot.handlers import start, help, calculate
+        dp.include_router(start.router)
+        dp.include_router(help.help_router)
+        dp.include_router(calculate.calculate_router)
+        dp.include_router(history.history_router)
+        dp.include_router(select_language.change_language_router)
+        dp.include_router(donate.donate_router)
 
-            dp.update.middleware(RestoreStateMiddleware())
+        dp.update.middleware(RestoreStateMiddleware())
 
-            asyncio.create_task(parse_periodically())
+        asyncio.create_task(parse_periodically(session_local))
 
-            await dp.start_polling(bot)
+        await dp.start_polling(bot)
 
     except AttributeError as attr_error:
         logging.error(f"Ошибка доступа к атрибуту: {attr_error}", exc_info=True)
@@ -112,8 +105,9 @@ async def main():
         logging.error(f"Общая ошибка при выполнении операции: {e}", exc_info=True)
         return {"error": f"Неизвестная ошибка: {e}"}
     finally:
+        await aiohttp_session.close()
         logger.info("Завершение работы бота.")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(AiohttpSession()))
