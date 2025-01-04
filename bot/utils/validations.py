@@ -12,7 +12,8 @@ def save_execute(f):
         try:
             return await f(session, *args, **kwargs)
         except Exception as e:
-            await session.rollback()
+            if hasattr(session, 'rollback'):
+                await session.rollback()
             logging.error(e)
 
     return wrapper

@@ -1,8 +1,9 @@
+import logging
 from bot.utils.project_data import clean_fundraise_data, clean_twitter_subs
 
 
 def determine_project_tier(
-    capitalization, fundraising, twitter_followers, twitter_score, category, investors
+        capitalization, fundraising, twitter_followers, twitter_score, category, investors
 ):
     """
     Determine the tier of a project based on provided metrics.
@@ -96,10 +97,10 @@ def determine_project_tier(
 
         # Проверка всех основных метрик
         passes_metrics = (
-                int(capitalization) >= int(criteria["capitalization"])
-                and int(fundraising) >= int(criteria["fundraising"])
-                and int(clean_twitter_subs(twitter_followers)) >= int(clean_twitter_subs(criteria["twitter_followers"]))
-                and int(twitter_score) >= int(criteria["twitter_score"])
+                capitalization != "N/A" and int(capitalization) >= int(criteria["capitalization"])
+                and fundraising != "N/A" and int(fundraising) >= int(criteria["fundraising"])
+                and twitter_followers != "N/A" and int(clean_twitter_subs(twitter_followers)) >= int(clean_twitter_subs(criteria["twitter_followers"]))
+                and twitter_score != "N/A" and int(twitter_score) >= int(criteria["twitter_score"])
         )
 
         # Если метрики не подходят, сразу переходим к следующему Tier
@@ -155,69 +156,130 @@ def calculate_tokenomics_score(project_name, comparisons):
     total_score = round(total_score, 2)
 
     result_string = (
-        f"Общая оценка токеномики проекта {project_name}: {total_score} баллов.\n\n"
-        f"Отдельные набранные баллы в сравнении с другими проектами:\n"
-        + ",\n".join(results) + "."
+            f"Общая оценка токеномики проекта {project_name}: {total_score} баллов.\n\n"
+            f"Отдельные набранные баллы в сравнении с другими проектами:\n"
+            + ",\n".join(results) + "."
     )
 
     return result_string, total_score
 
 
-def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_price, growth_percentage, fall_percentage, top_100_percentage, tvl_percentage):
+def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_price, growth_percentage,
+                            fall_percentage, top_100_percentage, tvl_percentage):
     tvl_score = 0
     top_100_score = 0
     growth_and_fall_score = 0
     funds_score = 0
 
+    growth_and_fall_result = ""
+    detailed_report = ""
+
+    # Логика расчета доходности фондов
     if fundraise != 'N/A' and total_supply != 'N/A':
         avg_price = (float(fundraise) / (float(total_supply) * float(fund_distribution.replace('%', '').strip()))) * 100
         x_funds = round(float(market_price) / avg_price, 2)
         percente_of_funds_profit = (x_funds * 100) - 100
 
-        print(fundraise, total_supply, avg_price, x_funds, percente_of_funds_profit, fund_distribution)
+        detailed_report += (
+            f"\n[Funds Calculation]:\n"
+            f"  Средняя цена токена = (Фандрейз: {fundraise} / (Общее предложение: {total_supply} * Доля фондов: {fund_distribution})) * 100 = {avg_price}\n"
+            f"  X-фондов = Текущая цена: {market_price} / Средняя цена: {avg_price} = {x_funds}\n"
+            f"  Процент доходности фондов = (X-фондов * 100) - 100 = {percente_of_funds_profit}\n"
+        )
 
         if percente_of_funds_profit <= 200:
             funds_score = percente_of_funds_profit / 20
+            detailed_report += f"  Баллы доходности фондов = Процент доходности фондов / 20 = {funds_score}\n"
         elif 201 <= percente_of_funds_profit <= 1000:
             funds_score = (200 / 20) + ((percente_of_funds_profit - 200) / 100) * (-0.5)
+            detailed_report += (
+                f"  Баллы доходности фондов = (200 / 20) + (({percente_of_funds_profit} - 200) / 100) * (-0.5) = {funds_score}\n"
+            )
         elif 1001 <= percente_of_funds_profit <= 3000:
             funds_score = (200 / 20) + (800 / 100) * (-0.5) + ((percente_of_funds_profit - 1000) / 100) * (-1)
+            detailed_report += (
+                f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (({percente_of_funds_profit} - 1000) / 100) * (-1) = {funds_score}\n"
+            )
         elif 3001 <= percente_of_funds_profit <= 5000:
             funds_score = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + (
-                        (percente_of_funds_profit - 3000) / 100) * (-1.5)
+                    (percente_of_funds_profit - 3000) / 100) * (-1.5)
+            detailed_report += (
+                f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + (({percente_of_funds_profit} - 3000) / 100) * (-1.5) = {funds_score}\n"
+            )
         elif percente_of_funds_profit > 5000:
             funds_score = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + (2000 / 100) * (-1.5) + (
-                        (percente_of_funds_profit - 5000) / 100) * (-2)
+                    (percente_of_funds_profit - 5000) / 100) * (-2)
+            detailed_report += (
+                f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + (2000 / 100) * (-1.5) + (({percente_of_funds_profit} - 5000) / 100) * (-2) = {funds_score}\n"
+            )
 
-        funds_score = max(funds_score, -50)
-
-        funds_result = f"По данному показателю проект получает {round(funds_score, 2)} баллов.\n"
+        funds_score = max(min(funds_score, 100), -50)
+        funds_result = f"По показателю доходности фондов проект получает {round(funds_score, 2)} баллов.\n"
     else:
         funds_result = "Данные для расчета средней цены и доходности фондов отсутствуют. 0 баллов.\n"
 
+    # Логика расчета роста и падения
     if growth_percentage != 'N/A' and fall_percentage != 'N/A':
         growth_and_fall_score = fall_percentage - growth_percentage
+
         if growth_and_fall_score < -50:
             growth_and_fall_score = -50
-        growth_and_fall_result = f"Проект {'потерял' if growth_and_fall_score < 0 else 'получил'} {round(abs(growth_and_fall_score), 2)} баллов по показателю роста от минимальных значений и падения от максимальных значений.\n"
+            detailed_report += (
+                f"\n[Growth and Fall Calculation]:\n"
+                f"  Падение: {fall_percentage} - Рост: {growth_percentage} = {growth_and_fall_score} (баллы оказались меньше 50, выставлено значение -50)\n"
+            )
+        elif growth_and_fall_score > 100:
+            growth_and_fall_score = 100
+            detailed_report += (
+                f"\n[Growth and Fall Calculation]:\n"
+                f"  Падение: {fall_percentage} - Рост: {growth_percentage} = {growth_and_fall_score} баллы оказались больше 100, выставлено значение 100)\n"
+            )
+        else:
+            detailed_report += (
+                f"\n[Growth and Fall Calculation]:\n"
+                f"  Падение: {fall_percentage} - Рост: {growth_percentage} = {growth_and_fall_score}\n"
+            )
+
+            growth_and_fall_result = f"Проект {'потерял' if growth_and_fall_score < 0 else 'получил'} {round(abs(growth_and_fall_score), 2)} баллов по показателю роста от минимальных значений и падения от максимальных значений.\n"
     else:
         growth_and_fall_result = "Данные для расчета роста и падения отсутствуют. 0 баллов.\n"
 
+    # Логика расчета топ-100 кошельков
     if top_100_percentage != 'N/A':
         top_100_score = max(0, int(top_100_percentage) - 70)
+        detailed_report += (
+            f"\n[Top 100 Wallets Calculation]:\n"
+            f"  Процент монет на топ-100 кошельках: {top_100_percentage}%\n"
+            f"  Баллы рассчитываются как: max(0, {top_100_percentage} - 70)\n"
+            f"  Здесь max() возвращает большее из двух значений: либо 0, либо ({top_100_percentage} - 70).\n"
+            f"  Итоговые баллы: {top_100_score}\n"
+        )
+
         top_100_result = f"Проект {'потерял' if top_100_score == 0 else 'получил'} {top_100_score} баллов по показателю процента монет на топ 100 кошельков.\n"
     else:
         top_100_result = "Данные для расчета процента монет на топ 100 кошельков отсутствуют. 0 баллов.\n"
 
+    # Логика расчета TVL
     if tvl_percentage != 'N/A':
         tvl_score = int(tvl_percentage)
+        detailed_report += (
+            f"\n[TVL Calculation]:\n"
+            f"  Процент заблокированных монет (TVL): {tvl_percentage}\n"
+            f"  Баллы = {tvl_percentage}\n"
+        )
+
         tvl_result = f"Проект {'потерял' if tvl_score == 0 else 'получил'} {tvl_score} баллов по показателю процента заблокированных монет.\n"
     else:
         tvl_result = "Данные для расчета процента заблокированных монет отсутствуют. 0 баллов.\n"
 
+    # Общий отчет
     report = funds_result + growth_and_fall_result + top_100_result + tvl_result
-    print(tvl_score + top_100_score + growth_and_fall_score + funds_score)
-    return report, tvl_score + top_100_score + growth_and_fall_score + funds_score
+    detailed_report += report
+
+    total_score = tvl_score + top_100_score + growth_and_fall_score + funds_score
+    detailed_report += f"\n[Total Score]: {total_score}\n"
+
+    return detailed_report, total_score
 
 
 def calculate_project_score(fundraising, tier, twitter_followers, twitter_score, tokenomics_score, profitability_score):
@@ -274,12 +336,12 @@ def calculate_project_score(fundraising, tier, twitter_followers, twitter_score,
     twitter_engagement_score = round(twitter_score * TWITTER_SCORE_MULTIPLIER, 2)
 
     preliminary_score = (
-        fundraising_score +
-        tier_score +
-        followers_score +
-        twitter_engagement_score +
-        tokenomics_score +
-        profitability_score
+            fundraising_score +
+            tier_score +
+            followers_score +
+            twitter_engagement_score +
+            tokenomics_score +
+            profitability_score
     )
 
     tier_coefficient = TIER_COEFFICIENTS.get(tier, 0.60)

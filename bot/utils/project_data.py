@@ -1,12 +1,11 @@
 import asyncio
 import logging
 import re
-from typing import Type, Dict, Any
-from urllib.parse import urljoin
-
 import aiohttp
 import httpx
 import requests
+
+from urllib.parse import urljoin
 from aiogram.types import Message
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
@@ -27,7 +26,7 @@ from bot.database.models import (
     NetworkMetrics, AgentAnswer
 )
 from bot.utils.consts import tickers, MAX_MESSAGE_LENGTH, get_header_params, SessionLocal, get_cryptocompare_params, \
-    sync_session
+    replaced_project_twitter
 from bot.utils.gpt import agent_handler
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.utils.validations import is_async_session, save_execute
@@ -54,7 +53,6 @@ async def get_data(model, project_id, is_async, session):
 
 @save_execute
 async def get_user_project_info(session, user_coin_name):
-
     try:
         is_async = is_async_session(session)
         if is_async:
@@ -65,7 +63,6 @@ async def get_user_project_info(session, user_coin_name):
             project = session.query(Project).filter(Project.coin_name == user_coin_name).first()
         if not project:
             raise ValueError(f"Project '{user_coin_name}' not found.")
-
 
         tokenomics_data = await get_data(Tokenomics, project.id, is_async, session)
         basic_metrics = await get_data(BasicMetrics, project.id, is_async, session)
@@ -172,7 +169,8 @@ async def get_project_and_tokenomics(session, project_name, user_coin_name):
 async def get_project_data(calc, session):
     project = await find_record(Project, session, id=calc.project_id)
     basic_metrics = await find_record(BasicMetrics, session, project_id=project.id)
-    projects, similar_projects = await get_project_and_tokenomics(session, project.category, user_coin_name=project.coin_name)
+    projects, similar_projects = await get_project_and_tokenomics(session, project.category,
+                                                                  user_coin_name=project.coin_name)
     base_tokenomics = await find_record(Tokenomics, session, project_id=project.id)
 
     return project, basic_metrics, similar_projects, base_tokenomics
@@ -254,33 +252,33 @@ async def get_full_info(session, project_name, user_coin_name):
         logging.error(f"Общая ошибка при обработке данных проекта: {e}")
         return None, None
 
-@save_execute
-async def get_twitter_link_by_symbol(session, symbol):
+
+async def get_twitter_link_by_symbol(symbol):
     url = f'https://pro-api.coinmarketcap.com/v1/cryptocurrency/info?symbol={symbol}'
 
     header_params = get_header_params(coin_name=None)
 
-    async with session.get(url, headers=header_params["headers"]) as response:
-        if response.status == 200:
-            data = await response.json()
-
-            if symbol in data['data']:
-                description = data['data'][symbol].get('description', None)
-                lower_name = data['data'][symbol].get('name', None)
-                urls = data['data'][symbol].get('urls', {})
-                twitter_links = urls.get('twitter', [])
-                if twitter_links and description:
-                    twitter_link = twitter_links[0].lower()
-                    return twitter_link, description, lower_name.lower()
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=header_params["headers"]) as response:
+            if response.status == 200:
+                data = await response.json()
+                if symbol in data['data']:
+                    description = data['data'][symbol].get('description', None)
+                    lower_name = data['data'][symbol].get('name', None)
+                    urls = data['data'][symbol].get('urls', {})
+                    twitter_links = urls.get('twitter', [])
+                    if twitter_links and description:
+                        twitter_link = twitter_links[0].lower()
+                        return twitter_link, description, lower_name.lower()
+                    else:
+                        print(f"Twitter link for '{symbol}' not found.")
+                        return None, None, None
                 else:
-                    print(f"Twitter link for '{symbol}' not found.")
+                    print(f"Cryptocurrency with symbol '{symbol}' not found.")
                     return None, None, None
             else:
-                print(f"Cryptocurrency with symbol '{symbol}' not found.")
+                print(f"Error retrieving data: {response.status}, {await response.text()}")
                 return None, None, None
-        else:
-            print(f"Error retrieving data: {response.status}, {await response.text()}")
-            return None, None, None
 
 
 def clean_fundraise_data(fundraise_str):
@@ -376,7 +374,8 @@ async def get_twitter(name):
         else:
             coin_name, about, lower_name = name
 
-        await page.route("**/*", lambda route: route.continue_() if "image" not in route.request.resource_type else route.abort())
+        await page.route("**/*", lambda
+            route: route.continue_() if "image" not in route.request.resource_type else route.abort())
         coin = coin_name.split('/')[-1]
 
         try:
@@ -460,16 +459,17 @@ def extract_tokenomics(data):
     return tokenomics_data
 
 
-async def get_percantage_data(session_local, lower_name, user_coin_name):
+async def get_percantage_data(lower_name, user_coin_name):
     tokenomics_data = []
 
     try:
-            project = await session_local.execute(
+        async with SessionLocal() as async_session:
+            project = await async_session.execute(
                 select(Project).filter_by(coin_name=user_coin_name)
             )
             project = project.scalars().first()
             if project:
-                funds_profit = await session_local.execute(
+                funds_profit = await async_session.execute(
                     select(FundsProfit).filter_by(project_id=project.id)
                 )
                 user_tokenomics = funds_profit.scalars().first()
@@ -481,7 +481,8 @@ async def get_percantage_data(session_local, lower_name, user_coin_name):
                         browser = await p.chromium.launch(headless=True)
                         page = await browser.new_page()
                         try:
-                            await page.goto(f"https://cryptorank.io/price/{lower_name}/vesting", wait_until='networkidle')
+                            await page.goto(f"https://cryptorank.io/price/{lower_name}/vesting",
+                                            wait_until='networkidle')
                             await page.wait_for_selector('table', timeout=60000)
 
                             # Получение HTML-страницы
@@ -510,7 +511,8 @@ async def get_percantage_data(session_local, lower_name, user_coin_name):
                                         percentage = columns[1].get_text(strip=True)
                                         tokenomics_data.append(f"{name} ({percentage})")
                             else:
-                                logging.warning("Не удалось найти таблицу с заданными заголовками на Cryptorank. Пробуем Tokenomist.ai...")
+                                logging.warning(
+                                    "Не удалось найти таблицу с заданными заголовками на Cryptorank. Пробуем Tokenomist.ai...")
                                 await page.goto(f"https://tokenomist.ai/{lower_name}", wait_until='networkidle')
                                 await page.wait_for_selector('div[class*="overflow-y-auto"]', timeout=60000)
 
@@ -521,11 +523,15 @@ async def get_percantage_data(session_local, lower_name, user_coin_name):
                                 allocation_divs = soup.select('div[class*="overflow-y-auto"] > div')
                                 for div in allocation_divs:
                                     try:
-                                        name = div.select_one('div.flex.items-center.w-[60px], div.flex.items-center.w-[90px]').get_text(strip=True)
-                                        percentage = div.select_one('div.font-medium.mr-1.w-8.text-right').get_text(strip=True)
+                                        name = div.select_one(
+                                            'div.flex.items-center.w-[60px], div.flex.items-center.w-[90px]').get_text(
+                                            strip=True)
+                                        percentage = div.select_one('div.font-medium.mr-1.w-8.text-right').get_text(
+                                            strip=True)
                                         tokenomics_data.append(f"{name} ({percentage})")
                                     except AttributeError:
-                                        logging.warning("Не удалось извлечь данные для одного из элементов Tokenomist.ai.")
+                                        logging.warning(
+                                            "Не удалось извлечь данные для одного из элементов Tokenomist.ai.")
 
                             return tokenomics_data
                         except Exception as e:
@@ -564,7 +570,8 @@ async def get_percantage_data(session_local, lower_name, user_coin_name):
                                     percentage = columns[1].get_text(strip=True)
                                     tokenomics_data.append(f"{name} ({percentage})")
                         else:
-                            logging.warning("Не удалось найти таблицу с заданными заголовками на Cryptorank. Пробуем Tokenomist.ai...")
+                            logging.warning(
+                                "Не удалось найти таблицу с заданными заголовками на Cryptorank. Пробуем Tokenomist.ai...")
                             await page.goto(f"https://tokenomist.ai/{lower_name}", wait_until='networkidle')
                             await page.wait_for_selector('div[class*="overflow-y-auto"]', timeout=60000)
 
@@ -575,8 +582,11 @@ async def get_percantage_data(session_local, lower_name, user_coin_name):
                             allocation_divs = soup.select('div[class*="overflow-y-auto"] > div')
                             for div in allocation_divs:
                                 try:
-                                    name = div.select_one('div.flex.items-center.w-[60px], div.flex.items-center.w-[90px]').get_text(strip=True)
-                                    percentage = div.select_one('div.font-medium.mr-1.w-8.text-right').get_text(strip=True)
+                                    name = div.select_one(
+                                        'div.flex.items-center.w-[60px], div.flex.items-center.w-[90px]').get_text(
+                                        strip=True)
+                                    percentage = div.select_one('div.font-medium.mr-1.w-8.text-right').get_text(
+                                        strip=True)
                                     tokenomics_data.append(f"{name} ({percentage})")
                                 except AttributeError:
                                     logging.warning("Не удалось извлечь данные для одного из элементов Tokenomist.ai.")
@@ -891,38 +901,38 @@ async def fetch_fundraise_data(user_coin_name):
         logging.error(f"Общая ошибка при обработке данных фандрейза: {e}")
         return None
 
-@save_execute
-async def fetch_tvl_data(session, coin_name):
+
+async def fetch_tvl_data(coin_name):
     base_url = "https://api.llama.fi/v2/historicalChainTvl/"
     url = f"{base_url}{coin_name.lower()}"
 
-    try:
-        async with session.get(url) as response:
-            if response.status == 200:
-                data = await response.json()
-                print("data tvl", coin_name.lower(), data)
-
-                if data:
-                    last_tvl = data[-1]['tvl']
-                    return last_tvl
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    # print("data tvl", coin_name.lower(), data)
+                    if data:
+                        last_tvl = data[-1]['tvl']
+                        return last_tvl
+                    else:
+                        logging.error(f"No TVL data found for {coin_name}.")
+                        return None
                 else:
-                    logging.error(f"No TVL data found for {coin_name}.")
+                    logging.error(f"Failed to fetch TVL data. Status code: {response.status}")
                     return None
-            else:
-                logging.error(f"Failed to fetch TVL data. Status code: {response.status}")
-                return None
-    except AttributeError as attr_error:
-        logging.error(f"Ошибка доступа к атрибутам данных TVL для {coin_name}: {attr_error}")
-        return None
-    except KeyError as key_error:
-        logging.error(f"Ошибка при извлечении данных TVL для {coin_name}: отсутствует ключ {key_error}")
-        return None
-    except ValueError as value_error:
-        logging.error(f"Ошибка при обработке значений TVL для {coin_name}: {value_error}")
-        return None
-    except Exception as e:
-        logging.error(f"Общая ошибка при извлечении данных TVL для {coin_name}: {e}")
-        return None
+        except AttributeError as attr_error:
+            logging.error(f"Ошибка доступа к атрибутам данных TVL для {coin_name}: {attr_error}")
+            return None
+        except KeyError as key_error:
+            logging.error(f"Ошибка при извлечении данных TVL для {coin_name}: отсутствует ключ {key_error}")
+            return None
+        except ValueError as value_error:
+            logging.error(f"Ошибка при обработке значений TVL для {coin_name}: {value_error}")
+            return None
+        except Exception as e:
+            logging.error(f"Общая ошибка при извлечении данных TVL для {coin_name}: {e}")
+            return None
 
 
 def standardize_category(overall_category: str) -> str:
@@ -956,19 +966,20 @@ def standardize_category(overall_category: str) -> str:
     }
     return category_map.get(overall_category, "Unknown Category")
 
-@save_execute
-async def get_lower_name(session_local, user_coin_name):
+
+async def get_lower_name(user_coin_name):
     url = f'https://pro-api.coinmarketcap.com/v1/cryptocurrency/info?symbol={user_coin_name.upper()}'
     header_params = get_header_params(coin_name=None)  # Передаем None, так как символ здесь не используется
 
-    async with session_local.get(url, headers=header_params["headers"]) as response:
-        if response.status == 200:
-            data = await response.json()
-            logging.info(f"{data['data']}")
-            if user_coin_name.upper() in data['data']:
-                lower_name = data['data'][user_coin_name.upper()].get('name', None).lower()
+    async with aiohttp.ClientSession() as session_local:
+        async with session_local.get(url, headers=header_params["headers"]) as response:
+            if response.status == 200:
+                data = await response.json()
+                logging.info(f"{data['data']}")
+                if user_coin_name.upper() in data['data']:
+                    lower_name = data['data'][user_coin_name.upper()].get('name', None).lower()
 
-                return lower_name
+                    return lower_name
 
 
 def get_top_projects_by_capitalization_and_category(tokenomics_data_list):
@@ -987,36 +998,31 @@ def get_top_projects_by_capitalization_and_category(tokenomics_data_list):
     return top_projects
 
 
-@save_execute
-async def get_top_projects_by_capitalization(session: SessionLocal, project_type: str, tickers: list, top_n_tickers=5, top_n_other=10):
-    stmt_ticker_projects = (
-        select(Project)
-        .join(Tokenomics, Project.id == Tokenomics.project_id)
-        .where(Project.category == project_type)
-        .where(Project.coin_name.in_(tickers))
-        .order_by(Tokenomics.capitalization.desc())
-        .limit(top_n_tickers)
-    )
-
-    stmt_other_projects = (
-        select(Project)
-        .join(Tokenomics, Project.id == Tokenomics.project_id)
-        .where(Project.category == project_type)
-        .where(Project.coin_name.in_(tickers))
-        .order_by(Tokenomics.capitalization.desc())
-        .limit(top_n_other)
-    )
-
-    result_ticker_projects = await session.execute(stmt_ticker_projects)
-    result_other_projects = await session.execute(stmt_other_projects)
-
-    top_ticker_projects = result_ticker_projects.scalars().all()
-    top_other_projects = result_other_projects.scalars().all()
-
-    return [project.coin_name for project in list(top_ticker_projects) + list(top_other_projects)]
+async def get_top_projects_by_capitalization(project_type: str, tickers: list, top_n_tickers=5, top_n_other=10):
+    async with SessionLocal() as session:
+        stmt_ticker_projects = (
+            select(Project)
+            .join(Tokenomics, Project.id == Tokenomics.project_id)
+            .where(Project.category == project_type)
+            .where(Project.coin_name.in_(tickers))
+            .order_by(Tokenomics.capitalization.desc())
+            .limit(top_n_tickers)
+        )
+        stmt_other_projects = (
+            select(Project)
+            .join(Tokenomics, Project.id == Tokenomics.project_id)
+            .where(Project.category == project_type)
+            .where(Project.coin_name.in_(tickers))
+            .order_by(Tokenomics.capitalization.desc())
+            .limit(top_n_other)
+        )
+        result_ticker_projects = await session.execute(stmt_ticker_projects)
+        result_other_projects = await session.execute(stmt_other_projects)
+        top_ticker_projects = result_ticker_projects.scalars().all()
+        top_other_projects = result_other_projects.scalars().all()
+        return [project.coin_name for project in list(top_ticker_projects) + list(top_other_projects)]
 
 
-@save_execute
 async def check_and_run_tasks(
         project,
         price,
@@ -1033,6 +1039,7 @@ async def check_and_run_tasks(
         session: AsyncSession,
         model_mapping: dict
 ):
+    logging.info(f"IN CHECK_AND_RUN_TASKS --- : {project}")
     tasks = []
     results = {}
 
@@ -1099,11 +1106,8 @@ async def check_and_run_tasks(
                 logging.warning(f"Данные содержат N/A, пропускаем сохранение: {data}")
                 continue
 
-            # Добавляем project_id
-            data_dict["project_id"] = project.id
-
             # Сохраняем в базу данных
-            await update_or_create(session, model, defaults=data_dict, project_id=project.id)
+            await update_or_create(session, model, project_id=project.id, defaults=data_dict)
 
     logging.info(f"Результаты сохранены: {results}")
     return results
@@ -1139,7 +1143,8 @@ async def send_long_message(bot_or_message, text, chat_id=None, reply_markup=Non
     if isinstance(bot_or_message, Message):
         sender = bot_or_message.answer
     else:
-        sender = lambda text, reply_markup=None: bot_or_message.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
+        sender = lambda text, reply_markup=None: bot_or_message.send_message(chat_id=chat_id, text=text,
+                                                                             reply_markup=reply_markup)
 
     while text:
         part = text[:MAX_MESSAGE_LENGTH]
@@ -1184,56 +1189,79 @@ def process_and_update_models(input_lines, field_mapping, model_mapping, session
 
     session.commit()
 
-@save_execute
-async def generate_flags_answer(user_id, session, all_data_string_for_flags_agent, user_languages, project, tokenomics_data, investing_metrics, social_metrics,
-                                 funds_profit, market_metrics, manipulative_metrics, network_metrics,
-                                 funds_answer, tokemonic_answer, comparison_results, category_answer, twitter_link, top_and_bottom, tier):
 
-    if user_languages.get(user_id) == 'RU':
+async def generate_flags_answer(
+    user_id=None,
+    session=None,
+    all_data_string_for_flags_agent=None,
+    user_languages=None,
+    project=None,
+    tokenomics_data=None,
+    investing_metrics=None,
+    social_metrics=None,
+    funds_profit=None,
+    market_metrics=None,
+    manipulative_metrics=None,
+    network_metrics=None,
+    tier=None,
+    funds_answer=None,
+    tokemonic_answer=None,
+    comparison_results=None,
+    category_answer=None,
+    twitter_link=None,
+    top_and_bottom=None,
+    language=None,
+):
+    flags_answer = None
+    if (user_id and user_languages and user_languages.get(user_id) == 'RU') or (language and language == 'RU'):
+        logging.info("Ответ будет на русском")
+
         language = 'RU'
         flags_answer = agent_handler("flags", topic=all_data_string_for_flags_agent, language=language)
         flags_answer += (
             f"\n\nДанные для анализа\n"
             f"- Анализ категории: {category_answer}\n\n"
             f"- Тир проекта (из функции): {tier}\n"
-            f"- Тикер монеты: {project.coin_name if project else 'N/A'}\n"
-            f"- Категория: {project.category if project else 'N/A'}\n"
-            f"- Капитализация: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n"
+            f"- Тикер монеты: {project.coin_name if project and project.coin_name else 'N/A'}\n"
+            f"- Категория: {project.category if project and project.category else 'N/A'}\n"
+            f"- Капитализация: ${round(tokenomics_data.capitalization, 2) if tokenomics_data and tokenomics_data.capitalization else 'N/A'}\n"
             f"- Фандрейз: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
-            f"- Количество подписчиков: {social_metrics.twitter} (Twitter: {twitter_link[0]})\n"
-            f"- Twitter Score: {social_metrics.twitterscore}\n"
-            f"- Тир фондов: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
-            f"- Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
-            f"- Минимальная цена токена: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom else 'N/A'}\n"
-            f"- Максимальная цена токена: ${round(top_and_bottom.upper_threshold, 2) if top_and_bottom else 'N/A'}\n"
-            f"- Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}\n"
-            f"- Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}\n"
+            f"- Количество подписчиков: {social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A'} (Twitter: {replaced_project_twitter.get(twitter_link[0], twitter_link[0])})\n"
+            f"- Twitter Score: {social_metrics.social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A'}\n"
+            f"- Тир фондов: {investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A'}\n"
+            f"- Распределение токенов: {funds_profit.distribution if funds_profit and funds_profit.distribution else 'N/A'}\n"
+            f"- Минимальная цена токена: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom and top_and_bottom.lower_threshold else 'N/A'}\n"
+            f"- Максимальная цена токена: ${round(top_and_bottom.upper_threshold, 2) if top_and_bottom and top_and_bottom.upper_threshold else 'N/A'}\n"
+            f"- Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics and market_metrics.growth_low else 'N/A'}\n"
+            f"- Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics and market_metrics.fail_high else 'N/A'}\n"
             f"- Процент нахождения монет на топ 100 кошельков блокчейна: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}%\n"
-            f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n\n"
+            f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data and  tokenomics_data.capitalization and network_metrics.tvl else 'N/A'}%\n\n"
             f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
             f"- Оценка токеномики: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
             f"**Данные для анализа токеномики**:\n{comparison_results}"
         )
-    else:
+    elif (user_id and user_languages and user_languages.get(user_id) == 'ENG') or (language and language == 'ENG'):
+        logging.info("Ответ будет на английском")
+
         language = 'ENG'
         flags_answer = agent_handler("flags", topic=all_data_string_for_flags_agent, language=language)
         flags_answer += (
             f"\n\nData to analyze\n"
             f"- Category analysis: {category_answer}\n\n"
-            f"- Coin Ticker: {project.coin_name if project else 'N/A'}\n"
-            f"- Category: {project.category if project else 'N/A'}\n"
-            f"- Capitalization: ${round(tokenomics_data.capitalization, 2) if tokenomics_data else 'N/A'}\n"
+            f"- Coin Ticker: {project.coin_name if project and project.coin_name else 'N/A'}\n"
+            f"- Category: {project.category if project and project.category else 'N/A'}\n"
+            f"- Capitalization: ${round(tokenomics_data.capitalization, 2) if tokenomics_data and tokenomics_data.capitalization else 'N/A'}\n"
             f"- Fundraise: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
-            f"- Number of Twitter subscribers: {social_metrics.twitter} (Twitter: {twitter_link[0]})\n"
-            f"- Twitter Score: {social_metrics.twitterscore}\n"
-            f"- Funds tier: {investing_metrics.fund_level if investing_metrics else 'N/A'}\n"
-            f"- Token allocation: {funds_profit.distribution if funds_profit else 'N/A'}\n"
-            f"- Minimum token price: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom else 'N/A'}\n"
-            f"- Maximum token price: ${round(top_and_bottom.upper_threshold, 2) if top_and_bottom else 'N/A'}\n"
-            f"- Token value growth from a low: {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics else 'N/A'}%\n"
-            f"- Token drop from the high: {round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A'}%\n"
-            f"- Percentage of coins found on top 100 blockchain wallets: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}%\n"
-            f"- Blocked tokens (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data else 'N/A'}%\n"
+            f"- Number of Twitter subscribers: {social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A'} (Twitter: {replaced_project_twitter.get(twitter_link[0], twitter_link[0])})\n"
+            f"- Twitter Score: {social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A'}\n"
+            f"- Funds tier: {investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A'}\n"
+            f"- Token allocation: {funds_profit.distribution if funds_profit and funds_profit.distribution else 'N/A'}\n"
+            f"- Minimum token price: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom and top_and_bottom.lower_threshold else 'N/A'}\n"
+            f"- Maximum token price: ${round(top_and_bottom.upper_threshold, 2) if top_and_bottom and top_and_bottom.upper_threshold else 'N/A'}\n"
+            f"- Token value growth from a low: {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics and market_metrics.growth_low else 'N/A'}%\n"
+            f"- Token drop from the high: {f'{round(market_metrics.fail_high * 100, 2)}%' if market_metrics and market_metrics.fail_high else 'N/A'}\n"
+            f"- Percentage of coins found on top 100 blockchain wallets: {f'{round(manipulative_metrics.top_100_wallet * 100, 2)}%' if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}\n"
+            f"- Blocked tokens (TVL): {f'{round((network_metrics.tvl / tokenomics_data.capitalization) * 100)}%' if network_metrics and network_metrics.tvl and tokenomics_data and tokenomics_data.capitalization else 'N/A'}\n"
             f"- Estimation of fund returns: {funds_answer if funds_answer else 'N/A'}\n"
             f"- Tokenomics valuation: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
             f"Data for tokenomic analysis:\n{comparison_results}"
@@ -1321,6 +1349,8 @@ def map_data_to_model_fields(model_name, data):
 async def update_or_create(session, model, project_id=None, id=None, defaults=None, **kwargs):
     """ Вспомогательная функция для обновления или создания записи. """
     instance = None
+
+    logging.info(f"project_id {project_id} id {id}")
 
     if id:
         result = await session.execute(select(model).filter_by(id=id))

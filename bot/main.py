@@ -5,19 +5,16 @@ import logging
 import redis.asyncio as redis
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from aiogram.fsm.storage.redis import RedisStorage
 
-from bot.config import API_TOKEN, engine_url, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, REDIS_PORT, REDIS_HOST
+from bot.config import API_TOKEN, engine_url, DB_PASSWORD, REDIS_PORT, REDIS_HOST
 from bot.data_update import fetch_crypto_data, update_agent_answers
 from bot.database.backups import create_backup
-from bot.database.db_setup import create_db
 from bot.handlers import history, select_language, donate
-from bot.utils.consts import STATE_FILE, session_local
+from bot.utils.consts import session_local
 from bot.utils.middlewares import RestoreStateMiddleware
-from bot.utils.resources.files_worker.bot_states import restore_states, save_all_states
 from bot.utils.validations import save_execute
 
 logging.basicConfig(level=logging.INFO)
@@ -35,62 +32,96 @@ async def check_redis_connection():
         print("Не удалось подключиться к Redis!")
         raise Exception("Не удалось подключиться к Redis!")
 
-@save_execute
-async def parse_periodically(session_local):
-    last_agent_update = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+
+async def parse_periodically():
+    last_agent_update = None  # Храним время последнего выполнения задач в 3:00
 
     while True:
-        try:
-            async def fetch_task():
-                await fetch_crypto_data(session_local)
+        current_time = datetime.datetime.utcnow()
 
-            async def agent_update_task():
-                await update_agent_answers()
+        # Расчет времени до следующего запуска fetch_task (каждые 6 часов)
+        next_fetch_run = current_time + datetime.timedelta(hours=6 - (current_time.hour % 6))
+        next_fetch_run = next_fetch_run.replace(minute=0, second=0, microsecond=0)
+        time_until_fetch = (next_fetch_run - current_time).total_seconds()
 
-            async def backup_task():
-                await create_backup()
+        # Расчет времени до 3:00 ночи
+        next_agent_run = current_time.replace(hour=3, minute=0, second=0, microsecond=0)
+        if current_time >= next_agent_run:
+            next_agent_run += datetime.timedelta(days=1)
+        time_until_agent = (next_agent_run - current_time).total_seconds()
 
-            tasks = [fetch_task()]
-            current_time = datetime.datetime.utcnow()
+        # Определяем, что нужно запускать первым
+        if time_until_fetch <= time_until_agent:
+            await asyncio.sleep(time_until_fetch)
+            try:
+                async def fetch_task():
+                    await fetch_crypto_data()
 
-            if (current_time - last_agent_update).days >= 1:
-                tasks.append(agent_update_task())
-                # tasks.append(backup_task())
-                last_agent_update = current_time
+                # Выполняем fetch_task каждые 6 часов
+                await fetch_task()
 
-            # Выполнение всех задач
-            await asyncio.gather(*tasks)
+            except Exception as e:
+                print(f"Ошибка при выполнении fetch_task: {e}")
 
-        except Exception as e:
-            logging.error(f"Неизвестная ошибка при выполнении задач: {e}", exc_info=True)
+        else:
+            await asyncio.sleep(time_until_agent)
+            try:
+                async def fetch_task():
+                    await fetch_crypto_data()
 
-        await asyncio.sleep(3600)
+                async def agent_update_task():
+                    await update_agent_answers(session_local)
 
-@save_execute
-async def main(aiohttp_session: AiohttpSession):
+                async def backup_task():
+                    await create_backup()
+
+                # Выполняем все задачи в 3:00 ночи
+                tasks = [fetch_task(), agent_update_task(), backup_task()]
+                await asyncio.gather(*tasks)
+
+                # Обновляем время последнего выполнения задач в 3:00
+                last_agent_update = next_agent_run
+
+            except Exception as e:
+                print(f"Ошибка при выполнении задач в 3:00: {e}")
+
+
+async def main():
     try:
         await check_redis_connection()
         # await create_db()
         # storage = MemoryStorage()
-        storage = RedisStorage(redis_client)
-        dp = Dispatcher(storage=storage)
 
-        bot = Bot(token=API_TOKEN, session=aiohttp_session)
-        await bot.set_my_commands([BotCommand(command="/start", description="Запустить бота")])
+        async with AiohttpSession() as aiohttp_session:
+            storage = RedisStorage(redis_client)
+            dp = Dispatcher(storage=storage)
 
-        from bot.handlers import start, help, calculate
-        dp.include_router(start.router)
-        dp.include_router(help.help_router)
-        dp.include_router(calculate.calculate_router)
-        dp.include_router(history.history_router)
-        dp.include_router(select_language.change_language_router)
-        dp.include_router(donate.donate_router)
+            bot = Bot(token=API_TOKEN, session=aiohttp_session)
 
-        dp.update.middleware(RestoreStateMiddleware())
+            logger.info("Устанавливаются команды: %s", [
+                BotCommand(command="/start", description="Запустить бота"),
+                BotCommand(command="/analysis", description="Выбрать блок аналитики")
+            ])
 
-        asyncio.create_task(parse_periodically(session_local))
+            await bot.set_my_commands([
+                BotCommand(command="/start", description="Запустить бота"),
+                BotCommand(command="/analysis", description="Выбрать блок аналитики")
+            ])
 
-        await dp.start_polling(bot)
+            from bot.handlers import start, help, calculate, analysis
+            dp.include_router(start.router)
+            dp.include_router(analysis.analysis_router)
+            dp.include_router(help.help_router)
+            dp.include_router(calculate.calculate_router)
+            dp.include_router(history.history_router)
+            dp.include_router(select_language.change_language_router)
+            dp.include_router(donate.donate_router)
+
+            dp.update.middleware(RestoreStateMiddleware(SessionLocal))
+
+            asyncio.create_task(parse_periodically())
+
+            await dp.start_polling(bot)
 
     except AttributeError as attr_error:
         logging.error(f"Ошибка доступа к атрибуту: {attr_error}", exc_info=True)
@@ -105,9 +136,8 @@ async def main(aiohttp_session: AiohttpSession):
         logging.error(f"Общая ошибка при выполнении операции: {e}", exc_info=True)
         return {"error": f"Неизвестная ошибка: {e}"}
     finally:
-        await aiohttp_session.close()
         logger.info("Завершение работы бота.")
 
 
 if __name__ == "__main__":
-    asyncio.run(main(AiohttpSession()))
+    asyncio.run(main())
