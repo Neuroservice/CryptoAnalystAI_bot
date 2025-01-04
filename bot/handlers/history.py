@@ -44,27 +44,17 @@ class HistoryState(StatesGroup):
     waiting_for_basic_data = State()
 
 
+# @history_router.message(lambda message: message.text == 'История расчетов' or message.text == 'Calculation History')
+# async def file_format_chosen(message: types.Message, state: FSMContext):
+#     await history_command(async_session, message, state)
+
+
+# @history_router.message(HistoryState.choosing_file_format)
 @history_router.message(lambda message: message.text == 'История расчетов' or message.text == 'Calculation History')
-async def file_format_chosen(session: SessionLocal(), message: types.Message, state: FSMContext):
-    result = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
-    user = result.scalars().first()
-
-    if not user:
-        user = User(telegram_id=message.from_user.id)
-        session.add(user)
-        await session.commit()
-
-    if user.language:
-        user_languages[message.from_user.id] = user.language
-
-    await message.answer(phrase_by_user("file_format", message.from_user.id), reply_markup=file_format_keyboard())
-    await state.set_state(HistoryState.choosing_file_format)
-
-
-@history_router.message(HistoryState.choosing_file_format)
-@save_execute
-async def history_command(async_session: SessionLocal(), message: types.Message, state: FSMContext):
+async def history_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
+
+    await message.answer(phrase_by_user("wait_for_zip", user_id))
 
     file_format = message.text.lower()
     await state.update_data(file_format=file_format)
@@ -86,21 +76,13 @@ async def history_command(async_session: SessionLocal(), message: types.Message,
         zip_buffer = BytesIO()
 
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_archive:
-            if file_format == 'excel':
-                for i, calculation in enumerate(last_calculations, start=1):
-                    output = BytesIO()
-                    workbook = xlsxwriter.Workbook(output)
-                    await create_excel_file(zip_archive, calculation, async_session, user_id)
-                    workbook.close()
-                    output.seek(0)
-            elif file_format == 'pdf':
-                for i, calculation in enumerate(last_calculations, start=1):
-                    pdf = FPDF(orientation='P')
-                    pdf.add_page()
-                    await create_pdf_file(zip_archive, calculation, async_session, user_id)
-                    pdf_output = BytesIO()
-                    pdf.output(pdf_output)
-                    pdf_output.seek(0)
+            for i, calculation in enumerate(last_calculations, start=1):
+                pdf = FPDF(orientation='P')
+                pdf.add_page()
+                await create_pdf_file(zip_archive, calculation, async_session, user_id)
+                pdf_output = BytesIO()
+                pdf.output(pdf_output)
+                pdf_output.seek(0)
 
         zip_buffer.seek(0)
 
@@ -112,7 +94,7 @@ async def history_command(async_session: SessionLocal(), message: types.Message,
     finally:
         await async_session.close()
 
-@save_execute
+
 async def create_pdf_file(zip_file, calc, session, user_id):
     cells_content = None
     row_data = []

@@ -6,6 +6,7 @@ phrase_dict = {
         "rebalancing_input_token": "Введите тикер токена (например SOL, SUI):",
         "analysis_input_token": "Введите тикер токена (например STRK, SUI):",
         "wait_for_calculations": "Делаю расчеты⏳\nЭто может занять некоторое время...",
+        "wait_for_zip": "Создаю архив с расчетами⏳\nЭто может занять некоторое время...",
         "calculations_end": "Завершение расчетов. Чтобы начать снова пользоваться ботом, введите команду /start.",
         "stablecoins_answer": "Вы выбрали стейблкоин. Он плохо подходит для инвестирования, так как его стоимость фиксирована. Попробуйте другой токен.",
         "fundamental_tokens_answer": "Вы выбрали фундаментальный токен. Он подходит для долгосрочных инвестиций на 5 лет и более.",
@@ -21,6 +22,7 @@ phrase_dict = {
 
         ## Ошибки
         "error_input_token_from_user": "Ошибка. Проверьте правильность введенного тикера токена и попробуйте еще раз.",
+        "beta_block": "Данный блок пока что находится в разработке. Попробуйте, пожалуйста, другой блок аналитики.",
         "error_not_valid_input_data": "Пожалуйста, убедитесь, что все данные введены корректно.\nПодробности ошибки:",
         "error_common": "Произошла ошибка.\nПодробности ошибки:",
         "error_file_format_message": "Пожалуйста, выберите формат файла: PDF или Excel.",
@@ -56,6 +58,7 @@ phrase_dict = {
         "rebalancing_input_token": "Enter the coin name (for example SOL, SUI):",
         "analysis_input_token": "Enter the token ticker (e.g. STRK, SUI):",
         "wait_for_calculations": "I'm doing the calculations⏳\nThis may take some time...",
+        "wait_for_zip": "Creating an archive with the calculations⏳\nThis may take some time...",
         "calculations_end": "Completing the calculations. To start using the bot again, enter the /start command.",
         "stablecoins_answer": "You have chosen a stablecoin. It is not good for investing because its value is fixed. Try another token.",
         "fundamental_tokens_answer": "You have chosen a fundamental token. It is suitable for long-term investments for 5 years or more.",
@@ -71,6 +74,7 @@ phrase_dict = {
 
         ## Ошибки
         "error_input_token_from_user": "Error. Check if the coin entered is correct and try again.",
+        "beta_block": "This block is still under development. Please try another analytics block.",
         "error_not_valid_input_data": "Please make sure all data is entered correctly.\nError details:",
         "error_common": "An error has occurred.\nDetails of the error:",
         "error_file_format_message": "Please select the file format: PDF or Excel.",

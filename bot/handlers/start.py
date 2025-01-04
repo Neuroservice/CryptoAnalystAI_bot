@@ -1,23 +1,19 @@
-import json
-import logging
-
 from aiogram import Router, types
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from sqlalchemy import select
 
 from bot.database.models import User
-from bot.utils.consts import user_languages, SessionLocal, STATE_FILE
+from bot.utils.consts import user_languages, session_local
 from bot.utils.keyboards.start_keyboards import main_menu_keyboard, language_keyboard
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
-from bot.utils.validations import save_execute
 
 router = Router()
 
 
 @router.message(CommandStart())
-@save_execute
-async def start_command(session: SessionLocal(), message: types.Message, state: FSMContext):
+async def start_command(message: types.Message, state: FSMContext):
+    session = session_local
     await state.clear()
     await state.set_state(None)
 
@@ -40,8 +36,8 @@ async def start_command(session: SessionLocal(), message: types.Message, state: 
 
 
 @router.message(lambda message: message.text in ['Русский', 'English'])
-@save_execute
-async def language_choice(session: SessionLocal(), message: types.Message):
+async def language_choice(message: types.Message):
+    session = session_local
     user_id = message.from_user.id
     chosen_language = 'RU' if message.text == 'Русский' else 'ENG'
 
@@ -56,28 +52,3 @@ async def language_choice(session: SessionLocal(), message: types.Message):
 
     await message.answer(phrase_by_user("hello_phrase", user.telegram_id), reply_markup=main_menu_keyboard(chosen_language))
 
-
-async def handle_first_message(message: types.Message, storage: FSMContext):
-    try:
-        user_id = message.from_user.id
-        user_key = f"user:{user_id}"
-
-        # Загрузка данных из JSON
-        with open(STATE_FILE, "r", encoding="utf-8") as file:
-            all_states = json.load(file)
-
-        # Идентификация пользователя и получение состояния
-        user_data = all_states.get(user_key, {})
-        user_state = user_data.get("state").replace(":", ".")
-        user_language = user_data.get("language")
-
-        # Установка состояния из JSON, если оно указано
-        if user_state:
-            await storage.set_state(state=user_state)
-            await message.answer(f"Ваше состояние восстановлено: {user_state} (язык: {user_language})")
-        else:
-            await message.answer(f"У вас нет активного состояния. (язык: {user_language})")
-    except FileNotFoundError:
-        await message.answer("Файл с состояниями не найден.")
-    except Exception as e:
-        logging.error(f"Ошибка при обработке состояния: {e}")

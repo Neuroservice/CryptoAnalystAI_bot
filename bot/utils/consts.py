@@ -28,11 +28,6 @@ dejavu_path = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed.ttf'  # Дл�
 # dejavu_path = '/app/fonts/DejaVuSansCondensed.ttf'  # Для прода
 
 
-# Путь к файлу состояний
-STATE_FILE = r'C:\Users\dimak\PycharmProjects\Crypto-Analyst\bot\database\user_states.json'
-# STATE_FILE = "/app/data/user_states.json"
-
-
 # Числовые константы
 MAX_MESSAGE_LENGTH = 4096
 
@@ -169,16 +164,14 @@ def get_cryptocompare_params(user_coin_name):
 
 calculations_choices = {
     'RU': (
-        "Вариант {index}\n"
         "Результаты расчета для {user_coin_name} в сравнении с {project_coin_name}:\n"
         "Возможный прирост токена (в %): {growth:.2f}%\n"
-        "Ожидаемая цена токена: {fair_price}\n"
+        "Ожидаемая цена токена: {fair_price}\n\n"
     ),
     'ENG': (
-        "Variant {index}\n"
         "Calculation results for {user_coin_name} compared to {project_coin_name}:\n"
         "Possible token growth (in %): {growth:.2f}%\n"
-        "The expected price of the token: {fair_price}\n"
+        "The expected price of the token: {fair_price}\n\n"
     )
 }
 
@@ -193,7 +186,7 @@ SessionLocal = sessionmaker(
 session_local = SessionLocal()
 
 
-client_session = ClientSession()
+client_session = ClientSession
 
 engine = create_engine(DATABASE_URL)
 async_engine = create_async_engine(DATABASE_URL, echo=True)
@@ -259,3 +252,8 @@ def prepare_ru_data_for_analysis(
            f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n" \
            f"- Оценка токеномики: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n" \
            f"**Данные для анализа токеномики**:\n{comparison_results}"
+
+
+replaced_project_twitter = {
+    "https://twitter.com/aptos_network": "https://x.com/Aptos",
+}

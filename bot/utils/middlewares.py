@@ -1,17 +1,18 @@
-import json
 from aiogram import BaseMiddleware
-from aiogram.fsm.storage.base import StorageKey
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import Update, Message, CallbackQuery, InlineQuery
-from aiogram.fsm.context import FSMContext
+from aiogram.types import Update, Message
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from bot.database.models import User
-from bot.utils.consts import STATE_FILE, user_languages, session_local
+from bot.utils.consts import user_languages, session_local
 
 
 class RestoreStateMiddleware(BaseMiddleware):
     """Middleware для восстановления языка общения с пользователем."""
+
+    def __init__(self, session_factory: async_sessionmaker):
+        super().__init__()
+        self.session_factory = session_factory
 
     async def __call__(self, handler, event: Update, data: dict):
         if not hasattr(event, 'message') or not isinstance(event.message, Message):
