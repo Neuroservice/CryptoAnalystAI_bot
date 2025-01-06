@@ -24,8 +24,12 @@ DATABASE_URL = engine_url
 logo_path = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\bot\\fasolka.jpg"  # Для локалки
 # logo_path = "/app/bot/fasolka.jpg" # Для прода
 
-dejavu_path = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed.ttf'  # Для локалки
-# dejavu_path = '/app/fonts/DejaVuSansCondensed.ttf'  # Для прода
+dejavu_path = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed.ttf'  # Для локалки (обычный)
+dejavu_bold_path = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed-Bold.ttf'  # Для локалки (жирный)
+dejavu_italic_path = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed-Oblique.ttf'  # Для локалки (курсив)
+# dejavu_path = '/app/fonts/DejaVuSansCondensed.ttf'
+# dejavu_bold_path = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed-Bold.ttf'
+# dejavu_italic_path = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed-Oblique.ttf'
 
 
 # Числовые константы

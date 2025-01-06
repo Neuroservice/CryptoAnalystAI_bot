@@ -35,7 +35,7 @@ def load_document(start_title: str, end_title: str) -> str:
 
 
 def load_document_for_category_agent() -> str:
-    return load_document("1. Категории крипто проектов", "2. Тир проекта")
+    return load_document("1. Категории крипто проектов и краткое описание", "1. Категории крипто проектов")
 
 
 def load_document_for_tier_agent() -> str:
@@ -69,9 +69,9 @@ def create_agent_response(system_content: str, user_prompt: str) -> str:
     return response.content
 
 
-def category_agent(topic):
+def category_agent(topic, language):
     system = load_document_for_category_agent()
-    user_prompt = f"Определи к какой категории относится данный проект.\nВот текстовое описание проекта: {topic}"
+    user_prompt = f"Определи к какой категории относится данный проект. Текстовое описание предоставь на языке пользователя: {language}\nВот текстовое описание проекта: {topic}"
     return create_agent_response(system, user_prompt)
 
 
@@ -115,7 +115,7 @@ def flags_agent(topic, language):
 def agent_handler(agent_type, topic, language=None):
     """Обработчик для вызова различных агентов в зависимости от типа агента."""
     agent_functions = {
-        "category": category_agent,
+        "category": lambda t: category_agent(t, language),
         "tier_agent": tier_agent,
         "tokemonic_agent": tokemonic_agent,
         "funds_agent": funds_agent,

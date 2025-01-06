@@ -1227,7 +1227,7 @@ async def generate_flags_answer(
             f"- Капитализация: ${round(tokenomics_data.capitalization, 2) if tokenomics_data and tokenomics_data.capitalization else 'N/A'}\n"
             f"- Фандрейз: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
             f"- Количество подписчиков: {social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A'} (Twitter: {replaced_project_twitter.get(twitter_link[0], twitter_link[0])})\n"
-            f"- Twitter Score: {social_metrics.social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A'}\n"
+            f"- Twitter Score: {social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A'}\n"
             f"- Тир фондов: {investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A'}\n"
             f"- Распределение токенов: {funds_profit.distribution if funds_profit and funds_profit.distribution else 'N/A'}\n"
             f"- Минимальная цена токена: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom and top_and_bottom.lower_threshold else 'N/A'}\n"
@@ -1238,7 +1238,6 @@ async def generate_flags_answer(
             f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data and  tokenomics_data.capitalization and network_metrics.tvl else 'N/A'}%\n\n"
             f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
             f"- Оценка токеномики: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
-            f"**Данные для анализа токеномики**:\n{comparison_results}"
         )
     elif (user_id and user_languages and user_languages.get(user_id) == 'ENG') or (language and language == 'ENG'):
         logging.info("Ответ будет на английском")
@@ -1264,7 +1263,6 @@ async def generate_flags_answer(
             f"- Blocked tokens (TVL): {f'{round((network_metrics.tvl / tokenomics_data.capitalization) * 100)}%' if network_metrics and network_metrics.tvl and tokenomics_data and tokenomics_data.capitalization else 'N/A'}\n"
             f"- Estimation of fund returns: {funds_answer if funds_answer else 'N/A'}\n"
             f"- Tokenomics valuation: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
-            f"Data for tokenomic analysis:\n{comparison_results}"
         )
 
     new_answer = AgentAnswer(project_id=project.id, answer=flags_answer, language=language)
