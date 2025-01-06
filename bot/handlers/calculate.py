@@ -1,10 +1,10 @@
 import logging
+import re
 import traceback
 from datetime import datetime
 from io import BytesIO
 from typing import Optional, Union
 
-import xlsxwriter
 from aiogram import Router, types, Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.context import FSMContext
@@ -36,7 +36,8 @@ from bot.utils.consts import (
     model_mapping,
     checking_map,
     dejavu_path,
-    logo_path, color_palette, get_header_params, calculations_choices, async_session, session_local
+    logo_path, get_header_params, calculations_choices, async_session, session_local, dejavu_bold_path,
+    dejavu_italic_path
 )
 from bot.utils.consts import user_languages
 from bot.utils.gpt import (
@@ -45,15 +46,12 @@ from bot.utils.gpt import (
 from bot.utils.keyboards.calculate_keyboards import analysis_type_keyboard
 from bot.utils.metrics import (
     process_metrics,
-    check_missing_fields,
-    generate_cells_content,
-    create_project_data_row
+    check_missing_fields
 )
 from bot.utils.metrics_evaluation import determine_project_tier, calculate_tokenomics_score, analyze_project_metrics, \
     calculate_project_score
 from bot.utils.project_data import (
     get_project_and_tokenomics,
-    get_full_info,
     get_twitter_link_by_symbol,
     fetch_coinmarketcap_data,
     get_user_project_info,
@@ -66,11 +64,10 @@ from bot.utils.project_data import (
     get_top_projects_by_capitalization_and_category,
     process_and_update_models, fetch_coingecko_data, generate_flags_answer, find_record, update_or_create
 )
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
-from bot.utils.resources.files_worker.pdf_worker import generate_pie_chart, PDF
-from bot.utils.resources.headers.headers import ru_additional_headers, eng_additional_headers
-from bot.utils.resources.headers.headers_handler import results_header_by_user, calculation_header_by_user
-from bot.utils.validations import validate_user_input, extract_overall_category, save_execute
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user, phrase_by_language
+from bot.utils.resources.files_worker.pdf_worker import PDF
+from bot.utils.validations import validate_user_input, extract_overall_category, save_execute, extract_description, \
+    extract_red_green_flags, extract_calculations
 
 calculate_router = Router()
 logging.basicConfig(level=logging.INFO)
@@ -417,6 +414,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     total_supply = None
     fundraise = None
     calculation_record = None
+    language = 'RU' if user_languages.get(message.from_user.id) == 'RU' else 'ENG'
 
     if await validate_user_input(user_coin_name, message, state):
         return
@@ -424,16 +422,14 @@ async def receive_data(message: types.Message, state: FSMContext):
         # Сообщаем пользователю, что будут производиться расчеты
         await message.answer(phrase_by_user("wait_for_calculations", message.from_user.id))
 
-    data = await state.get_data()
-    selected_format = data.get("file_format")
-
     twitter_name, description, lower_name = await get_twitter_link_by_symbol(user_coin_name)
     coin_description = await get_coin_description(lower_name)
     if description:
         coin_description += description
 
-    category_answer = agent_handler("category", topic=coin_description)
+    category_answer = agent_handler("category", topic=coin_description, language=language)
     overall_category = extract_overall_category(category_answer)
+    token_description = extract_description(category_answer)
     chosen_project = standardize_category(overall_category)
 
     if chosen_project == 'Unknown Category':
@@ -622,9 +618,11 @@ async def receive_data(message: types.Message, state: FSMContext):
         "tvl": network_metrics.tvl if network_metrics else None
     }
     data = {
-        "new_project": new_project,
+        "new_project": new_project.to_dict(),
         "calculation_record": calculation_record.to_dict(),
         "category_answer": category_answer,
+        "project_category": overall_category,
+        "token_description": token_description,
         "chosen_project": chosen_project,
         "twitter_name": twitter_name,
         "coin_name": user_coin_name,
@@ -801,7 +799,7 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
 
         answer = comparison_results + "\n"
         answer += flags_answer
-        answer = answer.replace('**', '')
+        answer = answer.replace('**', '').strip()
 
         if isinstance(message, Message):
             await send_long_message(bot_or_message=message, text=f"{answer}\n")
@@ -827,29 +825,27 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
 @save_execute
 async def create_pdf(session, state: FSMContext, message: Optional[Union[Message, str]] = None, user_id: Optional[int] = None):
     state_data = await state.get_data()
-    logging.info(f"state data {state_data}")
     chosen_project = state_data.get("chosen_project")
     category_answer = state_data.get("category_answer")
     new_project = state_data.get("new_project")
     coin_name = state_data.get("coin_name")
     twitter_link = state_data.get("twitter_name")
+    token_description = state_data.get("token_description")
     price = state_data.get("price")
     total_supply = state_data.get("total_supply")
     calculation_record = state_data.get("calculation_record")
+    project_category = state_data.get("project_category")
     chosen_project_obj = await find_record(Project, session, coin_name=coin_name)
     user_input = message.text if isinstance(message, Message) else message
     row_data = []
     cells_content = None
     language = 'RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'
+    coin_twitter, about, lower_name = twitter_link
+    current_date = datetime.now().strftime("%d.%m.%Y")
 
     input_lines = user_input.split('\n')
     if user_input != '-':
         process_and_update_models(input_lines, field_mapping, model_mapping, session, new_project, chosen_project_obj)
-
-    if isinstance(message, Message):
-        headers = calculation_header_by_user(message.from_user.id)
-    else:
-        headers = calculation_header_by_user(user_id)
 
     try:
         result = await get_project_and_tokenomics(session, chosen_project, get_project_and_tokenomics)
@@ -885,41 +881,14 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                     fair_price
                 ])
 
-        pdf = PDF(logo_path=logo_path, orientation='L')
+        pdf = PDF(logo_path=logo_path, orientation='P')
         pdf.add_page()
         pdf.add_font("DejaVu", '', dejavu_path, uni=True)
+        pdf.add_font("DejaVu", 'B', dejavu_bold_path, uni=True)
+        pdf.add_font("DejaVu", 'I', dejavu_italic_path, uni=True)
         pdf.set_font("DejaVu", size=8)
 
-        for header in headers:
-            if header == 'Вариант' or header == 'Option':
-                pdf.cell(30, 10, header, 1)
-            else:
-                pdf.cell(45, 10, header, 1)
-        pdf.ln()
-
-        for row in row_data:
-            for col_num, value in enumerate(row):
-                if headers[col_num] == 'Вариант' or headers[col_num] == 'Option':
-                    pdf.cell(30, 10, str(value), 1)
-                else:
-                    pdf.cell(45, 10, str(value), 1)
-            pdf.ln()
-        pdf.ln()
-
-        (
-            projects,
-            tokenomics_data_list,
-            basic_metrics_data_list,
-            invested_metrics_data_list,
-            social_metrics_data_list,
-            funds_profit_data_list,
-            top_and_bottom_data_list,
-            market_metrics_data_list,
-            manipulative_metrics_data_list,
-            network_metrics_data_list
-        ) = await get_full_info(session, chosen_project, coin_name)
-
-        project_info = await get_user_project_info(session, new_project.coin_name)
+        project_info = await get_user_project_info(session, new_project["coin_name"])
         project = project_info.get("project")
         basic_metrics = project_info.get("basic_metrics")
         tokenomics_data = project_info.get("tokenomics_data")
@@ -931,15 +900,19 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
         top_and_bottom = project_info.get("top_and_bottom")
         network_metrics = project_info.get("network_metrics")
 
-        print(new_project.coin_name, project.coin_name, manipulative_metrics.top_100_wallet)
-
         existing_answer = await find_record(AgentAnswer, session, project_id=project.id, language=('RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'))
 
         comparison_results = ""
         result_index = 1
+
+        print(row_data)
+
         for index, coin_name, project_coin, expected_x, fair_price in row_data:
+            print(index, coin_name, project_coin, expected_x, fair_price)
             if project_coin != coin_name:
-                if project.coin_name in tickers:
+                print("в первом условии")
+                if project_coin in tickers:
+                    print("во втором условии")
                     try:
                         if isinstance(expected_x, str):
                             growth = float(expected_x)
@@ -978,16 +951,34 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         print(f"fair_price: {fair_price}, type: {type(fair_price)}")
                         raise
 
-        if existing_answer is None:
-            tier_answer = determine_project_tier(
-                capitalization=tokenomics_data.capitalization if tokenomics_data else 'N/A',
-                fundraising=investing_metrics.fundraise if investing_metrics else 'N/A',
-                twitter_followers=social_metrics.twitter if social_metrics else 'N/A',
-                twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
-                category=project.category if project else 'N/A',
-                investors=investing_metrics.fund_level if investing_metrics else 'N/A',
-            )
+        print(comparison_results)
 
+        all_data_string_for_funds_agent = (
+            f"Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
+        )
+        funds_agent_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
+
+        funds_answer, funds_scores, funds_score, growth_and_fall_score, top_100_score, tvl_score = analyze_project_metrics(
+            funds_agent_answer,
+            investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
+            tokenomics_data.total_supply if tokenomics_data and tokenomics_data.total_supply else 'N/A',
+            basic_metrics.market_price if basic_metrics and basic_metrics.market_price else 'N/A',
+            round((market_metrics.growth_low - 100) * 100, 2) if market_metrics and market_metrics.growth_low else 'N/A',
+            round(market_metrics.fail_high * 100, 2) if market_metrics and market_metrics.fail_high else 'N/A',
+            manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A',
+            (network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'
+        )
+
+        tier_answer = determine_project_tier(
+            capitalization=tokenomics_data.capitalization if tokenomics_data else 'N/A',
+            fundraising=investing_metrics.fundraise if investing_metrics else 'N/A',
+            twitter_followers=social_metrics.twitter if social_metrics else 'N/A',
+            twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
+            category=project.category if project else 'N/A',
+            investors=investing_metrics.fund_level if investing_metrics else 'N/A',
+        )
+
+        if existing_answer is None:
             data_for_tokenomics = []
             for index, coin_name, project_coin, expected_x, fair_price in row_data:
                 ticker = project_coin
@@ -995,29 +986,13 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
             tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
 
-            all_data_string_for_funds_agent = (
-                f"Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
-            )
-            funds_agent_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
-
-            funds_answer, funds_scores = analyze_project_metrics(
-                funds_agent_answer,
-                investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
-                tokenomics_data.total_supply if tokenomics_data and tokenomics_data.total_supply else 'N/A',
-                basic_metrics.market_price if basic_metrics and basic_metrics.market_price else 'N/A',
-                round((market_metrics.growth_low - 100) * 100, 2) if market_metrics and market_metrics.growth_low else 'N/A',
-                round(market_metrics.fail_high * 100, 2) if market_metrics and market_metrics.fail_high else 'N/A',
-                manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A',
-                (network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'
-            )
-
             project_rating_result = calculate_project_score(
                 investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
                 tier_answer,
                 social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A',
                 social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A',
                 tokemonic_score if tokemonic_answer else 'N/A',
-                funds_scores if funds_answer else 'N/A'
+                funds_scores if funds_scores else 'N/A'
             )
             project_rating_answer = project_rating_result["calculations_summary"]
 
@@ -1035,122 +1010,184 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                                         funds_profit, market_metrics, manipulative_metrics, network_metrics, tier_answer, funds_answer, tokemonic_answer,
                                         comparison_results, category_answer, twitter_link, top_and_bottom, language)
 
-            agent_answer_record = AgentAnswer(
-                project_id=project.id,
-                answer=flags_answer,
-                language='RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'
-            )
-            session.add(agent_answer_record)
-
         else:
             flags_answer = existing_answer.answer
 
-        existing_calculation = await find_record(Calculation, session, id=calculation_record.id)
+        existing_calculation = await find_record(Calculation, session, id=calculation_record["id"])
         existing_calculation.agent_answer = flags_answer
         session.add(existing_calculation)
 
-        answer = comparison_results + "\n"
-        answer += flags_answer
+        answer = flags_answer
         answer = answer.replace('**', '')
+        answer += "**Данные для анализа токеномики**:\n" + comparison_results
+        answer = re.sub(r'\n\s*\n', '\n', answer)
 
-        investor_data_list = []
-        headers_mapping = results_header_by_user(user_id)
-        for header_set in headers_mapping:
-            for header in header_set:
-                if header == 'Тир фондов' or header == 'Fund Tier':
-                    pdf.cell(230, 10, header, 1)
-                elif header == 'Сфера' or header == 'Sphere':
-                    pdf.cell(50, 10, header, 1)
-                elif header == 'FDV':
-                    pdf.cell(70, 10, header, 1)
-                else:
-                    pdf.cell(40, 10, header, 1)
-            pdf.ln()
+        print(answer)
 
-            for index, (project, tokenomics_data) in enumerate(tokenomics_data_list, start=1):
-                for tokenomics in tokenomics_data:
-                    funds_profit = next((fp for fp in funds_profit_data_list if fp[0] == project), None)
-                    cells_content = generate_cells_content(
-                        basic_metrics_data_list,
-                        invested_metrics_data_list,
-                        social_metrics_data_list,
-                        market_metrics_data_list,
-                        manipulative_metrics_data_list,
-                        network_metrics_data_list,
-                        top_and_bottom_data_list,
-                        project,
-                        header_set,
-                        headers_mapping,
-                        tokenomics,
-                        cells_content
-                    )
+        if language == "RU":
+            match = re.search(r"Итоговые баллы проекта?:\s*([\d.]+)\s*баллов?\s*–\s*оценка\s*“(.+?)”", answer)
+        else:
+            match = re.search(r"Total Project Score:\s*([\d.]+)\s*points\s*–\s*rating\s*“(.+?)”", answer)
 
-                    if len(cells_content) != len(header_set):
-                        print(f"Ошибка: количество значений {len(cells_content)} не соответствует заголовкам {len(header_set)}.")
-                        continue
+        if match:
+            project_score = float(match.group(1))  # Извлекаем баллы
+            project_rating = match.group(2)  # Извлекаем оценку
+            print(f"Итоговые баллы: {project_score}")
+            print(f"Оценка проекта: {project_rating}")
+        else:
+            project_score = "Данных по баллам не поступило" if language == "RU" else "No data on scores were received"
+            project_rating = "Нет данных по оценке баллов проекта" if language == "RU" else "No data available on project scoring"
+            print("Не удалось найти итоговые баллы и/или оценку.")
 
-                    cell_widths = []
-                    for i, content in enumerate(cells_content):
-                        if i < len(header_set) and (header_set[i] == 'Тир фондов' or header_set[i] == 'Fund Tier'):
-                            cell_widths.append(230)
-                        elif i < len(header_set) and (header_set[i] == 'Сфера' or header_set[i] == 'Sphere'):
-                            cell_widths.append(50)
-                        elif i < len(header_set) and header_set[i] == 'FDV':
-                            cell_widths.append(70)
-                        else:
-                            cell_widths.append(40)
+        red_green_flags = extract_red_green_flags(answer, language)
+        calculations = extract_calculations(answer, language)
 
-                    max_lines = 1
-                    for i, content in enumerate(cells_content):
-                        content_width = pdf.get_string_width(content)
-                        lines = (content_width // cell_widths[i]) + 1
-                        if lines > max_lines:
-                            max_lines = lines
+        if top_and_bottom and top_and_bottom.lower_threshold and top_and_bottom.upper_threshold:
+            top_and_bottom_answer = phrase_by_user(
+                'top_bottom_values',
+                message.from_user.id if isinstance(message, Message) else user_id,
+                current_value=round(basic_metrics.market_price, 4),
+                min_value=round(top_and_bottom.lower_threshold, 4),
+                max_value=round(top_and_bottom.upper_threshold, 4)
+            )
+        else:
+            top_and_bottom_answer = phrase_by_user(
+                'top_bottom_values',
+                message.from_user.id if isinstance(message, Message) else user_id,
+                current_value=round(basic_metrics.market_price, 4),
+                min_value="Нет данных",
+                max_value="Нет данных"
+            )
 
-                    cell_height = max_lines * 10
-                    for i, content in enumerate(cells_content):
-                        if pdf.get_string_width(content) > cell_widths[i]:
-                            pdf.multi_cell(cell_widths[i], 10, content, 1)
-                            current_y = pdf.get_y()
-                            pdf.set_xy(pdf.get_x(), current_y - 10)
-                        else:
-                            pdf.cell(cell_widths[i], cell_height, content, 1)
-                pdf.ln()
+        funds_profit_scores = f"{funds_score} баллов из 100"
+        if funds_profit and funds_profit.distribution:
+            distribution_items = funds_profit.distribution.split('\n')
+            formatted_distribution = "\n".join([f"- {item}" for item in distribution_items])
+        else:
+            formatted_distribution = 'Нет данных по распределению токенов' if language == 'RU' else 'No token distribution data'
 
-                if funds_profit and funds_profit[1] and funds_profit[1][0].distribution and (project.coin_name, funds_profit[1][0].distribution) not in investor_data_list:
-                    investor_data_list.append((project.coin_name, funds_profit[1][0].distribution))
+        formatted_metrics = [
+            f"- {'Капитализация проекта' if language == 'RU' else 'Project capitalization'}: ${round(tokenomics_data.capitalization, 0)}"
+            if tokenomics_data and tokenomics_data.capitalization else (
+                "- Капитализация проекта: Нет данных" if language == 'RU' else "- Project capitalization: No info"
+            ),
+            f"- {'Полная капитализация проекта (FDV)' if language == 'RU' else 'Fully Diluted Valuation (FDV)'}: ${round(tokenomics_data.fdv, 0)}"
+            if tokenomics_data and tokenomics_data.fdv else (
+                "- Полная капитализация проекта (FDV): Нет данных" if language == 'RU' else "- Fully Diluted Valuation (FDV): No info"
+            ),
+            f"- {'Общее количество токенов (Total Supply)' if language == 'RU' else 'Total Supply'}: {round(tokenomics_data.total_supply, 0)}"
+            if tokenomics_data and tokenomics_data.total_supply else (
+                "- Общее количество токенов (Total Supply): Нет данных" if language == 'RU' else "- Total Supply: No info"
+            ),
+            f"- {'Сумма сбора средств от инвесторов (Fundraising)' if language == 'RU' else 'Fundraising'}: ${round(investing_metrics.fundraise, 0)}"
+            if investing_metrics and investing_metrics.fundraise else (
+                "- Сумма сбора средств от инвесторов (Fundraising): Нет данных" if language == 'RU' else "- Fundraising: No info"
+            ),
+            f"- {'Количество подписчиков на Twitter' if language == 'RU' else 'Twitter followers'} ({twitter_link[0]}): {social_metrics.twitter}"
+            if social_metrics and social_metrics.twitter else (
+                "- Количество подписчиков на Twitter: Нет данных" if language == 'RU' else "- Twitter followers: No info"
+            ),
+            f"- {'Twitter Score'}: {social_metrics.twitterscore}"
+            if social_metrics and social_metrics.twitterscore else (
+                "- Twitter Score: Нет данных" if language == 'RU' else "- Twitter Score: No info"
+            ),
+            f"- {'Общая стоимость заблокированных активов (TVL)' if language == 'RU' else 'Total Value Locked (TVL)'}: ${round(network_metrics.tvl, 0)}"
+            if network_metrics and network_metrics.tvl else (
+                "- Общая стоимость заблокированных активов (TVL): Нет данных" if language == 'RU' else "- Total Value Locked (TVL): No info"
+            ),
+            f"- {'Процент нахождения токенов на топ 100 кошельков блокчейна' if language == 'RU' else 'Percentage of tokens on top 100 wallets'}: {round(manipulative_metrics.top_100_wallet * 100, 2)}%"
+            if manipulative_metrics and manipulative_metrics.top_100_wallet else (
+                "- Процент нахождения токенов на топ 100 кошельков блокчейна: Нет данных" if language == 'RU' else "- Percentage of tokens on top 100 wallets: No info"
+            ),
+            f"- {'Инвесторы' if language == 'RU' else 'Investors'}: {investing_metrics.fund_level}"
+            if investing_metrics and investing_metrics.fund_level else (
+                "- Инвесторы: Нет данных" if language == 'RU' else "- Investors: No info"
+            ),
+        ]
 
-            pdf.ln()
+        formatted_metrics_text = "\n".join(formatted_metrics)
 
-        pdf.add_page()
-        page_width = pdf.w
-        diagram_per_page = 4
-        diagrams_on_page = 0
-        chart_width = 110
-        x_pos_left = (page_width / 4) - (chart_width / 2)
-        x_pos_right = (3 * page_width / 4) - (chart_width / 2)
+        pdf.set_font("DejaVu", size=12)
+        pdf.cell(0, 6, f"{'Анализ проекта' if language == 'RU' else 'Project analysis'} {lower_name.capitalize()} (${coin_name.upper()})", 0, 1, 'L')
+        pdf.cell(0, 6, f"{current_date}", 0, 1, 'L')
 
-        for i, (coin_name, distribution_data) in enumerate(investor_data_list):
-            if diagrams_on_page == diagram_per_page:
-                pdf.add_page()
-                diagrams_on_page = 0
+        pdf.ln(6)
 
-            y_pos = 30 + (diagrams_on_page // 2) * 90
+        pdf.set_font("DejaVu", style='B', size=12)
+        pdf.cell(0, 6, f"{'Описание проекта' if language == 'RU' else 'Project description'}:", 0, 1, 'L')
+        pdf.set_font("DejaVu", size=12)
+        pdf.multi_cell(0, 6, token_description, 0)
 
-            if i % 2 == 0:
-                x_pos = x_pos_left
-            else:
-                x_pos = x_pos_right
+        pdf.ln(6)
 
-            pdf.set_font("DejaVu", size=12)
-            pdf.set_xy(x_pos, y_pos - 10)
-            pdf.cell(90, 10, f"Распределение токенов для {coin_name}", 0, 1, 'C')
+        pdf.set_font("DejaVu", style='B', size=12)
+        pdf.cell(0, 6, f"{'Проект относится к категории' if language == 'RU' else 'The project is categorized as'}:", 0, 1, 'L')
+        pdf.set_font("DejaVu", size=12)
+        pdf.multi_cell(0, 6, chosen_project, 0)
 
-            pie_chart_img = generate_pie_chart(distribution_data)
-            pdf.image(pie_chart_img, x=x_pos, y=y_pos, w=chart_width, h=85)
+        pdf.ln(6)
 
-            diagrams_on_page += 1
+        pdf.set_font("DejaVu", style='B', size=12)
+        pdf.multi_cell(0, 6, f"{f'Метрики проекта (уровень {tier_answer})' if language == 'RU' else f'Project metrics (level {tier_answer})'}:", 0)
+        pdf.set_font("DejaVu", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, formatted_metrics_text, 0)
 
+        pdf.ln(6)
+
+        pdf.set_font("DejaVu", style='B', size=12)
+        pdf.multi_cell(0, 6, f"{'Распределение токенов' if language == 'RU' else 'Token distribution'}:", 0)
+        pdf.set_font("DejaVu", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, formatted_distribution, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("DejaVu", style='B', size=12)
+        pdf.multi_cell(0, 6, f"{phrase_by_user('funds_profit_scores', message.from_user.id if isinstance(message, Message) else user_id)}:", 0)
+        pdf.set_font("DejaVu", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, funds_profit_scores, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("DejaVu", style='B', size=12)
+        pdf.multi_cell(0, 6, f"{phrase_by_user('top_bottom_2_years', message.from_user.id if isinstance(message, Message) else user_id)}", 0)
+        pdf.set_font("DejaVu", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, top_and_bottom_answer, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("DejaVu", style='B', size=12)
+        pdf.cell(0, 6, f"{phrase_by_user('comparing_calculations', message.from_user.id if isinstance(message, Message) else user_id)}", 0, 1, 'L')
+        pdf.set_font("DejaVu", size=12)
+        pdf.multi_cell(0, 6, calculations, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("DejaVu", style='B', size=12)
+        pdf.cell(0, 6, f"{f'Общая оценка проекта {project_score} баллов ({project_rating})' if language == 'RU' else f'Overall project evaluation {project_score} points ({project_rating})'}", 0, 1, 'L')
+        pdf.set_font("DejaVu", size=12)
+
+        pdf.ln(6)
+
+        pdf.set_font("DejaVu", style='B', size=12)
+        pdf.cell(0, 6, f"{'«Ред» флаги и «грин» флаги' if language == 'RU' else '«Red» flags and «green» flags'}:", 0, 1, 'L')
+        pdf.set_font("DejaVu", size=12)
+        pdf.multi_cell(0, 6, red_green_flags, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("DejaVu", style='I', size=12)
+        pdf.multi_cell(0, 6, f"***{phrase_by_user('ai_help', message.from_user.id if isinstance(message, Message) else user_id)}", 0)
+        pdf.ln(0.1)
+        pdf.set_font("DejaVu", size=12, style='IU')
+        pdf.set_text_color(0, 0, 255)  # Синий цвет для ссылки
+        pdf.cell(0, 6, "https://t.me/FasolkaAI_bot", 0, 1, 'L', link="https://t.me/FasolkaAI_bot")
+        pdf.set_font("DejaVu", size=12)
+
+        # Сохраняем PDF в память
         pdf_output = BytesIO()
         pdf.output(pdf_output)
         pdf_output.seek(0)
@@ -1158,12 +1195,18 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
         await session.commit()
 
         if isinstance(message, Message):
-            # Отправляем файл с расчетами
-            await message.answer_document(BufferedInputFile(pdf_output.read(), filename="results.pdf"))
+            await message.send_message(
+                chat_id=user_id,
+                text=phrase_by_language("project_analysis_result", language).format(
+                    lower_name=lower_name.capitalize(),
+                    project_score=project_score,
+                    project_rating=project_rating
+                ),
+                reply_markup=ReplyKeyboardRemove()
+            )
 
-            # Отправляем сообщение с рейтингом проекта
-            await send_long_message(message, f"{phrase_by_user('overal_project_rating', user_id)} \n{answer}\n")
-            await message.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", user_id), reply_markup=ReplyKeyboardRemove())
+            await message.answer_document(BufferedInputFile(pdf_output.read(), filename="results.pdf"))
+            await message.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", message.from_user.id), reply_markup=ReplyKeyboardRemove())
 
             # Очищаем состояние и устанавливаем новое состояние на ожидание ввода нового токена
             await state.set_state(None)
@@ -1173,11 +1216,16 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             async with AiohttpSession() as session:
                 bot = Bot(token=API_TOKEN, session=session)
 
-                # Отправляем файл с расчетами
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=phrase_by_language("project_analysis_result", language).format(
+                        lower_name=lower_name.capitalize(),
+                        project_score=project_score,
+                        project_rating=project_rating
+                    ),
+                    reply_markup=ReplyKeyboardRemove()
+                )
                 await bot.send_document(chat_id=user_id, document=BufferedInputFile(pdf_output.read(), filename="results.pdf"))
-
-                # Отправляем сообщение с рейтингом проекта
-                await send_long_message(bot, f"{phrase_by_user('overal_project_rating', user_id)} \n{answer}\n", chat_id=user_id)
                 await bot.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", user_id), reply_markup=ReplyKeyboardRemove())
 
                 # Очищаем состояние и устанавливаем новое состояние на ожидание ввода нового токена

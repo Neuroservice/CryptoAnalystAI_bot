@@ -279,7 +279,7 @@ def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_p
     total_score = tvl_score + top_100_score + growth_and_fall_score + funds_score
     detailed_report += f"\n[Total Score]: {total_score}\n"
 
-    return detailed_report, total_score
+    return detailed_report, total_score, funds_score, growth_and_fall_score, top_100_score, tvl_score
 
 
 def calculate_project_score(fundraising, tier, twitter_followers, twitter_score, tokenomics_score, profitability_score):

@@ -19,6 +19,12 @@ phrase_dict = {
         "model_answer_for_calculations": "Ответ модели по расчету:",
         "tokens_distribution": "Распределение токенов для: ",
         "donate": "Задонатить на развитие проекта можно на наш кошелек:\n\nСети: BNB, ARB, OP, ERC20\n\n",
+        "project_analysis_result": "Проведен анализ проекта {lower_name}. Общая оценка проекта {project_score} баллов ({project_rating}). Подробности анализа в файле:",
+        "ai_help": "Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться нашим ИИ консультантом.",
+        "comparing_calculations": "Сравнение проекта с другими, схожими по уровню и категории:",
+        "top_bottom_2_years": "Данные роста/падения токена с минимальных и максимальных значений (за последние 2 года):",
+        "top_bottom_values": "Текущее значение: ${current_value}\nМинимальные значения: ${min_value}\nМаксимальные значения: ${max_value}",
+        "funds_profit_scores": "Оценка прибыльности инвесторов",
 
         ## Ошибки
         "error_input_token_from_user": "Ошибка. Проверьте правильность введенного тикера токена и попробуйте еще раз.",
@@ -62,7 +68,7 @@ phrase_dict = {
         "calculations_end": "Completing the calculations. To start using the bot again, enter the /start command.",
         "stablecoins_answer": "You have chosen a stablecoin. It is not good for investing because its value is fixed. Try another token.",
         "fundamental_tokens_answer": "You have chosen a fundamental token. It is suitable for long-term investments for 5 years or more.",
-        "input_next_token": "Enter the ticker of the next token (e.g. STRK, SUI) or enter /exit to complete:",
+        "input_next_token_for_analysis": "Enter the ticker of the next token (e.g. STRK, SUI) or enter /exit to complete:",
         "input_next_token_for_basic_report": "Enter the ticker of the next token (e.g. APT, ZK) or type /exit to complete:",
         "overal_project_rating": "Overall project evaluation:",
         "language_changed": "Your language has been changed to English.",
@@ -71,6 +77,12 @@ phrase_dict = {
         "model_answer_for_calculations": "Model response by calculation:",
         "tokens_distribution": "Distribution of tokens for: ",
         "donate": "You can donate for the development of the project on our wallet:\n\nNetworks: BNB, ARB, OP, ERC20\n\n",
+        "project_analysis_result": "The project {lower_name} has been analyzed.The overall project score is {project_score} points ({project_rating}). Details of the analysis are in the file:",
+        "ai_help": "If you do not understand the terminology in the report, you can use our AI consultant.",
+        "comparing_calculations": "Comparing the project with others similar in level and category:",
+        "top_bottom_2_years": "Token growth/decline data from minimum and maximum values (for the last 2 years):",
+        "top_bottom_values": "Current value: ${current_value}\nMinimum values: ${min_value}\nMaximum values: ${max_value}",
+        "funds_profit_scores": "Evaluating investor profitability",
 
         ## Ошибки
         "error_input_token_from_user": "Error. Check if the coin entered is correct and try again.",
