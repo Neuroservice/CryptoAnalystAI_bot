@@ -287,18 +287,18 @@ def calculate_project_score(fundraising, tier, twitter_followers, twitter_score,
     FOLLOWERS_DIVISOR = 15_000
     TWITTER_SCORE_MULTIPLIER = 0.1
     TIER_SCORES = {
-        "TIER 1": 100,
-        "TIER 2": 80,
-        "TIER 3": 60,
-        "TIER 4": 30,
-        "TIER 5": 0
+        "Tier 1": 100,
+        "Tier 2": 80,
+        "Tier 3": 60,
+        "Tier 4": 30,
+        "Tier 5": 0
     }
     TIER_COEFFICIENTS = {
-        "TIER 1": 1.00,
-        "TIER 2": 0.90,
-        "TIER 3": 0.80,
-        "TIER 4": 0.70,
-        "TIER 5": 0.60
+        "Tier 1": 1.00,
+        "Tier 2": 0.90,
+        "Tier 3": 0.80,
+        "Tier 4": 0.70,
+        "Tier 5": 0.60
     }
 
     # Обработка значений N/A и их замена на 0
@@ -310,6 +310,7 @@ def calculate_project_score(fundraising, tier, twitter_followers, twitter_score,
     if tier == 'N/A':
         tier = 'TIER 5'  # Можно задать значение по умолчанию для TIER
 
+    twitter_followers = clean_twitter_subs(twitter_followers)
     if twitter_followers == 'N/A' or not isinstance(twitter_followers, (int, float)):
         twitter_followers = 0
     else:
@@ -333,6 +334,7 @@ def calculate_project_score(fundraising, tier, twitter_followers, twitter_score,
     fundraising_score = round(fundraising / FUNDRAISING_DIVISOR, 2)
     tier_score = TIER_SCORES.get(tier, 0)
     followers_score = round(twitter_followers / FOLLOWERS_DIVISOR, 2)
+
     twitter_engagement_score = round(twitter_score * TWITTER_SCORE_MULTIPLIER, 2)
 
     preliminary_score = (

@@ -1,4 +1,5 @@
 import logging
+import re
 import traceback
 import zipfile
 from io import BytesIO
@@ -18,7 +19,8 @@ from bot.utils.consts import (
     column_widths,
     logo_path,
     dejavu_path,
-    color_palette, SessionLocal, async_session
+    color_palette, SessionLocal, async_session, patterns, ai_help_ru, ai_help_ru_split, ai_help_en, ai_help_en_split,
+    dejavu_bold_path, dejavu_italic_path
 )
 from bot.utils.keyboards.history_keyboards import file_format_keyboard
 from bot.utils.metrics import create_project_data_row, generate_cells_content
@@ -28,7 +30,7 @@ from bot.utils.resources.files_worker.pdf_worker import PDF, generate_pie_chart
 from bot.utils.resources.headers.headers import ru_results_headers, eng_results_headers, ru_additional_headers, \
     eng_additional_headers
 from bot.utils.resources.headers.headers_handler import calculation_header_by_user, write_headers
-from bot.utils.validations import save_execute
+from bot.utils.validations import save_execute, extract_old_calculations
 
 history_router = Router()
 matplotlib.use('Agg')
@@ -44,20 +46,12 @@ class HistoryState(StatesGroup):
     waiting_for_basic_data = State()
 
 
-# @history_router.message(lambda message: message.text == 'История расчетов' or message.text == 'Calculation History')
-# async def file_format_chosen(message: types.Message, state: FSMContext):
-#     await history_command(async_session, message, state)
-
-
-# @history_router.message(HistoryState.choosing_file_format)
 @history_router.message(lambda message: message.text == 'История расчетов' or message.text == 'Calculation History')
 async def history_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
+    language = 'RU' if user_languages.get(user_id) == 'RU' else 'ENG'
 
     await message.answer(phrase_by_user("wait_for_zip", user_id))
-
-    file_format = message.text.lower()
-    await state.update_data(file_format=file_format)
 
     try:
         query = (
@@ -79,7 +73,7 @@ async def history_command(message: types.Message, state: FSMContext):
             for i, calculation in enumerate(last_calculations, start=1):
                 pdf = FPDF(orientation='P')
                 pdf.add_page()
-                await create_pdf_file(zip_archive, calculation, async_session, user_id)
+                await create_pdf_file(zip_archive, calculation, async_session, user_id, language)
                 pdf_output = BytesIO()
                 pdf.output(pdf_output)
                 pdf_output.seek(0)
@@ -95,204 +89,175 @@ async def history_command(message: types.Message, state: FSMContext):
         await async_session.close()
 
 
-async def create_pdf_file(zip_file, calc, session, user_id):
-    cells_content = None
-    row_data = []
-    formatted_lines = []
-    skip_empty_line = False
+async def create_pdf_file(zip_file, calc, session, user_id, language):
     readable_date = calc.date.strftime("%Y-%m-%d_%H-%M-%S")
     file_name = f"calculation_{readable_date}.pdf"
+    current_date = calc.date.strftime("%d.%m.%Y")
 
-    pdf = PDF(logo_path=logo_path, orientation='L')
+    pdf = PDF(logo_path=logo_path, orientation='P')
     pdf.add_page()
     pdf.add_font("DejaVu", '', dejavu_path, uni=True)
-    # pdf.add_font("DejaVu", '', dejavu_path, uni=True)
-    headers = calculation_header_by_user(user_id)
+    pdf.add_font("DejaVu", 'B', dejavu_bold_path, uni=True)
+    pdf.add_font("DejaVu", 'I', dejavu_italic_path, uni=True)
 
     agent_answer = calc.agent_answer if calc.agent_answer else "Ответ модели отсутствует"
-    pdf.set_font("DejaVu", size=8)
-    lines = agent_answer.split('\n')
+    pdf.set_font("DejaVu", size=12)
+    flags_answer = agent_answer
 
-    for line in lines:
-        if line.startswith("**Положительные характеристики:**") or line.startswith("**Отрицательные характеристики:**"):
-            formatted_lines.append(line)
-            skip_empty_line = True
-        elif skip_empty_line and not line.strip():
-            continue
-        else:
-            formatted_lines.append(line.strip())
-            skip_empty_line = False
-
-    formatted_answer = "\n".join(formatted_lines)
-    pdf.multi_cell(0, 10, f"{phrase_by_user('model_answer_for_calculations', user_id)}\n{formatted_answer}\n", align='L')
-    pdf.set_font("DejaVu", size=10)
-
-    base_project, basic_metrics, similar_projects, base_tokenomics = await get_project_data(calc, session)
-    (
-        projects,
-        tokenomics_data_list,
-        basic_metrics_data_list,
-        invested_metrics_data_list,
-        social_metrics_data_list,
-        funds_profit_data_list,
-        top_and_bottom_data_list,
-        market_metrics_data_list,
-        manipulative_metrics_data_list,
-        network_metrics_data_list
-    ) = await get_full_info(session, base_project.category, base_project.coin_name)
-
-    result_index = 1
-    for index, (project, tokenomics_data) in enumerate(tokenomics_data_list, start=1):
-        for tokenomics in tokenomics_data:
-            if base_project.coin_name != project.coin_name:
-                fdv = tokenomics.fdv if tokenomics.fdv is not None else 0
-                calculation_result = calculate_expected_x(
-                    entry_price=basic_metrics.market_price,
-                    total_supply=base_tokenomics.total_supply,
-                    fdv=fdv,
-                )
-
-                if "error" in calculation_result:
-                    raise ValueError(calculation_result["error"])
-
-                fair_price = f"{calculation_result['fair_price']:.5f}" if isinstance(calculation_result['fair_price'], (int, float)) else "Ошибка в расчетах"
-                expected_x = f"{calculation_result['expected_x']:.5f}"
-
-                row_data.append([
-                    result_index,
-                    base_project.coin_name,
-                    project.coin_name,
-                    expected_x,
-                    fair_price
-                ])
-                result_index += 1
-
-    for header in headers:
-        if header == ('Вариант' or 'Option'):
-            pdf.cell(30, 10, header, 1)
-        elif header == ('Расчеты относительно монеты' or 'Calculations relative to coin'):
-            pdf.cell(55, 10, header, 1)
-        elif header == ('Ожидаемая цена монеты, $' or 'Expected market price, $'):
-            pdf.cell(50, 10, header, 1)
-        else:
-            pdf.cell(45, 10, header, 1)
-    pdf.ln()
-
-    for row in row_data:
-        for col_num, value in enumerate(row):
-            if headers[col_num] == ('Вариант' or 'Option'):
-                pdf.cell(30, 10, str(value), 1)
-            elif headers[col_num] == ('Расчеты относительно монеты' or 'Calculations relative to coin'):
-                pdf.cell(55, 10, str(value), 1)
-            elif headers[col_num] == ('Ожидаемая цена монеты, $' or 'Expected market price, $'):
-                pdf.cell(50, 10, str(value), 1)
-            else:
-                pdf.cell(45, 10, str(value), 1)
-        pdf.ln()
-    pdf.ln()
-
-    if user_languages.get(user_id) == 'RU':
-        headers_mapping = ru_results_headers
+    if language == "RU":
+        match = re.search(r"Общая оценка проекта\s*([\d.]+)\s*баллов?\s*\((.+?)\)", flags_answer)
     else:
-        headers_mapping = eng_results_headers
+        match = re.search(r"Overall project evaluation\s*([\d.]+)\s*points\s*\((.+?)\)", flags_answer)
 
-    investor_data_list = []
-    for header_set in headers_mapping:
-        for header in header_set:
-            if header == ('Тир фондов' or 'Fund Tier'):
-                pdf.cell(230, 10, header, 1)
-            elif header == ('Сфера' or 'Sphere'):
-                pdf.cell(80, 10, header, 1)
-            elif header == 'FDV':
-                pdf.cell(70, 10, header, 1)
+    if match:
+        project_score = float(match.group(1))  # Извлекаем баллы
+        project_rating = match.group(2)  # Извлекаем оценку
+        print(f"Итоговые баллы: {project_score}")
+        print(f"Оценка проекта: {project_rating}")
+    else:
+        project_score = "Данных по баллам не поступило" if language == "RU" else "No data on scores were received"
+        project_rating = "Нет данных по оценке баллов проекта" if language == "RU" else "No data available on project scoring"
+        print("Не удалось найти итоговые баллы и/или оценку.")
+
+    selected_patterns = patterns["RU"] if language == "RU" else patterns["EN"]
+
+    # Обработка текста для PDF
+    text_to_parse = flags_answer  # Исходный текст для обработки
+
+    # Добавление в PDF
+    pdf.set_font("DejaVu", size=12)
+    pdf.cell(0, 6, f"{'Анализ проекта' if language == 'RU' else 'Project analysis'}", 0, 1, 'L')
+    pdf.cell(0, 6, current_date, 0, 1, 'L')
+    pdf.ln(6)
+
+    for pattern in selected_patterns:
+        match = re.search(pattern, text_to_parse, re.IGNORECASE | re.DOTALL)
+        if match:
+            # Извлекаем заголовок
+            start, end = match.span()
+            header = match.group(1)
+
+            # Извлекаем содержимое под заголовком
+            content_start = end
+            next_header_match = None
+            for next_pattern in selected_patterns:
+                next_header_match = re.search(next_pattern, text_to_parse[end:], re.IGNORECASE)
+                if next_header_match:
+                    break
+
+            content_end = next_header_match.start() + end if next_header_match else len(text_to_parse)
+            content = text_to_parse[content_start:content_end].strip()
+
+            if re.search(ai_help_ru, content, re.DOTALL):
+                parts = re.split(ai_help_ru_split, content, maxsplit=1)
+                before_text = parts[0].strip()
+
+                # Добавляем заголовок жирным
+                pdf.set_font("DejaVu", style="B", size=12)
+                pdf.multi_cell(0, 6, header, 0)
+
+                pdf.ln(0.1)
+
+                # Обычный текст до фразы
+                pdf.set_font("DejaVu", size=12)
+                if header == "«Ред» флаги и «грин» флаги:":
+                    lines = before_text.splitlines()
+                    cleaned_lines = []
+                    for line in lines:
+                        stripped_line = " ".join(line.split())  # Убираем лишние пробелы внутри строки
+                        if stripped_line.startswith("-"):  # Если строка начинается с пункта списка
+                            cleaned_lines.append(stripped_line)
+                        elif cleaned_lines and not cleaned_lines[-1].endswith(
+                                ":"):  # Присоединяем к предыдущей строке
+                            cleaned_lines[-1] += f" {stripped_line}"
+                        else:
+                            cleaned_lines.append(stripped_line)
+                    before_text = "\n".join(cleaned_lines)
+
+                if "Отрицательные характеристики:" in before_text:
+                    before_text = before_text.replace("Отрицательные характеристики:","\nОтрицательные характеристики:")
+                pdf.multi_cell(0, 6, before_text, 0)
+
+                pdf.ln(0.1)
+
+                # Текст с курсивом (фраза и ссылка)
+                pdf.set_font("DejaVu", style="I", size=12)
+                pdf.multi_cell(0, 6,
+                               f"\n\n***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться нашим ИИ консультантом.",
+                               0)
+                pdf.ln(0.1)
+                # Устанавливаем цвет для ссылки (синий)
+                pdf.set_text_color(0, 0, 255)
+                pdf.multi_cell(0, 6, "https://t.me/FasolkaAI_bot", 0)
+
+                # Возвращаем цвет текста к обычному черному
+            elif re.search(ai_help_en, content, re.DOTALL):
+                parts = re.split(ai_help_en_split, content, maxsplit=1)
+                before_text = parts[0].strip()
+
+                pdf.set_font("DejaVu", style="B", size=12)
+                pdf.multi_cell(0, 6, header, 0)
+
+                pdf.ln(0.1)
+
+                # Обычный текст до фразы
+                pdf.set_font("DejaVu", size=12)
+                if header == "«Red» flags and «green» flags:":
+                    lines = before_text.splitlines()
+                    cleaned_lines = []
+                    for line in lines:
+                        stripped_line = " ".join(line.split())  # Убираем лишние пробелы внутри строки
+                        print("stripped_line: ", stripped_line)
+                        if stripped_line.startswith("-"):  # Если строка начинается с пункта списка
+                            cleaned_lines.append(stripped_line)
+                        elif cleaned_lines and not cleaned_lines[-1].endswith(
+                                ":"):  # Присоединяем к предыдущей строке
+                            cleaned_lines[-1] += f" {stripped_line}"
+                        else:
+                            cleaned_lines.append(stripped_line)
+                    before_text = "\n".join(cleaned_lines)
+
+                if "Negative Characteristics:" in before_text:
+                    before_text = before_text.replace("Negative Characteristics:", "\nNegative Characteristics:")
+
+                pdf.multi_cell(0, 6, before_text, 0)
+
+                pdf.ln(0.1)
+
+                # Текст с курсивом (фраза и ссылка)
+                pdf.set_font("DejaVu", style="I", size=12)
+                # Сначала выводим обычный текст
+                pdf.multi_cell(0, 6,
+                               f"\n\n***If you do not understand the terminology in the report, you can use our AI consultant.",
+                               0)
+                pdf.ln(0.1)
+                # Устанавливаем цвет для ссылки (синий)
+                pdf.set_text_color(0, 0, 255)
+                pdf.multi_cell(0, 6, "https://t.me/FasolkaAI_bot", 0)
+
+                # Возвращаем цвет текста к обычному черному
+                pdf.set_text_color(0, 0, 0)
             else:
-                pdf.cell(40, 10, header, 1)
-        pdf.ln()
+                print("header", header)
+                print("content", content)
+                # Добавляем заголовок жирным
+                pdf.set_font("DejaVu", style="B", size=12)
+                pdf.multi_cell(0, 6, header, 0)
 
-        for index, (project, tokenomics_data) in enumerate(tokenomics_data_list, start=1):
-            for tokenomics in tokenomics_data:
-                funds_profit = next((fp for fp in funds_profit_data_list if fp[0] == project), None)
+                pdf.ln(0.1)
 
-                cells_content = generate_cells_content(
-                    basic_metrics_data_list,
-                    invested_metrics_data_list,
-                    social_metrics_data_list,
-                    market_metrics_data_list,
-                    manipulative_metrics_data_list,
-                    network_metrics_data_list,
-                    top_and_bottom_data_list,
-                    project,
-                    header_set,
-                    headers_mapping,
-                    tokenomics,
-                    cells_content
-                )
+                # Добавляем основной текст
+                pdf.set_font("DejaVu", size=12)
+                content_cleaned = content
 
-                if len(cells_content) != len(header_set):
-                    print(f"Ошибка: количество значений {len(cells_content)} не соответствует заголовкам {len(header_set)}.")
-                    continue
+                if header in ["Описание проекта:", "Оценка прибыльности инвесторов:", "Project description:",
+                              "Evaluating investor profitability:", ]:
+                    content_cleaned = " ".join(content.split())
 
-                cell_widths = []
-                for i, content in enumerate(cells_content):
-                    if i < len(header_set) and header_set[i] == 'Тир фондов':
-                        cell_widths.append(230)
-                    elif i < len(header_set) and header_set[i] == 'Сфера':
-                        cell_widths.append(80)
-                    elif i < len(header_set) and header_set[i] == 'FDV':
-                        cell_widths.append(70)
-                    else:
-                        cell_widths.append(40)
+                content_cleaned = extract_old_calculations(content_cleaned, language)
+                pdf.multi_cell(0, 6, content_cleaned, 0)
 
-                max_lines = 1
-                for i, content in enumerate(cells_content):
-                    content_width = pdf.get_string_width(content)
-                    lines = (content_width // cell_widths[i]) + 1
-                    if lines > max_lines:
-                        max_lines = lines
-
-                cell_height = max_lines * 10
-                for i, content in enumerate(cells_content):
-                    if pdf.get_string_width(content) > cell_widths[i]:
-                        pdf.multi_cell(cell_widths[i], 10, content, 1)
-                        current_y = pdf.get_y()
-                        pdf.set_xy(pdf.get_x(), current_y - 10)
-                    else:
-                        pdf.cell(cell_widths[i], cell_height, content, 1)
-
-            pdf.ln()
-            if len(funds_profit) > 1 and len(funds_profit[1]) > 0 and funds_profit[1][0].distribution and (project.coin_name, funds_profit[1][0].distribution) not in investor_data_list:
-                investor_data_list.append((project.coin_name, funds_profit[1][0].distribution))
-
-        pdf.ln()
-
-    pdf.add_page()
-    page_width = pdf.w
-    diagram_per_page = 4
-    diagrams_on_page = 0
-    chart_width = 110
-    x_pos_left = (page_width / 4) - (chart_width / 2)
-    x_pos_right = (3 * page_width / 4) - (chart_width / 2)
-
-    for i, (coin_name, distribution_data) in enumerate(investor_data_list):
-        if diagrams_on_page == diagram_per_page:
-            pdf.add_page()
-            diagrams_on_page = 0
-
-        y_pos = 30 + (diagrams_on_page // 2) * 90
-
-        if i % 2 == 0:
-            x_pos = x_pos_left
-        else:
-            x_pos = x_pos_right
-
-        pdf.set_font("DejaVu", size=12)
-        pdf.set_xy(x_pos, y_pos - 10)
-        pdf.cell(90, 10, f"{phrase_by_user('tokens_distribution', user_id)} {coin_name}", 0, 1, 'C')
-
-        pie_chart_img = generate_pie_chart(distribution_data)
-        pdf.image(pie_chart_img, x=x_pos, y=y_pos, w=chart_width, h=85)
-
-        diagrams_on_page += 1
+                pdf.ln(6)
 
     pdf_output = BytesIO()
     pdf.output(pdf_output)

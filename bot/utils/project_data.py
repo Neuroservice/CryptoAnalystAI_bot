@@ -1,6 +1,9 @@
 import asyncio
 import logging
 import re
+import textwrap
+import fitz
+
 import aiohttp
 import httpx
 import requests
@@ -1265,10 +1268,6 @@ async def generate_flags_answer(
             f"- Tokenomics valuation: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
         )
 
-    new_answer = AgentAnswer(project_id=project.id, answer=flags_answer, language=language)
-    session.add(new_answer)
-    await session.commit()
-
     return flags_answer
 
 
@@ -1372,3 +1371,57 @@ async def update_or_create(session, model, project_id=None, id=None, defaults=No
 
     await session.commit()
     return instance
+
+
+def extract_text_with_formatting(pdf_file):
+    """
+    Функция для извлечения текста с форматированием (HTML).
+    """
+    doc = fitz.open(pdf_file)
+    formatted_text = ""
+
+    for page in doc:
+        # Извлечение текста с форматированием (HTML)
+        formatted_text += page.get_text("html")
+
+    return formatted_text
+
+
+def extract_project_score(answer, language):
+    # Заменяем типографские кавычки на обычные
+    answer = answer.replace("“", "\"").replace("”", "\"")
+
+    # Если язык RU
+    if language == "RU":
+        # Регулярное выражение для поиска баллов и оценки
+        match = re.search(r"Итоговые баллы проекта:\s*([\d,]+)\s*баллов?\s*–\s*оценка\s*\"(.+?)\"", answer)
+    else:
+        match = re.search(r"Overall Project Score:\s*([\d,]+)\s*points\s*–\s*rating\s*\"(.+?)\"", answer)
+
+    # Если найдено совпадение
+    if match:
+        # Заменяем запятую на точку в числе и конвертируем в float
+        project_score = float(match.group(1).replace(",", "."))
+        project_rating = match.group(2)
+        print(f"Итоговые баллы: {project_score}")
+        print(f"Оценка проекта: {project_rating}")
+    else:
+        project_score = "Данных по баллам не поступило" if language == "RU" else "No data on scores were received"
+        project_rating = "Нет данных по оценке баллов проекта" if language == "RU" else "No data available on project scoring"
+        print("Не удалось найти итоговые баллы и/или оценку.")
+
+    return project_score, project_rating
+
+
+def clean_text_preserving_list(content):
+    lines = content.splitlines()
+    cleaned_lines = []
+    for line in lines:
+        stripped_line = " ".join(line.split())  # Убираем лишние пробелы внутри строки
+        if stripped_line.startswith("-"):  # Если строка начинается с пункта списка
+            cleaned_lines.append(stripped_line)
+        elif cleaned_lines and not cleaned_lines[-1].endswith(":"):  # Присоединяем к предыдущей строке
+            cleaned_lines[-1] += f" {stripped_line}"
+        else:
+            cleaned_lines.append(stripped_line)
+    return "\n".join(cleaned_lines)
