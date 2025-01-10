@@ -1,5 +1,6 @@
 import logging
 import re
+import textwrap
 import traceback
 from datetime import datetime
 from io import BytesIO
@@ -38,7 +39,7 @@ from bot.utils.consts import (
     checking_map,
     dejavu_path,
     logo_path, get_header_params, calculations_choices, async_session, session_local, dejavu_bold_path,
-    dejavu_italic_path, patterns, ai_help_ru, ai_help_en, ai_help_en_split, ai_help_ru_split
+    dejavu_italic_path, patterns, ai_help_ru, ai_help_en, ai_link, ai_help_en_split, ai_help_ru_split
 )
 from bot.utils.consts import user_languages
 from bot.utils.gpt import (
@@ -64,7 +65,7 @@ from bot.utils.project_data import (
     send_long_message,
     get_top_projects_by_capitalization_and_category,
     process_and_update_models, fetch_coingecko_data, generate_flags_answer, find_record, update_or_create,
-    extract_project_score
+    extract_text_with_formatting, extract_project_score
 )
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user, phrase_by_language
 from bot.utils.resources.files_worker.pdf_worker import PDF
@@ -638,7 +639,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     await session_local.commit()
 
     await state.update_data(**data)
-    await create_pdf(session_local, state, message=message, user_id=message.from_user.id)
+    await create_pdf(session_local, state, message='-', user_id=message.from_user.id)
 
 
 @save_execute
@@ -944,6 +945,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
         )
         funds_agent_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
 
+        logging.info(f"funds_agent_answer: {funds_agent_answer, tokenomics_data.capitalization}")
+
         funds_answer, funds_scores, funds_score, growth_and_fall_score, top_100_score, tvl_score = analyze_project_metrics(
             funds_agent_answer,
             investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
@@ -952,7 +955,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             round((market_metrics.growth_low - 100) * 100, 2) if market_metrics and market_metrics.growth_low else 'N/A',
             round(market_metrics.fail_high * 100, 2) if market_metrics and market_metrics.fail_high else 'N/A',
             manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A',
-            (network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'
+            (network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data and tokenomics_data.capitalization and tokenomics_data.capitalization != 0 and network_metrics.tvl else 'N/A'
         )
 
         tier_answer = determine_project_tier(
@@ -961,8 +964,10 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             twitter_followers=social_metrics.twitter if social_metrics else 'N/A',
             twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
             category=project.category if project else 'N/A',
-            investors=investing_metrics.fund_level if investing_metrics else 'N/A',
+            investors=investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A',
         )
+
+        logging.info(f"tier agent: {tier_answer}")
 
         if existing_answer is None:
             data_for_tokenomics = []
@@ -970,6 +975,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 ticker = project_coin
                 growth_percent = expected_x
                 data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
+
+            logging.info(f"data_for_tokenomics: {data_for_tokenomics}")
             tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
 
             project_rating_result = calculate_project_score(
@@ -980,6 +987,9 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 tokemonic_score if tokemonic_answer else 'N/A',
                 funds_scores if funds_scores else 'N/A'
             )
+
+            logging.info(f"project_rating_result: {project_rating_result}")
+
             project_rating_answer = project_rating_result["calculations_summary"]
             fundraising_score = project_rating_result["fundraising_score"]
             tier_score = project_rating_result["tier_score"]
@@ -1016,6 +1026,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
             project_score, project_rating = extract_project_score(answer, language)
 
+
             red_green_flags = extract_red_green_flags(answer, language)
             calculations = extract_calculations(answer, language)
 
@@ -1036,22 +1047,24 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                     max_value="Нет данных"
                 )
 
-            capitalization = float(tokenomics_data.capitalization)
-            fundraising_amount = float(investing_metrics.fundraise)
+            capitalization = float(tokenomics_data.capitalization) if tokenomics_data and tokenomics_data.capitalization else ('Нет данных' if language == 'RU' else 'No info')
+            fundraising_amount = float(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else ('Нет данных' if language == 'RU' else 'No info')
             investors_percent = float(funds_agent_answer.strip('%')) / 100
 
-            # Расчеты
-            result_ratio = (capitalization * investors_percent) / fundraising_amount
-            final_score = f"{result_ratio:.2%}"
+            if isinstance(capitalization, float) and isinstance(fundraising_amount, float):
+                result_ratio = (capitalization * investors_percent) / fundraising_amount
+                final_score = f"{result_ratio:.2%}"
+            else:
+                result_ratio = 'Нет данных' if language == 'RU' else 'No info'
+                final_score = result_ratio
 
-            # Форматирование текста
             profit_text = phrase_by_user(
                 "investor_profit_text",
                 user_id=message.from_user.id if isinstance(message, Message) else user_id,
-                capitalization=f"{capitalization:,.2f}",
-                investors_percent=f"{investors_percent:.0%}",
-                fundraising_amount=f"{fundraising_amount:,.2f}",
-                result_ratio=f"{result_ratio:.4f}",
+                capitalization=f"{capitalization:,.2f}" if isinstance(capitalization, float) else capitalization,
+                investors_percent=f"{investors_percent:.0%}" if isinstance(investors_percent, float) else investors_percent,
+                fundraising_amount=f"{fundraising_amount:,.2f}" if isinstance(fundraising_amount, float) else fundraising_amount,
+                result_ratio=f"{result_ratio:.4f}" if isinstance(result_ratio, float) else result_ratio,
                 final_score=final_score
             )
 
@@ -1102,7 +1115,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
             formatted_metrics_text = "\n".join(formatted_metrics)
             project_evaluation = phrase_by_user(
-                "project_rating_details",
+      "project_rating_details",
                 user_id,
                 fundraising_score=int(fundraising_score),
                 tier=tier_answer,
@@ -1112,10 +1125,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 tokenomics_score=tokenomics_score,
                 profitability_score=funds_score,
                 preliminary_score=int(growth_and_fall_score),
-                top_100_percent=round(manipulative_metrics.top_100_wallet * 100,
-                                      2) if manipulative_metrics.top_100_wallet else 0,
-                tvl_percent=int((
-                                            network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics.tvl and tokenomics_data.total_supply else 0,
+                top_100_percent=round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 0,
+                tvl_percent=int((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics.tvl and tokenomics_data.total_supply else 0,
                 tier_coefficient=tier_coefficient,
             )
 
@@ -1164,8 +1175,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
             pdf.set_font("DejaVu", style='B', size=12)
             pdf.multi_cell(0, 6,
-                           f"{phrase_by_user('funds_profit_scores', message.from_user.id if isinstance(message, Message) else user_id)}:",
-                           0)
+                           f"{phrase_by_user('funds_profit_scores', message.from_user.id if isinstance(message, Message) else user_id)}:",0)
             pdf.set_font("DejaVu", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, profit_text, 0)
@@ -1193,7 +1203,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             pdf.ln(6)
 
             pdf.set_font("DejaVu", style='B', size=12)
-            pdf.cell(0, 6, f"{f'Оценка проекта:' if language == 'RU' else f'Overall evaluation:'}", 0, 0, 'L')
+            pdf.cell(0, 6, f"{f'Оценка проекта:' if language == 'RU' else f'Overall evaluation:'}",0, 0, 'L')
             pdf.set_font("DejaVu", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, project_evaluation, 0)
@@ -1202,8 +1212,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
             pdf.set_font("DejaVu", style='B', size=12)
             pdf.cell(0, 6,
-                     f"{f'Общая оценка проекта {project_score} баллов ({project_rating})' if language == 'RU' else f'Overall project evaluation {project_score} points ({project_rating})'}",
-                     0, 1, 'L')
+                     f"{f'Общая оценка проекта {project_score} баллов ({project_rating})' if language == 'RU' else f'Overall project evaluation {project_score} points ({project_rating})'}",0, 1, 'L')
             pdf.set_font("DejaVu", size=12)
 
             pdf.ln(6)
@@ -1306,8 +1315,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                             before_text = "\n".join(cleaned_lines)
 
                         if "Отрицательные характеристики:" in before_text:
-                            before_text = before_text.replace("Отрицательные характеристики:",
-                                                              "\nОтрицательные характеристики:")
+                            before_text = before_text.replace("Отрицательные характеристики:","\nОтрицательные характеристики:")
 
                         pdf.multi_cell(0, 6, before_text, 0)
 
@@ -1315,9 +1323,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
                         # Текст с курсивом (фраза и ссылка)
                         pdf.set_font("DejaVu", style="I", size=12)
-                        pdf.multi_cell(0, 6,
-                                       f"\n\n***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться нашим ИИ консультантом.",
-                                       0)
+                        pdf.multi_cell(0, 6,f"\n\n***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться нашим ИИ консультантом.",0)
                         pdf.ln(0.1)
                         # Устанавливаем цвет для ссылки (синий)
                         pdf.set_text_color(0, 0, 255)
@@ -1351,8 +1357,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                             before_text = "\n".join(cleaned_lines)
 
                         if "Negative Characteristics:" in before_text:
-                            before_text = before_text.replace("Negative Characteristics:",
-                                                              "\nNegative Characteristics:")
+                            before_text = before_text.replace("Negative Characteristics:","\nNegative Characteristics:")
 
                         pdf.multi_cell(0, 6, before_text, 0)
 
@@ -1361,9 +1366,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         # Текст с курсивом (фраза и ссылка)
                         pdf.set_font("DejaVu", style="I", size=12)
                         # Сначала выводим обычный текст
-                        pdf.multi_cell(0, 6,
-                                       f"\n\n***If you do not understand the terminology in the report, you can use our AI consultant.",
-                                       0)
+                        pdf.multi_cell(0, 6,f"\n\n***If you do not understand the terminology in the report, you can use our AI consultant.",0)
                         pdf.ln(0.1)
                         # Устанавливаем цвет для ссылки (синий)
                         pdf.set_text_color(0, 0, 255)
@@ -1382,8 +1385,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         # Добавляем основной текст
                         pdf.set_font("DejaVu", size=12)
                         content_cleaned = content
-                        if header in ["Описание проекта:", "Оценка прибыльности инвесторов:", "Project description:",
-                                      "Evaluating investor profitability:", ]:
+                        if header in ["Описание проекта:", "Оценка прибыльности инвесторов:", "Project description:", "Evaluating investor profitability:", ]:
                             content_cleaned = " ".join(content.split())
 
                         content_cleaned = extract_old_calculations(content_cleaned, language)

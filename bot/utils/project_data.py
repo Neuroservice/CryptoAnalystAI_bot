@@ -1390,13 +1390,14 @@ def extract_text_with_formatting(pdf_file):
 def extract_project_score(answer, language):
     # Заменяем типографские кавычки на обычные
     answer = answer.replace("“", "\"").replace("”", "\"")
+    logging.info(f"answer::::::::::: {answer}")
 
     # Если язык RU
     if language == "RU":
         # Регулярное выражение для поиска баллов и оценки
-        match = re.search(r"Итоговые баллы проекта:\s*([\d,]+)\s*баллов?\s*–\s*оценка\s*\"(.+?)\"", answer)
+        match = re.search(r"Итоговые баллы проекта:\s*([\d.,]+)\s*баллов?\s*– оценка\s*\"(.+?)\"", answer)
     else:
-        match = re.search(r"Overall Project Score:\s*([\d,]+)\s*points\s*–\s*rating\s*\"(.+?)\"", answer)
+        match = re.search(r"Overall project score:\s*([\d.,]+)\s*points\s*– rating\s*\"(.+?)\"", answer)
 
     # Если найдено совпадение
     if match:

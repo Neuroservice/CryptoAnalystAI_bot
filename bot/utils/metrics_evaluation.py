@@ -99,7 +99,8 @@ def determine_project_tier(
         passes_metrics = (
                 capitalization != "N/A" and int(capitalization) >= int(criteria["capitalization"])
                 and fundraising != "N/A" and int(fundraising) >= int(criteria["fundraising"])
-                and twitter_followers != "N/A" and int(clean_twitter_subs(twitter_followers)) >= int(clean_twitter_subs(criteria["twitter_followers"]))
+                and twitter_followers != "N/A" and int(clean_twitter_subs(twitter_followers)) >= int(
+            clean_twitter_subs(criteria["twitter_followers"]))
                 and twitter_score != "N/A" and int(twitter_score) >= int(criteria["twitter_score"])
         )
 
@@ -153,7 +154,7 @@ def calculate_tokenomics_score(project_name, comparisons):
                 total_score += score
                 results.append(f"{ticker} = {score} баллов")
 
-    total_score = round(total_score, 2)
+    total_score = max(-50, min(100, round(total_score, 2)))
 
     result_string = (
             f"Общая оценка токеномики проекта {project_name}: {total_score} баллов.\n\n"
@@ -173,12 +174,30 @@ def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_p
 
     growth_and_fall_result = ""
     detailed_report = ""
+    avg_price = 0
+    x_funds = "Не удалось провести расчет"
+    percente_of_funds_profit = 0
 
-    # Логика расчета доходности фондов
     if fundraise != 'N/A' and total_supply != 'N/A':
-        avg_price = (float(fundraise) / (float(total_supply) * float(fund_distribution.replace('%', '').strip()))) * 100
-        x_funds = round(float(market_price) / avg_price, 2)
-        percente_of_funds_profit = (x_funds * 100) - 100
+        logging.info(f"total {total_supply}, fund_distribution {fund_distribution}")
+        fund_dist_value = float(fund_distribution.replace('%', '').strip())
+
+        if fund_dist_value == 0:
+            logging.error("Fund distribution is zero, division by zero avoided.")
+            avg_price = None
+        elif total_supply == 0:
+            logging.error("Total supply is zero, division by zero avoided.")
+            avg_price = None
+        else:
+            avg_price = (float(fundraise) / (float(total_supply) * fund_dist_value)) * 100
+            logging.info(f"total {total_supply}, avg_price {avg_price}")
+
+        if avg_price is not None and avg_price > 0:
+            x_funds = round(float(market_price) / avg_price, 2)
+            percente_of_funds_profit = (x_funds * 100) - 100
+            logging.info(f"x_funds {x_funds}, percente_of_funds_profit {percente_of_funds_profit}")
+        else:
+            logging.error("Unable to calculate x_funds or funds profit due to invalid avg_price.")
 
         detailed_report += (
             f"\n[Funds Calculation]:\n"
@@ -387,9 +406,3 @@ def calculate_project_score(fundraising, tier, twitter_followers, twitter_score,
     }
 
     return result
-
-
-
-
-
-
