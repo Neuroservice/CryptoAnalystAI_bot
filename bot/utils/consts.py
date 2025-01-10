@@ -1,3 +1,5 @@
+import re
+
 from aiohttp import ClientSession
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -261,3 +263,39 @@ def prepare_ru_data_for_analysis(
 replaced_project_twitter = {
     "https://twitter.com/aptos_network": "https://x.com/Aptos",
 }
+
+
+# Слоаврь строк, которые нужно выделять в отчете
+patterns = {
+    "RU": [
+        r"(Описание проекта:)",
+        r"(Проект относится к категории:)",
+        r"(Метрики проекта \(уровень Tier \d+\):)",
+        r"(Распределение токенов:)",
+        r"(Оценка прибыльности инвесторов:)",
+        r"(Данные\s*роста/падения\s*токена\s*с\s*минимальных\s*и\s*максимальных\s*значений\s*\(за\s*последние\s*2\s*года\):)",
+        r"(Сравнение проекта с другими, схожими по уровню и категории:)",
+        r"(Оценка проекта:)",
+        r"(Общая оценка проекта [\d.]+ баллов? \(.+?\))",
+        r"(«Ред» флаги и «грин» флаги:)"
+    ],
+    "EN": [
+        r"(Project description:)",
+        r"(The project is categorized as:)",
+        r"(Project metrics \(level Tier \d+\):)",
+        r"(Token distribution:)",
+        r"(Evaluating investor profitability:)",
+        r"(Token growth/decline data from minimum and maximum values \(for the last 2 years\):)",
+        r"(Comparing the project with others similar in level and category:)",
+        r"(Overall evaluation:)",
+        r"(Overall project evaluation [\d.]+ points \(.+?\))",
+        r"(«Red» flags and «green» flags:)"
+    ]
+}
+
+ai_help_ru = r"\*\*\*Если\s+Вам\s+не\s+понятна\s+терминология,\s+изложенная\s+в\s+отчете,\s+Вы\s+можете\s+воспользоваться\s+нашим\s+ИИ\s+консультантом\."
+ai_help_en = r"\*\*\*If\s+you\s+do\s+not\s+understand\s+the\s+terminology\s+in\s+the\s+report,\s+you\s+can\s+use\s+our\s+AI\s+consultant\."
+ai_link = "https://t.me/FasolkaAI_bot"
+
+ai_help_ru_split = re.escape("***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться\nнашим ИИ консультантом.\nhttps://t.me/FasolkaAI_bot")
+ai_help_en_split = re.escape("***If you do not understand the terminology in the report, you can use our AI consultant.\nhttps://t.me/FasolkaAI_bot")

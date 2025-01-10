@@ -109,7 +109,6 @@ def extract_calculations(answer, language):
     """
     Функция для извлечения описания проекта без заголовка.
     """
-    print(f"language {language} answer !!!!!! {answer}")
 
     if language == "ENG":
         pattern = r'Data for tokenomic analysis:\s*'
@@ -137,6 +136,39 @@ def extract_calculations(answer, language):
         return '\n'.join(lines)
 
     return "Нет данных" if language == "RU" else "No data"
+
+
+def extract_old_calculations(answer, language):
+    """
+    Функция для извлечения описания проекта без заголовка.
+    """
+
+    if language == "ENG":
+        comparison_pattern = r'Comparing\s*the\s*project\s*with\s*others\s*similar\s*in\s*level\s*and\s*category:'
+    else:
+        comparison_pattern = r'Сравнение\s*проекта\s*с\s*другими,\s*схожими\s*по\s*уровню\s*и\s*категории:'
+
+    # Удаляем заголовок и пробел после него
+    answer = re.sub(comparison_pattern, '', answer, count=1)
+
+    # Ищем расчёты с учетом языка
+    if language == "ENG":
+        match = re.search(r'(Calculation results for.*?)$', answer, re.DOTALL)
+    else:
+        match = re.search(r'(Результаты расчета для.*?)$', answer, re.DOTALL)
+
+    if match:
+        extracted_text = match.group(1)
+        lines = extracted_text.split('\n')
+
+        for i in range(1, len(lines)):
+            if (language == "ENG" and lines[i].startswith('Calculation results for')) or \
+               (language != "ENG" and lines[i].startswith('Результаты расчета для')):
+                lines[i] = '\n' + lines[i]
+
+        return '\n'.join(lines)
+
+    return answer
 
 
 def is_async_session(session):

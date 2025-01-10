@@ -2,12 +2,15 @@ from bot.utils.consts import user_languages
 from bot.utils.resources.bot_phrases.bot_phrase_strings import phrase_dict
 
 
-def phrase_by_user(phrase_id, user_id, current_value=None, min_value=None, max_value=None):
+def phrase_by_user(phrase_id, user_id, **kwargs):
     language = user_languages.get(user_id)
-    phrase = phrase_dict.get(language).get(phrase_id)
+    phrase = phrase_dict.get(language, {}).get(phrase_id)
 
-    if current_value is not None and min_value is not None and max_value is not None:
-        phrase = phrase.format(current_value=current_value, min_value=min_value, max_value=max_value)
+    if phrase and kwargs:
+        try:
+            phrase = phrase.format(**kwargs)
+        except KeyError as e:
+            raise ValueError(f"Missing placeholder in kwargs for phrase '{phrase_id}': {e}")
 
     return phrase
 

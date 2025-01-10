@@ -5,6 +5,7 @@ from datetime import datetime
 from io import BytesIO
 from typing import Optional, Union
 
+import fitz
 from aiogram import Router, types, Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.context import FSMContext
@@ -37,7 +38,7 @@ from bot.utils.consts import (
     checking_map,
     dejavu_path,
     logo_path, get_header_params, calculations_choices, async_session, session_local, dejavu_bold_path,
-    dejavu_italic_path
+    dejavu_italic_path, patterns, ai_help_ru, ai_help_en, ai_help_en_split, ai_help_ru_split
 )
 from bot.utils.consts import user_languages
 from bot.utils.gpt import (
@@ -62,12 +63,13 @@ from bot.utils.project_data import (
     calculate_expected_x,
     send_long_message,
     get_top_projects_by_capitalization_and_category,
-    process_and_update_models, fetch_coingecko_data, generate_flags_answer, find_record, update_or_create
+    process_and_update_models, fetch_coingecko_data, generate_flags_answer, find_record, update_or_create,
+    extract_project_score
 )
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user, phrase_by_language
 from bot.utils.resources.files_worker.pdf_worker import PDF
 from bot.utils.validations import validate_user_input, extract_overall_category, save_execute, extract_description, \
-    extract_red_green_flags, extract_calculations
+    extract_red_green_flags, extract_calculations, extract_old_calculations
 
 calculate_router = Router()
 logging.basicConfig(level=logging.INFO)
@@ -635,18 +637,8 @@ async def receive_data(message: types.Message, state: FSMContext):
 
     await session_local.commit()
 
-    if missing_fields_string:
-        response_message = (
-                f"Отсутствующие данные для запроса: {missing_fields_string}.\n"
-                "Пожалуйста, предоставьте эти данные в следующем формате:\n"
-                + '\n'.join(examples)
-        )
-        await message.answer(response_message)
-        await state.update_data(**data)
-        await state.set_state(CalculateProject.waiting_for_pdf)
-    else:
-        await state.update_data(**data)
-        await create_pdf(session_local, state, message='-', user_id=message.from_user.id)
+    await state.update_data(**data)
+    await create_pdf(session_local, state, message=message, user_id=message.from_user.id)
 
 
 @save_execute
@@ -905,14 +897,10 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
         comparison_results = ""
         result_index = 1
 
-        print(row_data)
 
         for index, coin_name, project_coin, expected_x, fair_price in row_data:
-            print(index, coin_name, project_coin, expected_x, fair_price)
             if project_coin != coin_name:
-                print("в первом условии")
                 if project_coin in tickers:
-                    print("во втором условии")
                     try:
                         if isinstance(expected_x, str):
                             growth = float(expected_x)
@@ -950,8 +938,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         print(f"growth: {expected_x}, type: {type(expected_x)}")
                         print(f"fair_price: {fair_price}, type: {type(fair_price)}")
                         raise
-
-        print(comparison_results)
 
         all_data_string_for_funds_agent = (
             f"Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
@@ -995,6 +981,16 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 funds_scores if funds_scores else 'N/A'
             )
             project_rating_answer = project_rating_result["calculations_summary"]
+            fundraising_score = project_rating_result["fundraising_score"]
+            tier_score = project_rating_result["tier_score"]
+            followers_score = project_rating_result["followers_score"]
+            twitter_engagement_score = project_rating_result["twitter_engagement_score"]
+            tokenomics_score = project_rating_result["tokenomics_score"]
+            profitability_score = project_rating_result["profitability_score"]
+            preliminary_score = project_rating_result["preliminary_score"]
+            tier_coefficient = project_rating_result["tier_coefficient"]
+            overal_final_score = project_rating_result["final_score"]
+
 
             all_data_string_for_flags_agent = (
                 f"Проект: {project.category}\n"
@@ -1009,188 +1005,416 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                                         all_data_string_for_flags_agent, user_languages, project, tokenomics_data, investing_metrics, social_metrics,
                                         funds_profit, market_metrics, manipulative_metrics, network_metrics, tier_answer, funds_answer, tokemonic_answer,
                                         comparison_results, category_answer, twitter_link, top_and_bottom, language)
+            answer = flags_answer
+            answer = answer.replace('**', '')
+            answer += "**Данные для анализа токеномики**:\n" + comparison_results
+            answer = re.sub(r'\n\s*\n', '\n', answer)
+
+            flags_answer = answer
+
+            print(flags_answer)
+
+            project_score, project_rating = extract_project_score(answer, language)
+
+            red_green_flags = extract_red_green_flags(answer, language)
+            calculations = extract_calculations(answer, language)
+
+            if top_and_bottom and top_and_bottom.lower_threshold and top_and_bottom.upper_threshold:
+                top_and_bottom_answer = phrase_by_user(
+                    'top_bottom_values',
+                    message.from_user.id if isinstance(message, Message) else user_id,
+                    current_value=round(basic_metrics.market_price, 4),
+                    min_value=round(top_and_bottom.lower_threshold, 4),
+                    max_value=round(top_and_bottom.upper_threshold, 4)
+                )
+            else:
+                top_and_bottom_answer = phrase_by_user(
+                    'top_bottom_values',
+                    message.from_user.id if isinstance(message, Message) else user_id,
+                    current_value=round(basic_metrics.market_price, 4),
+                    min_value="Нет данных",
+                    max_value="Нет данных"
+                )
+
+            capitalization = float(tokenomics_data.capitalization)
+            fundraising_amount = float(investing_metrics.fundraise)
+            investors_percent = float(funds_agent_answer.strip('%')) / 100
+
+            # Расчеты
+            result_ratio = (capitalization * investors_percent) / fundraising_amount
+            final_score = f"{result_ratio:.2%}"
+
+            # Форматирование текста
+            profit_text = phrase_by_user(
+                "investor_profit_text",
+                user_id=message.from_user.id if isinstance(message, Message) else user_id,
+                capitalization=f"{capitalization:,.2f}",
+                investors_percent=f"{investors_percent:.0%}",
+                fundraising_amount=f"{fundraising_amount:,.2f}",
+                result_ratio=f"{result_ratio:.4f}",
+                final_score=final_score
+            )
+
+            if funds_profit and funds_profit.distribution:
+                distribution_items = funds_profit.distribution.split('\n')
+                formatted_distribution = "\n".join([f"- {item}" for item in distribution_items])
+            else:
+                formatted_distribution = 'Нет данных по распределению токенов' if language == 'RU' else 'No token distribution data'
+
+            formatted_metrics = [
+                f"- {'Капитализация проекта' if language == 'RU' else 'Project capitalization'}: ${round(tokenomics_data.capitalization, 0)}"
+                if tokenomics_data and tokenomics_data.capitalization else (
+                    "- Капитализация проекта: Нет данных" if language == 'RU' else "- Project capitalization: No info"
+                ),
+                f"- {'Полная капитализация проекта (FDV)' if language == 'RU' else 'Fully Diluted Valuation (FDV)'}: ${round(tokenomics_data.fdv, 0)}"
+                if tokenomics_data and tokenomics_data.fdv else (
+                    "- Полная капитализация проекта (FDV): Нет данных" if language == 'RU' else "- Fully Diluted Valuation (FDV): No info"
+                ),
+                f"- {'Общее количество токенов (Total Supply)' if language == 'RU' else 'Total Supply'}: {round(tokenomics_data.total_supply, 0)}"
+                if tokenomics_data and tokenomics_data.total_supply else (
+                    "- Общее количество токенов (Total Supply): Нет данных" if language == 'RU' else "- Total Supply: No info"
+                ),
+                f"- {'Сумма сбора средств от инвесторов (Fundraising)' if language == 'RU' else 'Fundraising'}: ${round(investing_metrics.fundraise, 0)}"
+                if investing_metrics and investing_metrics.fundraise else (
+                    "- Сумма сбора средств от инвесторов (Fundraising): Нет данных" if language == 'RU' else "- Fundraising: No info"
+                ),
+                f"- {'Количество подписчиков на Twitter' if language == 'RU' else 'Twitter followers'} ({twitter_link[0]}): {social_metrics.twitter}"
+                if social_metrics and social_metrics.twitter else (
+                    "- Количество подписчиков на Twitter: Нет данных" if language == 'RU' else "- Twitter followers: No info"
+                ),
+                f"- {'Twitter Score'}: {social_metrics.twitterscore}"
+                if social_metrics and social_metrics.twitterscore else (
+                    "- Twitter Score: Нет данных" if language == 'RU' else "- Twitter Score: No info"
+                ),
+                f"- {'Общая стоимость заблокированных активов (TVL)' if language == 'RU' else 'Total Value Locked (TVL)'}: ${round(network_metrics.tvl, 0)}"
+                if network_metrics and network_metrics.tvl else (
+                    "- Общая стоимость заблокированных активов (TVL): Нет данных" if language == 'RU' else "- Total Value Locked (TVL): No info"
+                ),
+                f"- {'Процент нахождения токенов на топ 100 кошельков блокчейна' if language == 'RU' else 'Percentage of tokens on top 100 wallets'}: {round(manipulative_metrics.top_100_wallet * 100, 2)}%"
+                if manipulative_metrics and manipulative_metrics.top_100_wallet else (
+                    "- Процент нахождения токенов на топ 100 кошельков блокчейна: Нет данных" if language == 'RU' else "- Percentage of tokens on top 100 wallets: No info"
+                ),
+                f"- {'Инвесторы' if language == 'RU' else 'Investors'}: {investing_metrics.fund_level}"
+                if investing_metrics and investing_metrics.fund_level else (
+                    "- Инвесторы: Нет данных" if language == 'RU' else "- Investors: No info"
+                ),
+            ]
+
+            formatted_metrics_text = "\n".join(formatted_metrics)
+            project_evaluation = phrase_by_user(
+                "project_rating_details",
+                user_id,
+                fundraising_score=int(fundraising_score),
+                tier=tier_answer,
+                tier_score=tier_score,
+                followers_score=int(followers_score),
+                twitter_engagement_score=int(twitter_engagement_score),
+                tokenomics_score=tokenomics_score,
+                profitability_score=funds_score,
+                preliminary_score=int(growth_and_fall_score),
+                top_100_percent=round(manipulative_metrics.top_100_wallet * 100,
+                                      2) if manipulative_metrics.top_100_wallet else 0,
+                tvl_percent=int((
+                                            network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics.tvl and tokenomics_data.total_supply else 0,
+                tier_coefficient=tier_coefficient,
+            )
+
+            pdf.set_font("DejaVu", size=12)
+            pdf.cell(0, 6,
+                     f"{'Анализ проекта' if language == 'RU' else 'Project analysis'} {lower_name.capitalize()} (${coin_name.upper()})",
+                     0, 1, 'L')
+            pdf.cell(0, 6, f"{current_date}", 0, 1, 'L')
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.cell(0, 6, f"{'Описание проекта' if language == 'RU' else 'Project description'}:", 0, 1, 'L')
+            pdf.set_font("DejaVu", size=12)
+            pdf.ln(0.1)
+            pdf.multi_cell(0, 6, token_description, 0)
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.cell(0, 6,
+                     f"{'Проект относится к категории' if language == 'RU' else 'The project is categorized as'}:", 0,
+                     1, 'L')
+            pdf.set_font("DejaVu", size=12)
+            pdf.multi_cell(0, 6, chosen_project, 0)
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.multi_cell(0, 6,
+                           f"{f'Метрики проекта (уровень {tier_answer})' if language == 'RU' else f'Project metrics (level {tier_answer})'}:",
+                           0)
+            pdf.set_font("DejaVu", size=12)
+            pdf.ln(0.1)
+            pdf.multi_cell(0, 6, formatted_metrics_text, 0)
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.multi_cell(0, 6, f"{'Распределение токенов' if language == 'RU' else 'Token distribution'}:", 0)
+            pdf.set_font("DejaVu", size=12)
+            pdf.ln(0.1)
+            pdf.multi_cell(0, 6, formatted_distribution, 0)
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.multi_cell(0, 6,
+                           f"{phrase_by_user('funds_profit_scores', message.from_user.id if isinstance(message, Message) else user_id)}:",
+                           0)
+            pdf.set_font("DejaVu", size=12)
+            pdf.ln(0.1)
+            pdf.multi_cell(0, 6, profit_text, 0)
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.multi_cell(0, 6,
+                           f"{phrase_by_user('top_bottom_2_years', message.from_user.id if isinstance(message, Message) else user_id)}",
+                           0)
+            pdf.set_font("DejaVu", size=12)
+            pdf.ln(0.1)
+            pdf.multi_cell(0, 6, top_and_bottom_answer, 0)
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.cell(0, 6,
+                     f"{phrase_by_user('comparing_calculations', message.from_user.id if isinstance(message, Message) else user_id)}",
+                     0, 1, 'L')
+            pdf.set_font("DejaVu", size=12)
+            pdf.ln(0.1)
+            pdf.multi_cell(0, 6, calculations, 0)
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.cell(0, 6, f"{f'Оценка проекта:' if language == 'RU' else f'Overall evaluation:'}", 0, 0, 'L')
+            pdf.set_font("DejaVu", size=12)
+            pdf.ln(0.1)
+            pdf.multi_cell(0, 6, project_evaluation, 0)
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.cell(0, 6,
+                     f"{f'Общая оценка проекта {project_score} баллов ({project_rating})' if language == 'RU' else f'Overall project evaluation {project_score} points ({project_rating})'}",
+                     0, 1, 'L')
+            pdf.set_font("DejaVu", size=12)
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.cell(0, 6, f"{'«Ред» флаги и «грин» флаги' if language == 'RU' else '«Red» flags and «green» flags'}:",
+                     0, 1, 'L')
+            pdf.set_font("DejaVu", size=12)
+            pdf.multi_cell(0, 6, red_green_flags, 0)
+
+            pdf.ln(6)
+
+            pdf.set_font("DejaVu", style='I', size=12)
+            pdf.multi_cell(0, 6,
+                           f"***{phrase_by_user('ai_help', message.from_user.id if isinstance(message, Message) else user_id)}",
+                           0)
+            pdf.ln(0.1)
+            pdf.set_font("DejaVu", size=12, style='IU')
+            pdf.set_text_color(0, 0, 255)  # Синий цвет для ссылки
+            pdf.cell(0, 6, "https://t.me/FasolkaAI_bot", 0, 1, 'L', link="https://t.me/FasolkaAI_bot")
+            pdf.set_font("DejaVu", size=12)
 
         else:
             flags_answer = existing_answer.answer
 
+            if language == "RU":
+                match = re.search(r"Общая оценка проекта\s*([\d.]+)\s*баллов?\s*\((.+?)\)", flags_answer)
+            else:
+                match = re.search(r"Overall project evaluation\s*([\d.]+)\s*points\s*\((.+?)\)", flags_answer)
+
+            if match:
+                project_score = float(match.group(1))  # Извлекаем баллы
+                project_rating = match.group(2)  # Извлекаем оценку
+                print(f"Итоговые баллы: {project_score}")
+                print(f"Оценка проекта: {project_rating}")
+            else:
+                project_score = "Данных по баллам не поступило" if language == "RU" else "No data on scores were received"
+                project_rating = "Нет данных по оценке баллов проекта" if language == "RU" else "No data available on project scoring"
+                print("Не удалось найти итоговые баллы и/или оценку.")
+
+            selected_patterns = patterns["RU"] if language == "RU" else patterns["EN"]
+
+            # Обработка текста для PDF
+            text_to_parse = flags_answer  # Исходный текст для обработки
+
+            # Добавление в PDF
+            pdf.set_font("DejaVu", size=12)
+            pdf.cell(0, 6, f"{'Анализ проекта' if language == 'RU' else 'Project analysis'}", 0, 1, 'L')
+            pdf.cell(0, 6, current_date, 0, 1, 'L')
+            pdf.ln(6)
+
+            for pattern in selected_patterns:
+                match = re.search(pattern, text_to_parse, re.IGNORECASE | re.DOTALL)
+
+                print(pattern)
+                if match:
+                    print("Matched pattern:", pattern)
+                    # Проверка извлеченных данных
+                    start, end = match.span()
+                    header = match.group(1)
+                    print("Extracted header:", header)
+
+                    # Извлекаем содержимое под заголовком
+                    content_start = end
+                    next_header_match = None
+                    for next_pattern in selected_patterns:
+                        next_header_match = re.search(next_pattern, text_to_parse[end:], re.IGNORECASE)
+                        if next_header_match:
+                            break
+
+                    content_end = next_header_match.start() + end if next_header_match else len(text_to_parse)
+                    content = text_to_parse[content_start:content_end].strip()
+
+                    print(content)
+
+                    if re.search(ai_help_ru, content, re.DOTALL):
+                        parts = re.split(ai_help_ru_split, content, maxsplit=1)
+                        before_text = parts[0].strip()
+
+                        # Добавляем заголовок жирным
+                        pdf.set_font("DejaVu", style="B", size=12)
+                        pdf.multi_cell(0, 6, header, 0)
+
+                        pdf.ln(0.1)
+
+                        # Обычный текст до фразы
+                        pdf.set_font("DejaVu", size=12)
+                        if header == "«Ред» флаги и «грин» флаги:":
+                            lines = before_text.splitlines()
+                            cleaned_lines = []
+                            for line in lines:
+                                stripped_line = " ".join(line.split())  # Убираем лишние пробелы внутри строки
+                                if stripped_line.startswith("-"):  # Если строка начинается с пункта списка
+                                    cleaned_lines.append(stripped_line)
+                                elif cleaned_lines and not cleaned_lines[-1].endswith(
+                                        ":"):  # Присоединяем к предыдущей строке
+                                    cleaned_lines[-1] += f" {stripped_line}"
+                                else:
+                                    cleaned_lines.append(stripped_line)
+                            before_text = "\n".join(cleaned_lines)
+
+                        if "Отрицательные характеристики:" in before_text:
+                            before_text = before_text.replace("Отрицательные характеристики:",
+                                                              "\nОтрицательные характеристики:")
+
+                        pdf.multi_cell(0, 6, before_text, 0)
+
+                        pdf.ln(0.1)
+
+                        # Текст с курсивом (фраза и ссылка)
+                        pdf.set_font("DejaVu", style="I", size=12)
+                        pdf.multi_cell(0, 6,
+                                       f"\n\n***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться нашим ИИ консультантом.",
+                                       0)
+                        pdf.ln(0.1)
+                        # Устанавливаем цвет для ссылки (синий)
+                        pdf.set_text_color(0, 0, 255)
+                        pdf.multi_cell(0, 6, "https://t.me/FasolkaAI_bot", 0)
+
+                        # Возвращаем цвет текста к обычному черному
+                    elif re.search(ai_help_en, content, re.DOTALL):
+                        parts = re.split(ai_help_en_split, content, maxsplit=1)
+                        before_text = parts[0].strip()
+
+                        pdf.set_font("DejaVu", style="B", size=12)
+                        pdf.multi_cell(0, 6, header, 0)
+
+                        pdf.ln(0.1)
+
+                        # Обычный текст до фразы
+                        pdf.set_font("DejaVu", size=12)
+                        if header == "«Red» flags and «green» flags:":
+                            lines = before_text.splitlines()
+                            cleaned_lines = []
+                            for line in lines:
+                                stripped_line = " ".join(line.split())  # Убираем лишние пробелы внутри строки
+                                print("stripped_line: ", stripped_line)
+                                if stripped_line.startswith("-"):  # Если строка начинается с пункта списка
+                                    cleaned_lines.append(stripped_line)
+                                elif cleaned_lines and not cleaned_lines[-1].endswith(
+                                        ":"):  # Присоединяем к предыдущей строке
+                                    cleaned_lines[-1] += f" {stripped_line}"
+                                else:
+                                    cleaned_lines.append(stripped_line)
+                            before_text = "\n".join(cleaned_lines)
+
+                        if "Negative Characteristics:" in before_text:
+                            before_text = before_text.replace("Negative Characteristics:",
+                                                              "\nNegative Characteristics:")
+
+                        pdf.multi_cell(0, 6, before_text, 0)
+
+                        pdf.ln(0.1)
+
+                        # Текст с курсивом (фраза и ссылка)
+                        pdf.set_font("DejaVu", style="I", size=12)
+                        # Сначала выводим обычный текст
+                        pdf.multi_cell(0, 6,
+                                       f"\n\n***If you do not understand the terminology in the report, you can use our AI consultant.",
+                                       0)
+                        pdf.ln(0.1)
+                        # Устанавливаем цвет для ссылки (синий)
+                        pdf.set_text_color(0, 0, 255)
+                        pdf.multi_cell(0, 6, "https://t.me/FasolkaAI_bot", 0)
+
+                        # Возвращаем цвет текста к обычному черному
+                        pdf.set_text_color(0, 0, 0)
+                    else:
+                        # Добавляем заголовок жирным
+                        print("header---------------------------------", header)
+                        pdf.set_font("DejaVu", style="B", size=12)
+                        pdf.multi_cell(0, 6, header, 0)
+
+                        pdf.ln(0.1)
+
+                        # Добавляем основной текст
+                        pdf.set_font("DejaVu", size=12)
+                        content_cleaned = content
+                        if header in ["Описание проекта:", "Оценка прибыльности инвесторов:", "Project description:",
+                                      "Evaluating investor profitability:", ]:
+                            content_cleaned = " ".join(content.split())
+
+                        content_cleaned = extract_old_calculations(content_cleaned, language)
+                        pdf.multi_cell(0, 6, content_cleaned, 0)
+
+                        pdf.ln(6)
+
+        pdf_output = BytesIO()
+        pdf.output(pdf_output)
+
+        # Сбросим указатель на начало
+        pdf_output.seek(0)
+
+        pdf_data = pdf_output.read()
+
+        pdf_output.seek(0)
+
+        if not existing_answer or (existing_answer and not existing_answer.answer):
+            doc = fitz.open(stream=pdf_data, filetype="pdf")
+            extracted_text = "".join([page.get_text("text") for page in doc])
+
+            new_answer = AgentAnswer(
+                project_id=project.id,
+                answer=extracted_text,
+                language=language
+            )
+            session.add(new_answer)
+
         existing_calculation = await find_record(Calculation, session, id=calculation_record["id"])
         existing_calculation.agent_answer = flags_answer
         session.add(existing_calculation)
-
-        answer = flags_answer
-        answer = answer.replace('**', '')
-        answer += "**Данные для анализа токеномики**:\n" + comparison_results
-        answer = re.sub(r'\n\s*\n', '\n', answer)
-
-        print(answer)
-
-        if language == "RU":
-            match = re.search(r"Итоговые баллы проекта?:\s*([\d.]+)\s*баллов?\s*–\s*оценка\s*“(.+?)”", answer)
-        else:
-            match = re.search(r"Total Project Score:\s*([\d.]+)\s*points\s*–\s*rating\s*“(.+?)”", answer)
-
-        if match:
-            project_score = float(match.group(1))  # Извлекаем баллы
-            project_rating = match.group(2)  # Извлекаем оценку
-            print(f"Итоговые баллы: {project_score}")
-            print(f"Оценка проекта: {project_rating}")
-        else:
-            project_score = "Данных по баллам не поступило" if language == "RU" else "No data on scores were received"
-            project_rating = "Нет данных по оценке баллов проекта" if language == "RU" else "No data available on project scoring"
-            print("Не удалось найти итоговые баллы и/или оценку.")
-
-        red_green_flags = extract_red_green_flags(answer, language)
-        calculations = extract_calculations(answer, language)
-
-        if top_and_bottom and top_and_bottom.lower_threshold and top_and_bottom.upper_threshold:
-            top_and_bottom_answer = phrase_by_user(
-                'top_bottom_values',
-                message.from_user.id if isinstance(message, Message) else user_id,
-                current_value=round(basic_metrics.market_price, 4),
-                min_value=round(top_and_bottom.lower_threshold, 4),
-                max_value=round(top_and_bottom.upper_threshold, 4)
-            )
-        else:
-            top_and_bottom_answer = phrase_by_user(
-                'top_bottom_values',
-                message.from_user.id if isinstance(message, Message) else user_id,
-                current_value=round(basic_metrics.market_price, 4),
-                min_value="Нет данных",
-                max_value="Нет данных"
-            )
-
-        funds_profit_scores = f"{funds_score} баллов из 100"
-        if funds_profit and funds_profit.distribution:
-            distribution_items = funds_profit.distribution.split('\n')
-            formatted_distribution = "\n".join([f"- {item}" for item in distribution_items])
-        else:
-            formatted_distribution = 'Нет данных по распределению токенов' if language == 'RU' else 'No token distribution data'
-
-        formatted_metrics = [
-            f"- {'Капитализация проекта' if language == 'RU' else 'Project capitalization'}: ${round(tokenomics_data.capitalization, 0)}"
-            if tokenomics_data and tokenomics_data.capitalization else (
-                "- Капитализация проекта: Нет данных" if language == 'RU' else "- Project capitalization: No info"
-            ),
-            f"- {'Полная капитализация проекта (FDV)' if language == 'RU' else 'Fully Diluted Valuation (FDV)'}: ${round(tokenomics_data.fdv, 0)}"
-            if tokenomics_data and tokenomics_data.fdv else (
-                "- Полная капитализация проекта (FDV): Нет данных" if language == 'RU' else "- Fully Diluted Valuation (FDV): No info"
-            ),
-            f"- {'Общее количество токенов (Total Supply)' if language == 'RU' else 'Total Supply'}: {round(tokenomics_data.total_supply, 0)}"
-            if tokenomics_data and tokenomics_data.total_supply else (
-                "- Общее количество токенов (Total Supply): Нет данных" if language == 'RU' else "- Total Supply: No info"
-            ),
-            f"- {'Сумма сбора средств от инвесторов (Fundraising)' if language == 'RU' else 'Fundraising'}: ${round(investing_metrics.fundraise, 0)}"
-            if investing_metrics and investing_metrics.fundraise else (
-                "- Сумма сбора средств от инвесторов (Fundraising): Нет данных" if language == 'RU' else "- Fundraising: No info"
-            ),
-            f"- {'Количество подписчиков на Twitter' if language == 'RU' else 'Twitter followers'} ({twitter_link[0]}): {social_metrics.twitter}"
-            if social_metrics and social_metrics.twitter else (
-                "- Количество подписчиков на Twitter: Нет данных" if language == 'RU' else "- Twitter followers: No info"
-            ),
-            f"- {'Twitter Score'}: {social_metrics.twitterscore}"
-            if social_metrics and social_metrics.twitterscore else (
-                "- Twitter Score: Нет данных" if language == 'RU' else "- Twitter Score: No info"
-            ),
-            f"- {'Общая стоимость заблокированных активов (TVL)' if language == 'RU' else 'Total Value Locked (TVL)'}: ${round(network_metrics.tvl, 0)}"
-            if network_metrics and network_metrics.tvl else (
-                "- Общая стоимость заблокированных активов (TVL): Нет данных" if language == 'RU' else "- Total Value Locked (TVL): No info"
-            ),
-            f"- {'Процент нахождения токенов на топ 100 кошельков блокчейна' if language == 'RU' else 'Percentage of tokens on top 100 wallets'}: {round(manipulative_metrics.top_100_wallet * 100, 2)}%"
-            if manipulative_metrics and manipulative_metrics.top_100_wallet else (
-                "- Процент нахождения токенов на топ 100 кошельков блокчейна: Нет данных" if language == 'RU' else "- Percentage of tokens on top 100 wallets: No info"
-            ),
-            f"- {'Инвесторы' if language == 'RU' else 'Investors'}: {investing_metrics.fund_level}"
-            if investing_metrics and investing_metrics.fund_level else (
-                "- Инвесторы: Нет данных" if language == 'RU' else "- Investors: No info"
-            ),
-        ]
-
-        formatted_metrics_text = "\n".join(formatted_metrics)
-
-        pdf.set_font("DejaVu", size=12)
-        pdf.cell(0, 6, f"{'Анализ проекта' if language == 'RU' else 'Project analysis'} {lower_name.capitalize()} (${coin_name.upper()})", 0, 1, 'L')
-        pdf.cell(0, 6, f"{current_date}", 0, 1, 'L')
-
-        pdf.ln(6)
-
-        pdf.set_font("DejaVu", style='B', size=12)
-        pdf.cell(0, 6, f"{'Описание проекта' if language == 'RU' else 'Project description'}:", 0, 1, 'L')
-        pdf.set_font("DejaVu", size=12)
-        pdf.multi_cell(0, 6, token_description, 0)
-
-        pdf.ln(6)
-
-        pdf.set_font("DejaVu", style='B', size=12)
-        pdf.cell(0, 6, f"{'Проект относится к категории' if language == 'RU' else 'The project is categorized as'}:", 0, 1, 'L')
-        pdf.set_font("DejaVu", size=12)
-        pdf.multi_cell(0, 6, chosen_project, 0)
-
-        pdf.ln(6)
-
-        pdf.set_font("DejaVu", style='B', size=12)
-        pdf.multi_cell(0, 6, f"{f'Метрики проекта (уровень {tier_answer})' if language == 'RU' else f'Project metrics (level {tier_answer})'}:", 0)
-        pdf.set_font("DejaVu", size=12)
-        pdf.ln(0.1)
-        pdf.multi_cell(0, 6, formatted_metrics_text, 0)
-
-        pdf.ln(6)
-
-        pdf.set_font("DejaVu", style='B', size=12)
-        pdf.multi_cell(0, 6, f"{'Распределение токенов' if language == 'RU' else 'Token distribution'}:", 0)
-        pdf.set_font("DejaVu", size=12)
-        pdf.ln(0.1)
-        pdf.multi_cell(0, 6, formatted_distribution, 0)
-
-        pdf.ln(6)
-
-        pdf.set_font("DejaVu", style='B', size=12)
-        pdf.multi_cell(0, 6, f"{phrase_by_user('funds_profit_scores', message.from_user.id if isinstance(message, Message) else user_id)}:", 0)
-        pdf.set_font("DejaVu", size=12)
-        pdf.ln(0.1)
-        pdf.multi_cell(0, 6, funds_profit_scores, 0)
-
-        pdf.ln(6)
-
-        pdf.set_font("DejaVu", style='B', size=12)
-        pdf.multi_cell(0, 6, f"{phrase_by_user('top_bottom_2_years', message.from_user.id if isinstance(message, Message) else user_id)}", 0)
-        pdf.set_font("DejaVu", size=12)
-        pdf.ln(0.1)
-        pdf.multi_cell(0, 6, top_and_bottom_answer, 0)
-
-        pdf.ln(6)
-
-        pdf.set_font("DejaVu", style='B', size=12)
-        pdf.cell(0, 6, f"{phrase_by_user('comparing_calculations', message.from_user.id if isinstance(message, Message) else user_id)}", 0, 1, 'L')
-        pdf.set_font("DejaVu", size=12)
-        pdf.multi_cell(0, 6, calculations, 0)
-
-        pdf.ln(6)
-
-        pdf.set_font("DejaVu", style='B', size=12)
-        pdf.cell(0, 6, f"{f'Общая оценка проекта {project_score} баллов ({project_rating})' if language == 'RU' else f'Overall project evaluation {project_score} points ({project_rating})'}", 0, 1, 'L')
-        pdf.set_font("DejaVu", size=12)
-
-        pdf.ln(6)
-
-        pdf.set_font("DejaVu", style='B', size=12)
-        pdf.cell(0, 6, f"{'«Ред» флаги и «грин» флаги' if language == 'RU' else '«Red» flags and «green» flags'}:", 0, 1, 'L')
-        pdf.set_font("DejaVu", size=12)
-        pdf.multi_cell(0, 6, red_green_flags, 0)
-
-        pdf.ln(6)
-
-        pdf.set_font("DejaVu", style='I', size=12)
-        pdf.multi_cell(0, 6, f"***{phrase_by_user('ai_help', message.from_user.id if isinstance(message, Message) else user_id)}", 0)
-        pdf.ln(0.1)
-        pdf.set_font("DejaVu", size=12, style='IU')
-        pdf.set_text_color(0, 0, 255)  # Синий цвет для ссылки
-        pdf.cell(0, 6, "https://t.me/FasolkaAI_bot", 0, 1, 'L', link="https://t.me/FasolkaAI_bot")
-        pdf.set_font("DejaVu", size=12)
-
-        # Сохраняем PDF в память
-        pdf_output = BytesIO()
-        pdf.output(pdf_output)
-        pdf_output.seek(0)
 
         await session.commit()
 
