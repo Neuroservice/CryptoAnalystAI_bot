@@ -907,6 +907,7 @@ async def fetch_fundraise_data(user_coin_name):
 
 async def fetch_tvl_data(coin_name):
     base_url = "https://api.llama.fi/v2/historicalChainTvl/"
+    protocol_url = "https://api.llama.fi/protocol/"
     url = f"{base_url}{coin_name.lower()}"
 
     async with aiohttp.ClientSession() as session:
@@ -914,16 +915,38 @@ async def fetch_tvl_data(coin_name):
             async with session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
-                    # print("data tvl", coin_name.lower(), data)
-                    if data:
-                        last_tvl = data[-1]['tvl']
-                        return last_tvl
+                    # logging.info(f"data tvl (base_url): {coin_name.lower()} - {data}")
+                    if isinstance(data, list) and data:
+                        last_entry = data[-1]
+                        last_tvl = last_entry.get('totalLiquidityUSD', 0)
+                        logging.info(f"Последний TVL (base_url): {last_tvl}")
+                        return float(last_tvl)
                     else:
-                        logging.error(f"No TVL data found for {coin_name}.")
-                        return None
+                        logging.error(f"No TVL data found for {coin_name} using base_url.")
+
+            # Если базовый URL не сработал, пробуем через протокол URL
+            protocol_query = f"{protocol_url}{coin_name.lower()}"
+            async with session.get(protocol_query) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    # print("data tvl (protocol_url):", coin_name.lower(), data)
+
+                    # Проверяем наличие данных о текущих TVL
+                    current_chain_tvl = data.get("currentChainTvls", {})
+                    if current_chain_tvl:
+                        # Ищем ключи, связанные со стейкингом
+                        staking_keys = ["staking", f"{coin_name.lower()}-staking"]
+                        for key in staking_keys:
+                            if key in current_chain_tvl:
+                                staking_tvl = current_chain_tvl[key]
+                                print(f"Найден TVL стейкинга ({key}): {staking_tvl}")
+                                return staking_tvl
+
+                    logging.error(f"No staking TVL found for {coin_name} using protocol_url.")
                 else:
-                    logging.error(f"Failed to fetch TVL data. Status code: {response.status}")
+                    logging.error(f"Protocol URL failed for {coin_name}. Status code: {response.status}")
                     return None
+
         except AttributeError as attr_error:
             logging.error(f"Ошибка доступа к атрибутам данных TVL для {coin_name}: {attr_error}")
             return None
@@ -1048,26 +1071,25 @@ async def check_and_run_tasks(
 
     cryptocompare_params = get_cryptocompare_params(user_coin_name)
 
-    if investing_metrics and not all([
+    if (investing_metrics and not all([
         getattr(investing_metrics, 'fundraise', None),
         getattr(investing_metrics, 'fund_level', None),
         getattr(investing_metrics, 'fund_level', '-') != '-'
-    ]):
+    ])) or not investing_metrics:
         tasks.append((fetch_fundraise_data(lower_name), "investing_metrics"))
 
-    if social_metrics and not all([
+    if (social_metrics and not all([
         getattr(social_metrics, 'twitter', '') != '',
         getattr(social_metrics, 'twitterscore', '') != ''
-    ]):
+    ])) or not social_metrics:
         tasks.append((fetch_twitter_data(twitter_name), "social_metrics"))
 
-    if funds_profit and not all([
+    if (funds_profit and not all([
         getattr(funds_profit, 'distribution', None),
         getattr(funds_profit, 'distribution', '') != ''
-    ]):
+    ])) or not funds_profit:
         tasks.append((get_percantage_data(lower_name, user_coin_name), "funds_profit"))
 
-    logging.info(f"{top_and_bottom, market_metrics, price}")
     if not all([
         top_and_bottom,
         market_metrics,
@@ -1079,10 +1101,10 @@ async def check_and_run_tasks(
         tasks.append((fetch_cryptocompare_data(cryptocompare_params, price, "market_metrics"), "market_metrics"))
         tasks.append((fetch_cryptocompare_data(cryptocompare_params, price, "top_and_bottom"), "top_and_bottom"))
 
-    if manipulative_metrics and not getattr(manipulative_metrics, 'top_100_wallet', None):
+    if (manipulative_metrics and not getattr(manipulative_metrics, 'top_100_wallet', None)) or not manipulative_metrics:
         tasks.append((fetch_top_100_wallets(lower_name), "manipulative_metrics"))
 
-    if network_metrics and not getattr(network_metrics, 'tvl', None):
+    if (network_metrics and not getattr(network_metrics, 'tvl', None)) or not network_metrics:
         tasks.append((fetch_tvl_data(lower_name), "network_metrics"))
 
     # Выполняем задачи
@@ -1094,7 +1116,6 @@ async def check_and_run_tasks(
                 results[model_name] = []
             results[model_name].append(result)
 
-    print("results.items():", results.items(), tasks)
     # Сохранение результатов в базу данных
     for model_name, data_list in results.items():
         model = model_mapping.get(model_name)
@@ -1224,7 +1245,7 @@ async def generate_flags_answer(
         flags_answer += (
             f"\n\nДанные для анализа\n"
             f"- Анализ категории: {category_answer}\n\n"
-            f"- Тир проекта (из функции): {tier}\n"
+            f"- Тир проекта: {tier}\n"
             f"- Тикер монеты: {project.coin_name if project and project.coin_name else 'N/A'}\n"
             f"- Категория: {project.category if project and project.category else 'N/A'}\n"
             f"- Капитализация: ${round(tokenomics_data.capitalization, 2) if tokenomics_data and tokenomics_data.capitalization else 'N/A'}\n"
@@ -1335,7 +1356,7 @@ def map_data_to_model_fields(model_name, data):
         }
     elif model_name == "network_metrics":
         return {
-            "tvl": safe_value(data[0] if data else None)
+            "tvl": safe_value(data if data else None)
         }
 
     logging.warning(f"Не задано сопоставление для модели {model_name}")

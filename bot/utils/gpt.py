@@ -57,7 +57,7 @@ def load_document_for_project_rating_agent() -> str:
 
 
 def load_document_for_flags_agent() -> str:
-    return load_document("6. Агент ред флаги и грин флаги",
+    return load_document("7. Новый промт агента ред флаги и грин флаги",
                          "Примечание, весы (не обращай внимание):")
 
 

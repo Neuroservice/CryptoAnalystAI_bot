@@ -451,6 +451,17 @@ async def receive_data(message: types.Message, state: FSMContext):
     manipulative_metrics = project_info.get("manipulative_metrics")
     network_metrics = project_info.get("network_metrics")
 
+    print(network_metrics)
+
+    if not base_project:
+        await update_or_create(
+            session_local, Project,
+            defaults={
+                'category': chosen_project,
+                'coin_name': user_coin_name
+            },
+        )
+
     header_params = get_header_params(coin_name=user_coin_name)
     twitter_name = await get_twitter_link_by_symbol(user_coin_name)
 
@@ -554,6 +565,7 @@ async def receive_data(message: types.Message, state: FSMContext):
 
     if tasks.get("network_metrics", []):
         last_tvl = tasks.get("network_metrics", [])[0]
+        print("last_tvl: ", last_tvl)
         if last_tvl and price and total_supply:
             await update_or_create(
                 session_local, NetworkMetrics,
@@ -598,7 +610,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         )
         session_local.add(calculation_record)
         await session_local.commit()
-        session_local.refresh(calculation_record)
+        await session_local.refresh(calculation_record)
 
     metrics_data = {
         "circ_supply": tokenomics_data.circ_supply if tokenomics_data else None,
