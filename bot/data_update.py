@@ -1,5 +1,6 @@
 import datetime
 import logging
+import re
 import traceback
 from typing import Type, Any
 
@@ -237,8 +238,7 @@ async def update_agent_answers(async_session):
         top_and_bottom = project_info.get("top_and_bottom")
         manipulative_metrics = project_info.get("manipulative_metrics")
         network_metrics = project_info.get("network_metrics")
-        projects, tokenomics_data_list = await get_project_and_tokenomics(async_session, project.category,
-                                                                          project.coin_name)
+        projects, tokenomics_data_list = await get_project_and_tokenomics(async_session, project.category, project.coin_name)
         
         top_projects = sorted(
             tokenomics_data_list,
@@ -295,8 +295,7 @@ async def update_agent_answers(async_session):
             round((market_metrics.growth_low - 100) * 100, 2) if market_metrics else 'N/A',
             round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A',
             manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A',
-            (
-                        network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'
+            (network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'
         )
 
         project_rating_result = calculate_project_score(
@@ -328,9 +327,12 @@ async def update_agent_answers(async_session):
             funds_answer, tokemonic_answer, comparison_results, project.category, twitter_link, top_and_bottom,
             tier_answer, answer.language)
 
-        flags_answer = flags_answer.replace('**', '')
+        answer = flags_answer
+        answer = answer.replace('**', '')
+        answer += "**Данные для анализа токеномики**:\n" + comparison_results
+        answer = re.sub(r'\n\s*\n', '\n', answer)
 
-        answer.answer = flags_answer
+        answer.answer = answer
         answer.updated_at = current_time
         async_session.add(answer)
         await async_session.commit()
