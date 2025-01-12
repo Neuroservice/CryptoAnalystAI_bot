@@ -3,22 +3,13 @@ from bot.utils.project_data import clean_fundraise_data, clean_twitter_subs
 
 
 def determine_project_tier(
-        capitalization, fundraising, twitter_followers, twitter_score, category, investors
+        capitalization,
+        fundraising,
+        twitter_followers,
+        twitter_score,
+        category,
+        investors,
 ):
-    """
-    Determine the tier of a project based on provided metrics.
-
-    Parameters:
-    - capitalization (float): The project's market capitalization in USD.
-    - fundraising (float): Funds raised by the project in USD.
-    - twitter_followers (int): Number of Twitter followers.
-    - twitter_score (int): Twitter engagement score.
-    - category (str): The project's category.
-    - investors (list): List of investors with their tiers (e.g., "A16Z (TIER 1+)").
-
-    Returns:
-    - str: The tier of the project (e.g., "Tier 1", "Tier 2", etc.).
-    """
     # Define tier criteria
     tier_criteria = {
         "Tier 1": {
@@ -72,6 +63,9 @@ def determine_project_tier(
     }
 
     tier_rank = {"TIER 1": 1, "TIER 2": 2, "TIER 3": 3, "TIER 4": 4}
+
+    if any(value in ("N/A", None, "") for value in [capitalization, fundraising, twitter_followers, twitter_score, category]):
+        return "-"
 
     # Parse investor tiers from input
     parsed_investors = []
@@ -324,10 +318,10 @@ def calculate_project_score(fundraising, tier, twitter_followers, twitter_score,
     if fundraising == 'N/A' or not isinstance(fundraising, (int, float)):
         fundraising = 0
     else:
-        fundraising = float(fundraising)  # Преобразуем в число
+        fundraising = float(fundraising)
 
-    if tier == 'N/A':
-        tier = 'TIER 5'  # Можно задать значение по умолчанию для TIER
+    if tier == 'N/A' or tier == '-':
+        tier = '-'
 
     twitter_followers = clean_twitter_subs(twitter_followers)
     if twitter_followers == 'N/A' or not isinstance(twitter_followers, (int, float)):
