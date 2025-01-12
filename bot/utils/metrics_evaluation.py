@@ -392,6 +392,13 @@ def calculate_project_score(fundraising, tier, twitter_followers, twitter_score,
         final_score=final_score
     )
 
+    project_rating = (
+        "Плохо" if final_score < 50 else
+        "Нейтрально" if 50 <= final_score <= 100 else
+        "Хорошо" if 101 <= final_score <= 200 else
+        "Отлично"
+    )
+
     result = {
         "fundraising_score": fundraising_score,
         "tier_score": tier_score,
@@ -402,6 +409,7 @@ def calculate_project_score(fundraising, tier, twitter_followers, twitter_score,
         "preliminary_score": preliminary_score,
         "tier_coefficient": tier_coefficient,
         "final_score": final_score,
+        "project_rating": project_rating,
         "calculations_summary": calculations_summary
     }
 

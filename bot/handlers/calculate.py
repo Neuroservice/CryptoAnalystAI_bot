@@ -1012,6 +1012,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             preliminary_score = project_rating_result["preliminary_score"]
             tier_coefficient = project_rating_result["tier_coefficient"]
             overal_final_score = project_rating_result["final_score"]
+            project_rating_text = project_rating_result["project_rating"]
 
 
             all_data_string_for_flags_agent = (
@@ -1027,7 +1028,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                                         all_data_string_for_flags_agent, user_languages, project, tokenomics_data, investing_metrics, social_metrics,
                                         funds_profit, market_metrics, manipulative_metrics, network_metrics, tier_answer, funds_answer, tokemonic_answer,
                                         comparison_results, category_answer, twitter_link, top_and_bottom, language)
-            answer = flags_answer
+            answer = f"Итоговое общее количество баллов проекта: {project_rating_result['final_score']} ()"
+            answer += flags_answer
             answer = answer.replace('**', '')
             answer += "**Данные для анализа токеномики**:\n" + comparison_results
             answer = re.sub(r'\n\s*\n', '\n', answer)
@@ -1035,9 +1037,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             flags_answer = answer
 
             print(flags_answer)
-
-            project_score, project_rating = extract_project_score(answer, language)
-
 
             red_green_flags = extract_red_green_flags(answer, language)
             calculations = extract_calculations(answer, language)
@@ -1224,7 +1223,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
             pdf.set_font("DejaVu", style='B', size=12)
             pdf.cell(0, 6,
-                     f"{f'Общая оценка проекта {project_score} баллов ({project_rating})' if language == 'RU' else f'Overall project evaluation {project_score} points ({project_rating})'}",0, 1, 'L')
+                     f"{f'Общая оценка проекта {overal_final_score} баллов ({project_rating_text})' if language == 'RU' else f'Overall project evaluation {overal_final_score} points ({project_rating_text})'}",0, 1, 'L')
             pdf.set_font("DejaVu", size=12)
 
             pdf.ln(6)
