@@ -95,6 +95,7 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
     current_date = calc.date.strftime("%d.%m.%Y")
 
     pdf = PDF(logo_path=logo_path, orientation='P')
+    pdf.set_margins(left=20, top=10, right=20)
     pdf.add_page()
     pdf.add_font("DejaVu", '', dejavu_path, uni=True)
     pdf.add_font("DejaVu", 'B', dejavu_bold_path, uni=True)
