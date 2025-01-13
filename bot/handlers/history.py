@@ -20,7 +20,7 @@ from bot.utils.consts import (
     logo_path,
     dejavu_path,
     color_palette, SessionLocal, async_session, patterns, ai_help_ru, ai_help_ru_split, ai_help_en, ai_help_en_split,
-    dejavu_bold_path, dejavu_italic_path
+    dejavu_bold_path, dejavu_italic_path, times_new_roman_path, times_new_roman_bold_path, times_new_roman_italic_path
 )
 from bot.utils.keyboards.history_keyboards import file_format_keyboard
 from bot.utils.metrics import create_project_data_row, generate_cells_content
@@ -97,12 +97,12 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
     pdf = PDF(logo_path=logo_path, orientation='P')
     pdf.set_margins(left=20, top=10, right=20)
     pdf.add_page()
-    pdf.add_font("DejaVu", '', dejavu_path, uni=True)
-    pdf.add_font("DejaVu", 'B', dejavu_bold_path, uni=True)
-    pdf.add_font("DejaVu", 'I', dejavu_italic_path, uni=True)
+    pdf.add_font("TimesNewRoman", '', times_new_roman_path, uni=True)  # Обычный
+    pdf.add_font("TimesNewRoman", 'B', times_new_roman_bold_path, uni=True)  # Жирный
+    pdf.add_font("TimesNewRoman", 'I', times_new_roman_italic_path, uni=True)  # Курсив
 
     agent_answer = calc.agent_answer if calc.agent_answer else "Ответ модели отсутствует"
-    pdf.set_font("DejaVu", size=12)
+    pdf.set_font("TimesNewRoman", size=12)
     flags_answer = agent_answer
 
     if language == "RU":
@@ -126,7 +126,7 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
     text_to_parse = flags_answer  # Исходный текст для обработки
 
     # Добавление в PDF
-    pdf.set_font("DejaVu", size=12)
+    pdf.set_font("TimesNewRoman", size=12)
     pdf.cell(0, 6, f"{'Анализ проекта' if language == 'RU' else 'Project analysis'}", 0, 1, 'L')
     pdf.cell(0, 6, current_date, 0, 1, 'L')
     pdf.ln(6)
@@ -154,13 +154,13 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
                 before_text = parts[0].strip()
 
                 # Добавляем заголовок жирным
-                pdf.set_font("DejaVu", style="B", size=12)
+                pdf.set_font("TimesNewRoman", style="B", size=12)
                 pdf.multi_cell(0, 6, header, 0)
 
                 pdf.ln(0.1)
 
                 # Обычный текст до фразы
-                pdf.set_font("DejaVu", size=12)
+                pdf.set_font("TimesNewRoman", size=12)
                 if header == "«Ред» флаги и «грин» флаги:":
                     lines = before_text.splitlines()
                     cleaned_lines = []
@@ -182,7 +182,7 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
                 pdf.ln(0.1)
 
                 # Текст с курсивом (фраза и ссылка)
-                pdf.set_font("DejaVu", style="I", size=12)
+                pdf.set_font("TimesNewRoman", style="I", size=12)
                 pdf.multi_cell(0, 6,
                                f"\n\n***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться нашим ИИ консультантом.",
                                0)
@@ -196,13 +196,13 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
                 parts = re.split(ai_help_en_split, content, maxsplit=1)
                 before_text = parts[0].strip()
 
-                pdf.set_font("DejaVu", style="B", size=12)
+                pdf.set_font("TimesNewRoman", style="B", size=12)
                 pdf.multi_cell(0, 6, header, 0)
 
                 pdf.ln(0.1)
 
                 # Обычный текст до фразы
-                pdf.set_font("DejaVu", size=12)
+                pdf.set_font("TimesNewRoman", size=12)
                 if header == "«Red» flags and «green» flags:":
                     lines = before_text.splitlines()
                     cleaned_lines = []
@@ -226,7 +226,7 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
                 pdf.ln(0.1)
 
                 # Текст с курсивом (фраза и ссылка)
-                pdf.set_font("DejaVu", style="I", size=12)
+                pdf.set_font("TimesNewRoman", style="I", size=12)
                 # Сначала выводим обычный текст
                 pdf.multi_cell(0, 6,
                                f"\n\n***If you do not understand the terminology in the report, you can use our AI consultant.",
@@ -239,20 +239,17 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
                 # Возвращаем цвет текста к обычному черному
                 pdf.set_text_color(0, 0, 0)
             else:
-                print("header", header)
-                print("content", content)
                 # Добавляем заголовок жирным
-                pdf.set_font("DejaVu", style="B", size=12)
+                pdf.set_font("TimesNewRoman", style="B", size=12)
                 pdf.multi_cell(0, 6, header, 0)
 
                 pdf.ln(0.1)
 
                 # Добавляем основной текст
-                pdf.set_font("DejaVu", size=12)
+                pdf.set_font("TimesNewRoman", size=12)
                 content_cleaned = content
 
-                if header in ["Описание проекта:", "Оценка прибыльности инвесторов:", "Project description:",
-                              "Evaluating investor profitability:", ]:
+                if header in ["Описание проекта:", "Оценка прибыльности инвесторов:", "Project description:", "Evaluating investor profitability:", ]:
                     content_cleaned = " ".join(content.split())
 
                 content_cleaned = extract_old_calculations(content_cleaned, language)

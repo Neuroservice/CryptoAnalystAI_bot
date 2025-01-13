@@ -8,7 +8,7 @@ from PIL import ImageDraw
 from fpdf import FPDF
 from matplotlib import pyplot as plt
 
-from bot.utils.consts import dejavu_path
+from bot.utils.consts import dejavu_path, times_new_roman_path
 
 
 class PDF(FPDF):
@@ -42,9 +42,9 @@ def create_pdf_file(data, additional_headers):
     pdf = FPDF()
     pdf.add_page()
 
-    pdf.add_font("DejaVu", '', dejavu_path, uni=True)
+    pdf.add_font("TimesNewRoman", '', times_new_roman_path, uni=True)
     # pdf.add_font("DejaVu", '', dejavu_path, uni=True)
-    pdf.set_font("DejaVu", size=12)
+    pdf.set_font("TimesNewRoman", size=12)
 
     for header in additional_headers:
         pdf.cell(40, 10, header, 1)
