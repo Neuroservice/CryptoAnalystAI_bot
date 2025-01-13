@@ -103,7 +103,7 @@ Twitter Score = {twitter_engagement_score}
         ),
         "project_rating_details": """
 Total fundraising amount from investors = {fundraising_score}
-Investors level {tier} = {tier_score}
+Investors level Tier {tier} = {tier_score}
 Twitter followers count = {followers_score}
 Twitter Score = {twitter_engagement_score}
 Comparison with other projects of the same level and category = {tokenomics_score}
