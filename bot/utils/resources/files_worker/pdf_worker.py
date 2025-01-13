@@ -32,15 +32,10 @@ class PDF(FPDF):
         circular_img.save(temp_path, "PNG")
         return temp_path
 
-    def footer(self):
-        """Добавление номера страницы и маленького круглого логотипа внизу каждой страницы."""
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
+    def header(self):
+        """Добавление логотипа в верхний левый угол каждой страницы."""
         if self.footer_logo_path:
-            # Добавление маленького логотипа справа
-            logging.info(f"logo path: {self.footer_logo_path}")
-            # self.image(self.footer_logo_path, x=190, y=282, w=10)
-            self.image(self.footer_logo_path, x=280, y=193, w=10)
+            self.image(self.footer_logo_path, x=193, y=5, w=10)  # Логотип в верхнем левом углу
 
 
 def create_pdf_file(data, additional_headers):
