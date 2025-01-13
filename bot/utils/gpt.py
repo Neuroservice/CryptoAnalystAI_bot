@@ -71,7 +71,7 @@ def create_agent_response(system_content: str, user_prompt: str) -> str:
 
 def category_agent(topic, language):
     system = load_document_for_category_agent()
-    user_prompt = f"Определи к какой категории относится данный проект. Текстовое описание предоставь на языке пользователя: {language}\nВот текстовое описание проекта: {topic}"
+    user_prompt = f"Определи к какой категории относится данный проект. **Текстовое описание токена предоставь исключительно на языке {language}**\nВот текстовое описание проекта: {topic}"
     return create_agent_response(system, user_prompt)
 
 
