@@ -39,7 +39,8 @@ from bot.utils.consts import (
     checking_map,
     dejavu_path,
     logo_path, get_header_params, calculations_choices, async_session, session_local, dejavu_bold_path,
-    dejavu_italic_path, patterns, ai_help_ru, ai_help_en, ai_link, ai_help_en_split, ai_help_ru_split
+    dejavu_italic_path, patterns, ai_help_ru, ai_help_en, ai_link, ai_help_en_split, ai_help_ru_split,
+    times_new_roman_path, times_new_roman_bold_path, times_new_roman_italic_path
 )
 from bot.utils.consts import user_languages
 from bot.utils.gpt import (
@@ -847,6 +848,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
     language = 'RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'
     coin_twitter, about, lower_name = twitter_link
     current_date = datetime.now().strftime("%d.%m.%Y")
+    project_score = '-'
+    project_rating = '-'
 
     input_lines = user_input.split('\n')
     if user_input != '-':
@@ -889,10 +892,10 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
         pdf = PDF(logo_path=logo_path, orientation='P')
         pdf.set_margins(left=20, top=10, right=20)
         pdf.add_page()
-        pdf.add_font("DejaVu", '', dejavu_path, uni=True)
-        pdf.add_font("DejaVu", 'B', dejavu_bold_path, uni=True)
-        pdf.add_font("DejaVu", 'I', dejavu_italic_path, uni=True)
-        pdf.set_font("DejaVu", size=8)
+        pdf.add_font("TimesNewRoman", '', times_new_roman_path, uni=True)  # Обычный
+        pdf.add_font("TimesNewRoman", 'B', times_new_roman_bold_path, uni=True)  # Жирный
+        pdf.add_font("TimesNewRoman", 'I', times_new_roman_italic_path, uni=True)  # Курсив
+        pdf.set_font("TimesNewRoman", size=8)
 
         project_info = await get_user_project_info(session, new_project["coin_name"])
         project = project_info.get("project")
@@ -1037,8 +1040,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
             flags_answer = answer
 
-            print(flags_answer)
-
             red_green_flags = extract_red_green_flags(answer, language)
             calculations = extract_calculations(answer, language)
 
@@ -1142,7 +1143,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 tier_coefficient=tier_coefficient,
             )
 
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.cell(0, 6,
                      f"{'Анализ проекта' if language == 'RU' else 'Project analysis'} {lower_name.capitalize()} (${coin_name.upper()})",
                      0, 1, 'L')
@@ -1150,102 +1151,102 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.set_font("TimesNewRoman", style='B', size=12)
             pdf.cell(0, 6, f"{'Описание проекта' if language == 'RU' else 'Project description'}:", 0, 1, 'L')
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, token_description, 0)
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.set_font("TimesNewRoman", style='B', size=12)
             pdf.cell(0, 6,
                      f"{'Проект относится к категории' if language == 'RU' else 'The project is categorized as'}:", 0,
                      1, 'L')
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.multi_cell(0, 6, chosen_project, 0)
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.set_font("TimesNewRoman", style='B', size=12)
             pdf.multi_cell(0, 6,
                            f"{f'Метрики проекта (уровень {tier_answer})' if language == 'RU' else f'Project metrics (level {tier_answer})'}:",
                            0)
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, formatted_metrics_text, 0)
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.set_font("TimesNewRoman", style='B', size=12)
             pdf.multi_cell(0, 6, f"{'Распределение токенов' if language == 'RU' else 'Token distribution'}:", 0)
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, formatted_distribution, 0)
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.set_font("TimesNewRoman", style='B', size=12)
             pdf.multi_cell(0, 6,
                            f"{phrase_by_user('funds_profit_scores', message.from_user.id if isinstance(message, Message) else user_id)}:",0)
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, profit_text, 0)
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.set_font("TimesNewRoman", style='B', size=12)
             pdf.multi_cell(0, 6,
                            f"{phrase_by_user('top_bottom_2_years', message.from_user.id if isinstance(message, Message) else user_id)}",
                            0)
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, top_and_bottom_answer, 0)
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.set_font("TimesNewRoman", style='B', size=12)
             pdf.cell(0, 6,
                      f"{phrase_by_user('comparing_calculations', message.from_user.id if isinstance(message, Message) else user_id)}",
                      0, 1, 'L')
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, calculations, 0)
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.set_font("TimesNewRoman", style='B', size=12)
             pdf.cell(0, 6, f"{f'Оценка проекта:' if language == 'RU' else f'Overall evaluation:'}",0, 0, 'L')
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, project_evaluation, 0)
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.set_font("TimesNewRoman", style='B', size=12)
             pdf.cell(0, 6,
                      f"{f'Общая оценка проекта {overal_final_score} баллов ({project_rating_text})' if language == 'RU' else f'Overall project evaluation {overal_final_score} points ({project_rating_text})'}",0, 1, 'L')
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='B', size=12)
+            pdf.set_font("TimesNewRoman", style='B', size=12)
             pdf.cell(0, 6, f"{'«Ред» флаги и «грин» флаги' if language == 'RU' else '«Red» flags and «green» flags'}:",
                      0, 1, 'L')
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.multi_cell(0, 6, red_green_flags, 0)
 
             pdf.ln(6)
 
-            pdf.set_font("DejaVu", style='I', size=12)
+            pdf.set_font("TimesNewRoman", style='I', size=12)
             pdf.multi_cell(0, 6,
                            f"***{phrase_by_user('ai_help', message.from_user.id if isinstance(message, Message) else user_id)}",
                            0)
             pdf.ln(0.1)
-            pdf.set_font("DejaVu", size=12, style='IU')
+            pdf.set_font("TimesNewRoman", size=12, style='IU')
             pdf.set_text_color(0, 0, 255)  # Синий цвет для ссылки
             pdf.cell(0, 6, "https://t.me/FasolkaAI_bot", 0, 1, 'L', link="https://t.me/FasolkaAI_bot")
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
 
         else:
             flags_answer = existing_answer.answer
@@ -1271,7 +1272,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             text_to_parse = flags_answer  # Исходный текст для обработки
 
             # Добавление в PDF
-            pdf.set_font("DejaVu", size=12)
+            pdf.set_font("TimesNewRoman", size=12)
             pdf.cell(0, 6, f"{'Анализ проекта' if language == 'RU' else 'Project analysis'}", 0, 1, 'L')
             pdf.cell(0, 6, current_date, 0, 1, 'L')
             pdf.ln(6)
@@ -1279,13 +1280,10 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             for pattern in selected_patterns:
                 match = re.search(pattern, text_to_parse, re.IGNORECASE | re.DOTALL)
 
-                print(pattern)
                 if match:
-                    print("Matched pattern:", pattern)
                     # Проверка извлеченных данных
                     start, end = match.span()
                     header = match.group(1)
-                    print("Extracted header:", header)
 
                     # Извлекаем содержимое под заголовком
                     content_start = end
@@ -1298,20 +1296,18 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                     content_end = next_header_match.start() + end if next_header_match else len(text_to_parse)
                     content = text_to_parse[content_start:content_end].strip()
 
-                    print(content)
-
                     if re.search(ai_help_ru, content, re.DOTALL):
                         parts = re.split(ai_help_ru_split, content, maxsplit=1)
                         before_text = parts[0].strip()
 
                         # Добавляем заголовок жирным
-                        pdf.set_font("DejaVu", style="B", size=12)
+                        pdf.set_font("TimesNewRoman", style="B", size=12)
                         pdf.multi_cell(0, 6, header, 0)
 
                         pdf.ln(0.1)
 
                         # Обычный текст до фразы
-                        pdf.set_font("DejaVu", size=12)
+                        pdf.set_font("TimesNewRoman", size=12)
                         if header == "«Ред» флаги и «грин» флаги:":
                             lines = before_text.splitlines()
                             cleaned_lines = []
@@ -1334,7 +1330,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         pdf.ln(0.1)
 
                         # Текст с курсивом (фраза и ссылка)
-                        pdf.set_font("DejaVu", style="I", size=12)
+                        pdf.set_font("TimesNewRoman", style="I", size=12)
                         pdf.multi_cell(0, 6,f"\n\n***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться нашим ИИ консультантом.",0)
                         pdf.ln(0.1)
                         # Устанавливаем цвет для ссылки (синий)
@@ -1352,7 +1348,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         pdf.ln(0.1)
 
                         # Обычный текст до фразы
-                        pdf.set_font("DejaVu", size=12)
+                        pdf.set_font("TimesNewRoman", size=12)
                         if header == "«Red» flags and «green» flags:":
                             lines = before_text.splitlines()
                             cleaned_lines = []
@@ -1376,7 +1372,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         pdf.ln(0.1)
 
                         # Текст с курсивом (фраза и ссылка)
-                        pdf.set_font("DejaVu", style="I", size=12)
+                        pdf.set_font("TimesNewRoman", style="I", size=12)
                         # Сначала выводим обычный текст
                         pdf.multi_cell(0, 6,f"\n\n***If you do not understand the terminology in the report, you can use our AI consultant.",0)
                         pdf.ln(0.1)
@@ -1388,14 +1384,13 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         pdf.set_text_color(0, 0, 0)
                     else:
                         # Добавляем заголовок жирным
-                        print("header---------------------------------", header)
-                        pdf.set_font("DejaVu", style="B", size=12)
+                        pdf.set_font("TimesNewRoman", style="B", size=12)
                         pdf.multi_cell(0, 6, header, 0)
 
                         pdf.ln(0.1)
 
                         # Добавляем основной текст
-                        pdf.set_font("DejaVu", size=12)
+                        pdf.set_font("TimesNewRoman", size=12)
                         content_cleaned = content
                         if header in ["Описание проекта:", "Оценка прибыльности инвесторов:", "Project description:", "Evaluating investor profitability:", ]:
                             content_cleaned = " ".join(content.split())
