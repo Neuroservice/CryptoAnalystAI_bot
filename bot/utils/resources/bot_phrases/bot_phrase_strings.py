@@ -41,6 +41,7 @@ Twitter Score = {twitter_engagement_score}
 Процент общих заблокированных активов (TVL) = {tvl_percent}
 Понижающий коэффициент: {tier_coefficient}
 """,
+        "ai_answer_caution": "***Сформированный ИИ агентом отчет не является финансовым советом или рекомендацией к покупке токена",
 
         ## Ошибки
         "error_input_token_from_user": "Ошибка. Проверьте правильность введенного тикера токена и попробуйте еще раз.",
@@ -113,6 +114,7 @@ Percentage of tokens on the top 100 blockchain wallets = {top_100_percent}
 Percentage of total blocked assets (TVL) = {tvl_percent}
 Decreasing coefficient: {tier_coefficient}
 """,
+        "ai_answer_caution": "***Сформированный ИИ агентом отчет не является финансовым советом или рекомендацией к покупке токена",
 
         ## Ошибки
         "error_input_token_from_user": "Error. Check if the coin entered is correct and try again.",
