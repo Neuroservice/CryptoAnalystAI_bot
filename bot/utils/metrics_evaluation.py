@@ -1,4 +1,6 @@
 import logging
+
+from bot.utils.consts import tier_rank, tier_criteria
 from bot.utils.project_data import clean_fundraise_data, clean_twitter_subs
 
 
@@ -10,84 +12,26 @@ def determine_project_tier(
         category,
         investors,
 ):
-    # Define tier criteria
-    tier_criteria = {
-        "Tier 1": {
-            "capitalization": 1_000_000_000,
-            "fundraising": 100_000_000,
-            "twitter_followers": 500_000,
-            "twitter_score": 300,
-            "categories": [
-                "Layer 1",
-                "Layer 2 (ETH)",
-                "Financial sector",
-                "Infrastructure",
-            ],
-            "required_investors": {"TIER 1": 1, "TIER 2": 2},
-        },
-        "Tier 2": {
-            "capitalization": 200_000_000,
-            "fundraising": 50_000_000,
-            "twitter_followers": 100_000,
-            "twitter_score": 100,
-            "categories": [
-                "Layer 1 (OLD)",
-                "DeFi",
-                "Modular Blockchain",
-                "AI",
-                "RWA",
-                "Digital Identity",
-            ],
-            "required_investors": {"TIER 2": 1, "TIER 3": 1},
-        },
-        "Tier 3": {
-            "capitalization": 50_000_000,
-            "fundraising": 20_000_000,
-            "twitter_followers": 50_000,
-            "twitter_score": 50,
-            "categories": [
-                "GameFi / Metaverse",
-                "NFT Platforms / Marketplaces",
-                "SocialFi",
-            ],
-            "required_investors": {"TIER 3": 1, "TIER 4": 1},
-        },
-        "Tier 4": {
-            "capitalization": 10_000_000,
-            "fundraising": 5_000_000,
-            "twitter_followers": 10_000,
-            "twitter_score": 20,
-            "categories": ["TON"],
-            "required_investors": {"TIER 4": 1},
-        },
-    }
-
-    tier_rank = {"TIER 1": 1, "TIER 2": 2, "TIER 3": 3, "TIER 4": 4}
-
     if any(value in ("N/A", None, "") for value in [capitalization, fundraising, twitter_followers, twitter_score, category]):
         return "-"
 
-    # Parse investor tiers from input
     parsed_investors = []
     if isinstance(investors, str):
         investors = [inv.strip() for inv in investors.split(",")]
 
     for investor in investors:
-        print("Investor entry:", investor)
         if "(" in investor and ")" in investor:
             name, tier = investor.rsplit("(", 1)
-            tier = tier.strip(")").replace("+", "")  # Убираем "+" в конце
+            tier = tier.strip(")").replace("+", "")
             parsed_investors.append(tier)
 
     investor_counts = {tier: 0 for tier in tier_rank}
-    print("Parsed Investors:", parsed_investors)
     for tier in parsed_investors:
         if tier in tier_rank:
             investor_counts[tier] += 1
 
     # Determine tier
     for tier, criteria in tier_criteria.items():
-        print(f"Checking {tier}: {criteria}")
 
         # Проверка всех основных метрик
         passes_metrics = (
@@ -98,12 +42,10 @@ def determine_project_tier(
                 and twitter_score != "N/A" and int(twitter_score) >= int(criteria["twitter_score"])
         )
 
-        # Если метрики не подходят, сразу переходим к следующему Tier
         if not passes_metrics:
             print(f"Metrics do not fit for {tier}, moving to the next tier.")
             continue
 
-        # Проверка категории как минимального требования
         if category not in criteria["categories"]:
             print(f"Category {category} does not fit for {tier}, but metrics fit. Moving to the next tier.")
             continue
@@ -117,14 +59,9 @@ def determine_project_tier(
                     remaining_requirements[inv_tier] -= satisfied
                     investor_counts[higher_tier] -= satisfied
 
-        print(f"Remaining investor requirements for {tier}: {remaining_requirements}")
-
-        # Если инвесторы удовлетворены
         if all(count <= 0 for count in remaining_requirements.values()):
-            print(f"Project fits into {tier}!")
             return tier
 
-        # Если не удовлетворяет ни одному Tier, присваиваем Tier 5
     print("Project does not fit into any tier, assigning TIER 5.")
     return "TIER 5"
 
@@ -137,8 +74,6 @@ def calculate_tokenomics_score(project_name, comparisons):
         for ticker, data in comparison.items():
             if ticker != project_name:
                 growth_percent = data.get('growth_percent', 0)
-                print(f"Calculating tokenomics score {comparison}")
-                print(f"ticker: {ticker}, growth: {growth_percent}")
 
                 if abs(growth_percent) <= 1:
                     score = 0
@@ -408,3 +343,65 @@ def calculate_project_score(fundraising, tier, twitter_followers, twitter_score,
     }
 
     return result
+
+
+def project_investors_level(investors):
+    tier_rank = ["TIER 1", "TIER 2", "TIER 3", "TIER 4", "TIER 5"]
+
+    # Парсинг инвесторов
+    parsed_investors = []
+    if isinstance(investors, str):
+        investors = [inv.strip() for inv in investors.split(",")]
+
+    for investor in investors:
+        if "(" in investor and ")" in investor:
+            name, tier = investor.rsplit("(", 1)
+            tier = tier.strip(")").replace("+", "")  # Убираем "+" в конце
+            parsed_investors.append(tier)
+
+    # Считаем количество фондов по каждому Тиру
+    investor_counts = {tier: 0 for tier in tier_rank}
+    for tier in parsed_investors:
+        if tier in tier_rank:
+            investor_counts[tier] += 1
+
+    print(f"Изначальные фонды: {investor_counts}")
+
+    # Логика перекрытия требований
+    remaining_counts = investor_counts.copy()  # Создаем копию для работы
+    for i in range(len(tier_rank) - 1):  # Пропускаем TIER 5
+        higher_tier = tier_rank[i]
+        lower_tier = tier_rank[i + 1]
+        if remaining_counts[higher_tier] > 0:
+            transferable = remaining_counts[higher_tier]  # Все, что можно использовать
+            remaining_counts[lower_tier] = max(0, remaining_counts[lower_tier] - transferable)
+
+    print(f"Оставшиеся фонды после перекрытия: {remaining_counts}")
+
+    # Определяем уровень инвесторов
+    investor_level = 5  # По умолчанию Тир 5
+    if remaining_counts["TIER 1"] >= 1 and (remaining_counts["TIER 1"] + remaining_counts["TIER 2"]) >= 3:
+        investor_level = 1
+    elif remaining_counts["TIER 2"] >= 1 and (remaining_counts["TIER 2"] + remaining_counts["TIER 3"]) >= 2:
+        investor_level = 2
+    elif remaining_counts["TIER 3"] >= 1 and (remaining_counts["TIER 3"] + remaining_counts["TIER 4"]) >= 2:
+        investor_level = 3
+    elif remaining_counts["TIER 4"] >= 1:
+        investor_level = 4
+
+    # Присваиваем баллы в зависимости от уровня
+    level_to_score = {
+        1: 100,
+        2: 60,
+        3: 40,
+        4: 20,
+        5: 0,
+    }
+    score = level_to_score[investor_level]
+
+    return {
+        "level": investor_level,
+        "score": score,
+        "details": investor_counts,
+        "remaining_counts": remaining_counts,
+    }

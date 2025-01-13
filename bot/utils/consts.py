@@ -302,3 +302,55 @@ ai_link = "https://t.me/FasolkaAI_bot"
 
 ai_help_ru_split = re.escape("***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться\nнашим ИИ консультантом.\nhttps://t.me/FasolkaAI_bot")
 ai_help_en_split = re.escape("***If you do not understand the terminology in the report, you can use our AI consultant.\nhttps://t.me/FasolkaAI_bot")
+
+tier_rank = {"TIER 1": 1, "TIER 2": 2, "TIER 3": 3, "TIER 4": 4}
+tier_criteria = {
+        "Tier 1": {
+            "capitalization": 1_000_000_000,
+            "fundraising": 100_000_000,
+            "twitter_followers": 500_000,
+            "twitter_score": 300,
+            "categories": [
+                "Layer 1",
+                "Layer 2 (ETH)",
+                "Financial sector",
+                "Infrastructure",
+            ],
+            "required_investors": {"TIER 1": 1, "TIER 2": 2},
+        },
+        "Tier 2": {
+            "capitalization": 200_000_000,
+            "fundraising": 50_000_000,
+            "twitter_followers": 100_000,
+            "twitter_score": 100,
+            "categories": [
+                "Layer 1 (OLD)",
+                "DeFi",
+                "Modular Blockchain",
+                "AI",
+                "RWA",
+                "Digital Identity",
+            ],
+            "required_investors": {"TIER 2": 1, "TIER 3": 1},
+        },
+        "Tier 3": {
+            "capitalization": 50_000_000,
+            "fundraising": 20_000_000,
+            "twitter_followers": 50_000,
+            "twitter_score": 50,
+            "categories": [
+                "GameFi / Metaverse",
+                "NFT Platforms / Marketplaces",
+                "SocialFi",
+            ],
+            "required_investors": {"TIER 3": 1, "TIER 4": 1},
+        },
+        "Tier 4": {
+            "capitalization": 10_000_000,
+            "fundraising": 5_000_000,
+            "twitter_followers": 10_000,
+            "twitter_score": 20,
+            "categories": ["TON"],
+            "required_investors": {"TIER 4": 1},
+        },
+    }

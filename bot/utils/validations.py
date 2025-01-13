@@ -70,7 +70,7 @@ def extract_description(topic: str) -> str:
     Функция для извлечения описания проекта.
     """
 
-    match = re.search(r'Описание проекта:\s*"([^"]+)"', topic)
+    match = re.search(r'Описание проекта:\s*(.+?)(?=\n\s*\n|$)', topic, re.DOTALL)
     return match.group(1) if match else "Нет описания"
 
 

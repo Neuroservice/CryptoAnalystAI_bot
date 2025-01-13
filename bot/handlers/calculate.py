@@ -52,7 +52,7 @@ from bot.utils.metrics import (
     check_missing_fields
 )
 from bot.utils.metrics_evaluation import determine_project_tier, calculate_tokenomics_score, analyze_project_metrics, \
-    calculate_project_score
+    calculate_project_score, project_investors_level
 from bot.utils.project_data import (
     get_project_and_tokenomics,
     get_twitter_link_by_symbol,
@@ -432,6 +432,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         coin_description += description
 
     category_answer = agent_handler("category", topic=coin_description, language=language)
+    logging.info(f"category_answer: {category_answer}")
     overall_category = extract_overall_category(category_answer)
     token_description = extract_description(category_answer)
     chosen_project = standardize_category(overall_category)
@@ -733,6 +734,14 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
                         raise
 
         if existing_answer is None:
+            if investing_metrics and investing_metrics.fund_level:
+                project_investors_level_result = project_investors_level(investors=investing_metrics.fund_level)
+                investors_level = project_investors_level_result["level"]
+                investors_level_score = project_investors_level_result["score"]
+            else:
+                investors_level = '-'
+                investors_level_score = '-'
+
             tier_answer = determine_project_tier(
                 capitalization=tokenomics_data.capitalization if tokenomics_data else 'N/A',
                 fundraising=investing_metrics.fundraise if investing_metrics else 'N/A',
@@ -848,8 +857,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
     language = 'RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'
     coin_twitter, about, lower_name = twitter_link
     current_date = datetime.now().strftime("%d.%m.%Y")
-    project_score = '-'
-    project_rating = '-'
 
     input_lines = user_input.split('\n')
     if user_input != '-':
@@ -974,6 +981,14 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             (network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data and tokenomics_data.capitalization and tokenomics_data.capitalization != 0 and network_metrics.tvl else 'N/A'
         )
 
+        if investing_metrics and investing_metrics.fund_level:
+            project_investors_level_result = project_investors_level(investors=investing_metrics.fund_level)
+            investors_level = project_investors_level_result["level"]
+            investors_level_score = project_investors_level_result["score"]
+        else:
+            investors_level = '-'
+            investors_level_score = 0
+
         tier_answer = determine_project_tier(
             capitalization=tokenomics_data.capitalization if tokenomics_data else 'N/A',
             fundraising=investing_metrics.fundraise if investing_metrics else 'N/A',
@@ -982,8 +997,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             category=project.category if project else 'N/A',
             investors=investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A',
         )
-
-        logging.info(f"tier agent: {tier_answer}")
 
         if existing_answer is None:
             data_for_tokenomics = []
@@ -997,14 +1010,12 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
             project_rating_result = calculate_project_score(
                 investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
-                tier_answer,
+                f"Tier {investors_level}",
                 social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A',
                 social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A',
                 tokemonic_score if tokemonic_answer else 'N/A',
                 funds_scores if funds_scores else 'N/A'
             )
-
-            logging.info(f"project_rating_result: {project_rating_result}")
 
             project_rating_answer = project_rating_result["calculations_summary"]
             fundraising_score = project_rating_result["fundraising_score"]
@@ -1017,6 +1028,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             tier_coefficient = project_rating_result["tier_coefficient"]
             overal_final_score = project_rating_result["final_score"]
             project_rating_text = project_rating_result["project_rating"]
+            project_score = overal_final_score
+            project_rating = project_rating_text
 
 
             all_data_string_for_flags_agent = (
@@ -1131,12 +1144,12 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
       "project_rating_details",
                 user_id,
                 fundraising_score=int(fundraising_score),
-                tier=tier_answer,
-                tier_score=tier_score,
+                tier=investors_level,
+                tier_score=investors_level_score,
                 followers_score=int(followers_score),
                 twitter_engagement_score=int(twitter_engagement_score),
                 tokenomics_score=tokenomics_score,
-                profitability_score=funds_score,
+                profitability_score=round(funds_score, 2),
                 preliminary_score=int(growth_and_fall_score),
                 top_100_percent=round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 0,
                 tvl_percent=int((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics.tvl and tokenomics_data.total_supply else 0,

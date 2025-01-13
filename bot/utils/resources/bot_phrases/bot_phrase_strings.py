@@ -31,7 +31,7 @@ phrase_dict = {
         ),
         "project_rating_details": """
 Сумма сбора средств от инвесторов (Fundraising) = {fundraising_score}
-Уровень инвесторов {tier} = {tier_score}
+Уровень инвесторов Tier {tier} = {tier_score}
 Количество подписчиков на Twitter = {followers_score}
 Twitter Score = {twitter_engagement_score}
 Сравнение проекта с другими, схожими по уровню и категории = {tokenomics_score}
