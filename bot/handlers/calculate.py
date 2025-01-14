@@ -1445,10 +1445,10 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
         pdf_output.seek(0)
 
-        if not existing_answer or (existing_answer and not existing_answer.answer):
-            doc = fitz.open(stream=pdf_data, filetype="pdf")
-            extracted_text = "".join([page.get_text("text") for page in doc])
+        doc = fitz.open(stream=pdf_data, filetype="pdf")
+        extracted_text = "".join([page.get_text("text") for page in doc])
 
+        if not existing_answer or (existing_answer and not existing_answer.answer):
             new_answer = AgentAnswer(
                 project_id=project.id,
                 answer=extracted_text,
@@ -1457,7 +1457,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             session.add(new_answer)
 
         existing_calculation = await find_record(Calculation, session, id=calculation_record["id"])
-        existing_calculation.agent_answer = flags_answer
+        existing_calculation.agent_answer = extracted_text
         session.add(existing_calculation)
 
         await session.commit()
