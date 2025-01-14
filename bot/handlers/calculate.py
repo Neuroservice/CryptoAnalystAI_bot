@@ -1144,11 +1144,11 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             project_evaluation = phrase_by_user(
       "project_rating_details",
                 user_id,
-                fundraising_score=int(fundraising_score),
+                fundraising_score=round(fundraising_score, 2),
                 tier=investors_level,
                 tier_score=investors_level_score,
                 followers_score=int(followers_score),
-                twitter_engagement_score=int(twitter_engagement_score),
+                twitter_engagement_score=round(twitter_engagement_score, 2),
                 tokenomics_score=tokenomics_score,
                 profitability_score=round(funds_score, 2),
                 preliminary_score=int(growth_and_fall_score),
