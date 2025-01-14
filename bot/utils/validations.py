@@ -87,9 +87,8 @@ def extract_red_green_flags(answer: str, language: str) -> str:
         negative_label = "Данные для анализа"
     else:  # Предполагается, что язык - английский
         # Регулярное выражение для извлечения положительных характеристик
-        positive_pattern = r'(Positive Characteristics:.*?)(?=\s*Negative Characteristics|$)'
-        # Регулярное выражение для извлечения отрицательных характеристик до "Data to analyze"
-        negative_pattern = r'(Negative Characteristics:.*?)(?=\s*Data to analyze|$)'
+        positive_pattern = r'(?i)(Positive Characteristics:.*?)(?=\s*Negative Characteristics|$)'
+        negative_pattern = r'(?i)(Negative Characteristics:.*?)(?=\s*Data to analyze|$)'
         positive_label = "Negative Characteristics:"
         negative_label = "Data to analyze"
 

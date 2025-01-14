@@ -856,6 +856,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
     cells_content = None
     language = 'RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'
     coin_twitter, about, lower_name = twitter_link
+    print(lower_name.capitalize(), twitter_link)
     current_date = datetime.now().strftime("%d.%m.%Y")
 
     input_lines = user_input.split('\n')
@@ -1472,7 +1473,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 reply_markup=ReplyKeyboardRemove()
             )
 
-            await message.answer_document(BufferedInputFile(pdf_output.read(), filename="results.pdf"))
+            await message.answer_document(BufferedInputFile(pdf_output.read(), filename=f"{phrase_by_language('analyse_filename', language).format(token_name=lower_name.capitalize())}.pdf"))
             await message.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", message.from_user.id), reply_markup=ReplyKeyboardRemove())
 
             # Очищаем состояние и устанавливаем новое состояние на ожидание ввода нового токена
@@ -1492,7 +1493,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                     ),
                     reply_markup=ReplyKeyboardRemove()
                 )
-                await bot.send_document(chat_id=user_id, document=BufferedInputFile(pdf_output.read(), filename="results.pdf"))
+
+                await bot.send_document(chat_id=user_id, document=BufferedInputFile(pdf_output.read(), filename=f"{phrase_by_language('analyse_filename', language).format(token_name=lower_name.capitalize())}.pdf"))
                 await bot.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", user_id), reply_markup=ReplyKeyboardRemove())
 
                 # Очищаем состояние и устанавливаем новое состояние на ожидание ввода нового токена
