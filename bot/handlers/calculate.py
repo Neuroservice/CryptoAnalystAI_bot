@@ -1011,7 +1011,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
             project_rating_result = calculate_project_score(
                 investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
-                f"Tier {investors_level}",
+                f"{tier_answer}",
                 social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A',
                 social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A',
                 tokemonic_score if tokemonic_answer else 'N/A',
