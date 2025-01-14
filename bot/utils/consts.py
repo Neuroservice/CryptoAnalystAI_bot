@@ -296,12 +296,30 @@ patterns = {
     ]
 }
 
-ai_help_ru = r"\*\*\*Если\s+Вам\s+не\s+понятна\s+терминология,\s+изложенная\s+в\s+отчете,\s+Вы\s+можете\s+воспользоваться\s+нашим\s+ИИ\s+консультантом\."
-ai_help_en = r"\*\*\*If\s+you\s+do\s+not\s+understand\s+the\s+terminology\s+in\s+the\s+report,\s+you\s+can\s+use\s+our\s+AI\s+consultant\."
+# Шаблоны для поиска текста на русском и английском
+ai_help_ru = (
+    r"\*\*\*Если\s+Вам\s+не\s+понятна\s+терминология,\s+изложенная\s+в\s+отчете,\s+Вы\s+можете\s+воспользоваться\s+нашим\s+ИИ\s+консультантом\."
+    r"\s+https://t\.me/FasolkaAI_bot"
+    r"\s+\*\*\*Сформированный\s+ИИ\s+агентом\s+отчет\s+не\s+является\s+финансовым\s+советом\s+или\s+рекомендацией\s+к\s+покупке\s+токена\."
+)
+ai_help_en = (
+    r"\*\*\*If\s+you\s+do\s+not\s+understand\s+the\s+terminology\s+in\s+the\s+report,\s+you\s+can\s+use\s+our\s+AI\s+consultant\."
+    r"\s+https://t\.me/FasolkaAI_bot"
+    r"\s+\*\*\*The\s+report\s+generated\s+by\s+the\s+AI\s+agent\s+is\s+not\s+financial\s+advice\s+or\s+a\s+recommendation\s+to\s+purchase\s+the\s+token\."
+)
 ai_link = "https://t.me/FasolkaAI_bot"
 
-ai_help_ru_split = re.escape("***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться\nнашим ИИ консультантом.\nhttps://t.me/FasolkaAI_bot")
-ai_help_en_split = re.escape("***If you do not understand the terminology in the report, you can use our AI consultant.\nhttps://t.me/FasolkaAI_bot")
+# Добавление новых текстов
+ai_help_ru_split = (
+    r"\*\*\*Если\s+Вам\s+не\s+понятна\s+терминология,\s+изложенная\s+в\s+отчете,\s+Вы\s+можете\s+воспользоваться\s+нашим\s+ИИ\s+консультантом\.\s*"
+    r"https://t\.me/FasolkaAI_bot\s*"
+    r"\*\*\*Сформированный\s+ИИ\s+агентом\s+отчет\s+не\s+является\s+финансовым\s+советом\s+или\s+рекомендацией\s+к\s+покупке\s+токена\."
+)
+ai_help_en_split = (
+    r"\*\*\*If\s+you\s+do\s+not\s+understand\s+the\s+terminology\s+in\s+the\s+report,\s+you\s+can\s+use\s+our\s+AI\s+consultant\.\s*"
+    r"https://t\.me/FasolkaAI_bot\s*"
+    r"\*\*\*The\s+report\s+generated\s+by\s+the\s+AI\s+agent\s+is\s+not\s+financial\s+advice\s+or\s+a\s+recommendation\s+to\s+purchase\s+the\s+token\."
+)
 
 tier_rank = {"TIER 1": 1, "TIER 2": 2, "TIER 3": 3, "TIER 4": 4}
 tier_criteria = {
