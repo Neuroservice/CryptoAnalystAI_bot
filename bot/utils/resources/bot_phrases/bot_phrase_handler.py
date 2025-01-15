@@ -15,6 +15,14 @@ def phrase_by_user(phrase_id, user_id, **kwargs):
     return phrase
 
 
-def phrase_by_language(phrase_id, language):
-    return phrase_dict.get(language).get(phrase_id)
+def phrase_by_language(phrase_id, language, **kwargs):
+    phrase = phrase_dict.get(language, {}).get(phrase_id)
+
+    if phrase and kwargs:
+        try:
+            phrase = phrase.format(**kwargs)
+        except KeyError as e:
+            raise ValueError(f"Missing placeholder in kwargs for phrase '{phrase_id}': {e}")
+
+    return phrase
 

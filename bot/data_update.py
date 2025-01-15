@@ -2,8 +2,10 @@ import datetime
 import logging
 import re
 import traceback
+from io import BytesIO
 from typing import Type, Any
 
+import fitz
 from itypes import Dict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,10 +20,11 @@ from bot.database.models import (
     FundsProfit,
     AgentAnswer
 )
-from bot.utils.consts import tickers, project_types, get_header_params, SessionLocal, sync_session, calculations_choices
+from bot.utils.consts import tickers, project_types, get_header_params, SessionLocal, sync_session, \
+    calculations_choices, logo_path, times_new_roman_path, times_new_roman_bold_path, times_new_roman_italic_path
 from bot.utils.gpt import agent_handler
 from bot.utils.metrics_evaluation import determine_project_tier, calculate_tokenomics_score, analyze_project_metrics, \
-    calculate_project_score
+    calculate_project_score, project_investors_level
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
     fetch_top_100_wallets,
@@ -31,9 +34,12 @@ from bot.utils.project_data import (
     get_project_and_tokenomics,
     calculate_expected_x,
     get_top_projects_by_capitalization, fetch_coinmarketcap_data, fetch_coingecko_data, update_or_create,
-    generate_flags_answer
+    generate_flags_answer, get_coin_description, standardize_category
 )
-from bot.utils.validations import save_execute
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_language
+from bot.utils.resources.files_worker.pdf_worker import PDF
+from bot.utils.validations import save_execute, extract_red_green_flags, extract_calculations, extract_overall_category, \
+    extract_description
 
 logging.basicConfig(level=logging.INFO)
 current_day = datetime.datetime.utcnow().day
@@ -214,6 +220,16 @@ async def update_agent_answers(async_session):
     three_days_ago = current_time - datetime.timedelta(days=1)
     agents_info = []
     comparison_results = ""
+    language = None
+    current_date = datetime.now().strftime("%d.%m.%Y")
+
+    pdf = PDF(logo_path=logo_path, orientation='P')
+    pdf.set_margins(left=20, top=10, right=20)
+    pdf.add_page()
+    pdf.add_font("TimesNewRoman", '', times_new_roman_path, uni=True)  # Обычный
+    pdf.add_font("TimesNewRoman", 'B', times_new_roman_bold_path, uni=True)  # Жирный
+    pdf.add_font("TimesNewRoman", 'I', times_new_roman_italic_path, uni=True)  # Курсив
+    pdf.set_font("TimesNewRoman", size=8)
 
     stmt = select(AgentAnswer).where(AgentAnswer.updated_at <= three_days_ago)
     result = await async_session.execute(stmt)
@@ -226,6 +242,23 @@ async def update_agent_answers(async_session):
 
         if not project:
             continue
+
+        twitter_name, description, lower_name = await get_twitter_link_by_symbol(project.coin_name)
+        coin_description = await get_coin_description(lower_name)
+        if description:
+            coin_description += description
+
+        category_answer = agent_handler("category", topic=coin_description, language=language)
+        logging.info(f"category_answer: {category_answer}")
+        overall_category = extract_overall_category(category_answer)
+        token_description = extract_description(category_answer)
+        chosen_project = standardize_category(overall_category)
+
+        first_phrase = answer.answer.split(" ", 1)[0]
+        if first_phrase.startswith("Анализ проектов"):
+            language = 'RU'
+        else:
+            language = 'ENG'
 
         project_info = await get_user_project_info(async_session, project.coin_name)
         twitter_link = await get_twitter_link_by_symbol(project.coin_name)
@@ -273,6 +306,7 @@ async def update_agent_answers(async_session):
             twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
             category=project.category if project else 'N/A',
             investors=investing_metrics.fund_level if investing_metrics else 'N/A',
+            language=language if language else 'ENG'
         )
 
         data_for_tokenomics = []
@@ -287,15 +321,33 @@ async def update_agent_answers(async_session):
         )
         funds_agent_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
 
-        funds_answer, funds_scores = analyze_project_metrics(
+        funds_answer, funds_scores, funds_score, growth_and_fall_score, top_100_score, tvl_score = analyze_project_metrics(
             funds_agent_answer,
             investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
             tokenomics_data.total_supply if tokenomics_data and tokenomics_data.total_supply else 'N/A',
             basic_metrics.market_price if basic_metrics and basic_metrics.market_price else 'N/A',
-            round((market_metrics.growth_low - 100) * 100, 2) if market_metrics else 'N/A',
-            round(market_metrics.fail_high * 100, 2) if market_metrics else 'N/A',
+            round((market_metrics.growth_low - 100) * 100, 2) if market_metrics and market_metrics.growth_low else 'N/A',
+            round(market_metrics.fail_high * 100, 2) if market_metrics and market_metrics.fail_high else 'N/A',
             manipulative_metrics.top_100_wallet * 100 if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A',
-            (network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data else 'N/A'
+            (network_metrics.tvl / tokenomics_data.capitalization) * 100 if network_metrics and tokenomics_data and tokenomics_data.capitalization and tokenomics_data.capitalization != 0 and network_metrics.tvl else 'N/A'
+        )
+
+        if investing_metrics and investing_metrics.fund_level:
+            project_investors_level_result = project_investors_level(investors=investing_metrics.fund_level)
+            investors_level = project_investors_level_result["level"]
+            investors_level_score = project_investors_level_result["score"]
+        else:
+            investors_level = '-'
+            investors_level_score = 0
+
+        tier_answer = determine_project_tier(
+            capitalization=tokenomics_data.capitalization if tokenomics_data else 'N/A',
+            fundraising=investing_metrics.fundraise if investing_metrics else 'N/A',
+            twitter_followers=social_metrics.twitter if social_metrics else 'N/A',
+            twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
+            category=project.category if project else 'N/A',
+            investors=investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A',
+            language=language
         )
 
         project_rating_result = calculate_project_score(
@@ -304,10 +356,23 @@ async def update_agent_answers(async_session):
             social_metrics.twitter if social_metrics else 'N/A',
             social_metrics.twitterscore if social_metrics else 'N/A',
             tokemonic_score if tokemonic_answer else 'N/A',
-            funds_scores if funds_answer else 'N/A'
+            funds_scores if funds_answer else 'N/A',
+            language
         )
 
         project_rating_answer = project_rating_result["calculations_summary"]
+        fundraising_score = project_rating_result["fundraising_score"]
+        tier_score = project_rating_result["tier_score"]
+        followers_score = project_rating_result["followers_score"]
+        twitter_engagement_score = project_rating_result["twitter_engagement_score"]
+        tokenomics_score = project_rating_result["tokenomics_score"]
+        profitability_score = project_rating_result["profitability_score"]
+        preliminary_score = project_rating_result["preliminary_score"]
+        tier_coefficient = project_rating_result["tier_coefficient"]
+        overal_final_score = project_rating_result["final_score"]
+        project_rating_text = project_rating_result["project_rating"]
+        project_score = overal_final_score
+        project_rating = project_rating_text
 
         all_data_string_for_flags_agent = (
             f"Проект: {project.coin_name}\n"
@@ -332,7 +397,245 @@ async def update_agent_answers(async_session):
         answer += "**Данные для анализа токеномики**:\n" + comparison_results
         answer = re.sub(r'\n\s*\n', '\n', answer)
 
-        answer.answer = answer
+        red_green_flags = extract_red_green_flags(answer, language)
+        calculations = extract_calculations(answer, language)
+
+        if top_and_bottom and top_and_bottom.lower_threshold and top_and_bottom.upper_threshold:
+            top_and_bottom_answer = phrase_by_language(
+                'top_bottom_values',
+                language,
+                current_value=round(basic_metrics.market_price, 4),
+                min_value=round(top_and_bottom.lower_threshold, 4),
+                max_value=round(top_and_bottom.upper_threshold, 4)
+            )
+        else:
+            top_and_bottom_answer = phrase_by_language(
+                'top_bottom_values',
+                language,
+                current_value=round(basic_metrics.market_price, 4),
+                min_value="Нет данных",
+                max_value="Нет данных"
+            )
+
+        capitalization = float(
+            tokenomics_data.capitalization) if tokenomics_data and tokenomics_data.capitalization else (
+            'Нет данных' if language == 'RU' else 'No info')
+        fundraising_amount = float(
+            investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else (
+            'Нет данных' if language == 'RU' else 'No info')
+        investors_percent = float(funds_agent_answer.strip('%')) / 100
+
+        if isinstance(capitalization, float) and isinstance(fundraising_amount, float):
+            result_ratio = (capitalization * investors_percent) / fundraising_amount
+            final_score = f"{result_ratio:.2%}"
+        else:
+            result_ratio = 'Нет данных' if language == 'RU' else 'No info'
+            final_score = result_ratio
+
+        profit_text = phrase_by_language(
+            "investor_profit_text",
+            language=language,
+            capitalization=f"{capitalization:,.2f}" if isinstance(capitalization, float) else capitalization,
+            investors_percent=f"{investors_percent:.0%}" if isinstance(investors_percent, float) else investors_percent,
+            fundraising_amount=f"{fundraising_amount:,.2f}" if isinstance(fundraising_amount,
+                                                                          float) else fundraising_amount,
+            result_ratio=f"{result_ratio:.4f}" if isinstance(result_ratio, float) else result_ratio,
+            final_score=final_score
+        )
+
+        if funds_profit and funds_profit.distribution:
+            distribution_items = funds_profit.distribution.split('\n')
+            formatted_distribution = "\n".join([f"- {item}" for item in distribution_items])
+        else:
+            formatted_distribution = 'Нет данных по распределению токенов' if language == 'RU' else 'No token distribution data'
+
+        formatted_metrics = [
+            f"- {'Капитализация проекта' if language == 'RU' else 'Project capitalization'}: ${round(tokenomics_data.capitalization, 0)}"
+            if tokenomics_data and tokenomics_data.capitalization else (
+                "- Капитализация проекта: Нет данных" if language == 'RU' else "- Project capitalization: No info"
+            ),
+            f"- {'Полная капитализация проекта (FDV)' if language == 'RU' else 'Fully Diluted Valuation (FDV)'}: ${round(tokenomics_data.fdv, 0)}"
+            if tokenomics_data and tokenomics_data.fdv else (
+                "- Полная капитализация проекта (FDV): Нет данных" if language == 'RU' else "- Fully Diluted Valuation (FDV): No info"
+            ),
+            f"- {'Общее количество токенов (Total Supply)' if language == 'RU' else 'Total Supply'}: {round(tokenomics_data.total_supply, 0)}"
+            if tokenomics_data and tokenomics_data.total_supply else (
+                "- Общее количество токенов (Total Supply): Нет данных" if language == 'RU' else "- Total Supply: No info"
+            ),
+            f"- {'Сумма сбора средств от инвесторов (Fundraising)' if language == 'RU' else 'Fundraising'}: ${round(investing_metrics.fundraise, 0)}"
+            if investing_metrics and investing_metrics.fundraise else (
+                "- Сумма сбора средств от инвесторов (Fundraising): Нет данных" if language == 'RU' else "- Fundraising: No info"
+            ),
+            f"- {'Количество подписчиков на Twitter' if language == 'RU' else 'Twitter followers'} ({twitter_link[0]}): {social_metrics.twitter}"
+            if social_metrics and social_metrics.twitter else (
+                "- Количество подписчиков на Twitter: Нет данных" if language == 'RU' else "- Twitter followers: No info"
+            ),
+            f"- {'Twitter Score'}: {social_metrics.twitterscore}"
+            if social_metrics and social_metrics.twitterscore else (
+                "- Twitter Score: Нет данных" if language == 'RU' else "- Twitter Score: No info"
+            ),
+            f"- {'Общая стоимость заблокированных активов (TVL)' if language == 'RU' else 'Total Value Locked (TVL)'}: ${round(network_metrics.tvl, 0)}"
+            if network_metrics and network_metrics.tvl else (
+                "- Общая стоимость заблокированных активов (TVL): Нет данных" if language == 'RU' else "- Total Value Locked (TVL): No info"
+            ),
+            f"- {'Процент нахождения токенов на топ 100 кошельков блокчейна' if language == 'RU' else 'Percentage of tokens on top 100 wallets'}: {round(manipulative_metrics.top_100_wallet * 100, 2)}%"
+            if manipulative_metrics and manipulative_metrics.top_100_wallet else (
+                "- Процент нахождения токенов на топ 100 кошельков блокчейна: Нет данных" if language == 'RU' else "- Percentage of tokens on top 100 wallets: No info"
+            ),
+            f"- {'Инвесторы' if language == 'RU' else 'Investors'}: {investing_metrics.fund_level}"
+            if investing_metrics and investing_metrics.fund_level else (
+                "- Инвесторы: Нет данных" if language == 'RU' else "- Investors: No info"
+            ),
+        ]
+
+        formatted_metrics_text = "\n".join(formatted_metrics)
+        project_evaluation = phrase_by_language(
+            "project_rating_details",
+            language,
+            fundraising_score=round(fundraising_score, 2),
+            tier=investors_level,
+            tier_score=investors_level_score,
+            followers_score=int(followers_score),
+            twitter_engagement_score=round(twitter_engagement_score, 2),
+            tokenomics_score=tokenomics_score,
+            profitability_score=round(funds_score, 2),
+            preliminary_score=int(growth_and_fall_score),
+            top_100_percent=round(manipulative_metrics.top_100_wallet * 100,
+                                  2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 0,
+            tvl_percent=int((
+                                        network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics.tvl and tokenomics_data.total_supply else 0,
+            tier_coefficient=tier_coefficient,
+        )
+
+        pdf.set_font("TimesNewRoman", size=12)
+        pdf.cell(0, 6,
+                 f"{'Анализ проекта' if language == 'RU' else 'Project analysis'} {lower_name.capitalize()} (${coin_name.upper()})",
+                 0, 1, 'L')
+        pdf.cell(0, 6, f"{current_date}", 0, 1, 'L')
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='B', size=12)
+        pdf.cell(0, 6, f"{'Описание проекта' if language == 'RU' else 'Project description'}:", 0, 1, 'L')
+        pdf.set_font("TimesNewRoman", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, token_description, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='B', size=12)
+        pdf.cell(0, 6,
+                 f"{'Проект относится к категории' if language == 'RU' else 'The project is categorized as'}:", 0,
+                 1, 'L')
+        pdf.set_font("TimesNewRoman", size=12)
+        pdf.multi_cell(0, 6, chosen_project, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='B', size=12)
+        pdf.multi_cell(0, 6,
+                       f"{f'Метрики проекта (уровень {tier_answer})' if language == 'RU' else f'Project metrics (level {tier_answer})'}:",
+                       0)
+        pdf.set_font("TimesNewRoman", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, formatted_metrics_text, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='B', size=12)
+        pdf.multi_cell(0, 6, f"{'Распределение токенов' if language == 'RU' else 'Token distribution'}:", 0)
+        pdf.set_font("TimesNewRoman", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, formatted_distribution, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='B', size=12)
+        pdf.multi_cell(0, 6,
+                       f"{phrase_by_language('funds_profit_scores', language)}:",
+                       0)
+        pdf.set_font("TimesNewRoman", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, profit_text, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='B', size=12)
+        pdf.multi_cell(0, 6,
+                       f"{phrase_by_language('top_bottom_2_years', language)}",
+                       0)
+        pdf.set_font("TimesNewRoman", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, top_and_bottom_answer, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='B', size=12)
+        pdf.cell(0, 6,
+                 f"{phrase_by_language('comparing_calculations', language)}",
+                 0, 1, 'L')
+        pdf.set_font("TimesNewRoman", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, calculations, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='B', size=12)
+        pdf.cell(0, 6, f"{f'Оценка проекта:' if language == 'RU' else f'Overall evaluation:'}", 0, 0, 'L')
+        pdf.set_font("TimesNewRoman", size=12)
+        pdf.ln(0.1)
+        pdf.multi_cell(0, 6, project_evaluation, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='B', size=12)
+        pdf.cell(0, 6,
+                 f"{f'Общая оценка проекта {overal_final_score} баллов ({project_rating_text})' if language == 'RU' else f'Overall project evaluation {overal_final_score} points ({project_rating_text})'}",
+                 0, 1, 'L')
+        pdf.set_font("TimesNewRoman", size=12)
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='B', size=12)
+        pdf.cell(0, 6, f"{'«Ред» флаги и «грин» флаги' if language == 'RU' else '«Red» flags and «green» flags'}:",
+                 0, 1, 'L')
+        pdf.set_font("TimesNewRoman", size=12)
+        pdf.multi_cell(0, 6, red_green_flags, 0)
+
+        pdf.ln(6)
+
+        pdf.set_font("TimesNewRoman", style='I', size=12)
+        pdf.multi_cell(0, 6,
+                       f"***{phrase_by_language('ai_help', language)}",
+                       0)
+        pdf.ln(0.1)
+        pdf.set_font("TimesNewRoman", size=12, style='IU')
+        pdf.set_text_color(0, 0, 255)  # Синий цвет для ссылки
+        pdf.cell(0, 6, "https://t.me/FasolkaAI_bot", 0, 1, 'L', link="https://t.me/FasolkaAI_bot")
+
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(0.1)
+
+        pdf.set_font("TimesNewRoman", style="I", size=12)
+        pdf.multi_cell(0, 6,
+                       f"\n{phrase_by_language('ai_answer_caution', language)}",
+                       0)
+        pdf.ln(0.1)
+
+        pdf_output = BytesIO()
+        pdf.output(pdf_output)
+
+        # Сбросим указатель на начало
+        pdf_output.seek(0)
+
+        pdf_data = pdf_output.read()
+
+        pdf_output.seek(0)
+
+        doc = fitz.open(stream=pdf_data, filetype="pdf")
+        extracted_text = "".join([page.get_text("text") for page in doc])
+
+        answer.answer = extracted_text
         answer.updated_at = current_time
         async_session.add(answer)
         await async_session.commit()
