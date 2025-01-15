@@ -454,16 +454,12 @@ async def receive_data(message: types.Message, state: FSMContext):
     manipulative_metrics = project_info.get("manipulative_metrics")
     network_metrics = project_info.get("network_metrics")
 
-    print(network_metrics)
-
     if not base_project:
-        base_project = await update_or_create(
-            session_local, Project,
-            defaults={
-                'category': chosen_project,
-                'coin_name': user_coin_name
-            },
+        base_project = Project(
+            category=chosen_project,
+            coin_name=user_coin_name
         )
+        session_local.add(base_project)
 
     header_params = get_header_params(coin_name=user_coin_name)
     twitter_name = await get_twitter_link_by_symbol(user_coin_name)
