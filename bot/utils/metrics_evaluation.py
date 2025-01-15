@@ -11,9 +11,10 @@ def determine_project_tier(
         twitter_score,
         category,
         investors,
+        language
 ):
     if any(value in ("N/A", None, "") for value in [capitalization, fundraising, twitter_followers, twitter_score, category]):
-        return "-"
+        return "Нет данных" if language == 'RU' else "No data"
 
     parsed_investors = []
     if isinstance(investors, str):
@@ -230,7 +231,7 @@ def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_p
     return detailed_report, total_score, funds_score, growth_and_fall_score, top_100_score, tvl_score
 
 
-def calculate_project_score(fundraising, tier, twitter_followers, twitter_score, tokenomics_score, profitability_score):
+def calculate_project_score(fundraising, tier, twitter_followers, twitter_score, tokenomics_score, profitability_score, language):
     FUNDRAISING_DIVISOR = 5_000_000
     FOLLOWERS_DIVISOR = 15_000
     TWITTER_SCORE_MULTIPLIER = 0.1
@@ -294,8 +295,8 @@ def calculate_project_score(fundraising, tier, twitter_followers, twitter_score,
             profitability_score
     )
 
-    tier_coefficient = TIER_COEFFICIENTS.get(tier, 0.60)
-    final_score = round(preliminary_score * tier_coefficient, 2)
+    tier_coefficient = TIER_COEFFICIENTS.get(tier, "Нет данных, коэффициент не применен" if language == 'RU' else "No data, coefficient not applied")
+    final_score = round(preliminary_score * tier_coefficient, 2) if tier_coefficient not in ["Нет данных, коэффициент не применен", "No data, coefficient not applied"] else round(preliminary_score, 2)
 
     calculations_summary = """
     Расчеты:

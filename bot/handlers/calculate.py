@@ -252,7 +252,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             )
             session_local.add(calculation_record)
             await session_local.commit()
-            session_local.refresh(calculation_record)
+            await session_local.refresh(calculation_record)
 
         project_info = await get_user_project_info(session_local, user_coin_name)
         tokenomics_data = project_info.get("tokenomics_data")
@@ -750,6 +750,7 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
                 twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
                 category=project.category if project else 'N/A',
                 investors=investing_metrics.fund_level if investing_metrics else 'N/A',
+                language=language
             )
 
             data_for_tokenomics = []
@@ -781,7 +782,8 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
                 social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A',
                 social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A',
                 tokemonic_score if tokemonic_answer else 'N/A',
-                funds_scores if funds_answer else 'N/A'
+                funds_scores if funds_answer else 'N/A',
+                language
             )
             project_rating_answer = project_rating_result["calculations_summary"]
 
@@ -857,7 +859,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
     cells_content = None
     language = 'RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'
     coin_twitter, about, lower_name = twitter_link
-    print(lower_name.capitalize(), twitter_link)
     current_date = datetime.now().strftime("%d.%m.%Y")
 
     input_lines = user_input.split('\n')
@@ -998,6 +999,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
             category=project.category if project else 'N/A',
             investors=investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A',
+            language=language
         )
 
         if existing_answer is None:
@@ -1016,7 +1018,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A',
                 social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A',
                 tokemonic_score if tokemonic_answer else 'N/A',
-                funds_scores if funds_scores else 'N/A'
+                funds_scores if funds_scores else 'N/A',
+                language
             )
 
             project_rating_answer = project_rating_result["calculations_summary"]
