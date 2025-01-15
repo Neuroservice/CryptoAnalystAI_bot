@@ -151,6 +151,17 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     overall_category = extract_overall_category(category_answer)
     chosen_project_name = standardize_category(overall_category)
 
+    existing_project = await find_record(Project, session_local, coin_name=user_coin_name)
+    if existing_project:
+        new_project = existing_project
+    else:
+        new_project = Project(
+            category=chosen_project_name,
+            coin_name=user_coin_name
+        )
+        session_local.add(new_project)
+        await session_local.commit()
+
     if chosen_project_name == 'Unknown Category':
         await message.answer(phrase_by_user("error_project_inappropriate_category", message.from_user.id))
 
@@ -185,16 +196,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                     total_supply=total_supply,
                     fdv=fdv,
                 )
-
-                existing_project = await find_record(Project, session_local, coin_name=user_coin_name)
-                if existing_project:
-                    new_project = existing_project
-                else:
-                    new_project = Project(
-                        category=chosen_project_name,
-                        coin_name=user_coin_name
-                    )
-                    session_local.add(new_project)
 
                 existing_basic_metrics = await find_record(BasicMetrics, session_local, project_id=new_project.id)
                 if not existing_basic_metrics:
@@ -456,7 +457,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     print(network_metrics)
 
     if not base_project:
-        await update_or_create(
+        base_project = await update_or_create(
             session_local, Project,
             defaults={
                 'category': chosen_project,
