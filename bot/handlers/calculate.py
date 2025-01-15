@@ -433,7 +433,6 @@ async def receive_data(message: types.Message, state: FSMContext):
         coin_description += description
 
     category_answer = agent_handler("category", topic=coin_description, language=language)
-    logging.info(f"category_answer: {category_answer}")
     overall_category = extract_overall_category(category_answer)
     token_description = extract_description(category_answer)
     chosen_project = standardize_category(overall_category)
@@ -460,6 +459,7 @@ async def receive_data(message: types.Message, state: FSMContext):
             coin_name=user_coin_name
         )
         session_local.add(base_project)
+        await session_local.commit()
 
     header_params = get_header_params(coin_name=user_coin_name)
     twitter_name = await get_twitter_link_by_symbol(user_coin_name)
@@ -564,7 +564,6 @@ async def receive_data(message: types.Message, state: FSMContext):
 
     if tasks.get("network_metrics", []):
         last_tvl = tasks.get("network_metrics", [])[0]
-        print("last_tvl: ", last_tvl)
         if last_tvl and price and total_supply:
             await update_or_create(
                 session_local, NetworkMetrics,
@@ -598,7 +597,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     manipulative_metrics = project_info.get("manipulative_metrics")
     network_metrics = project_info.get("network_metrics")
 
-    new_project = await process_metrics(session_local, user_coin_name, project, chosen_project, tasks, price,
+    new_project = await process_metrics(session_local, user_coin_name, base_project, chosen_project, tasks, price,
                                         total_supply, fundraise, investors)
 
     if new_project:
@@ -985,19 +984,24 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             investors_level = project_investors_level_result["level"]
             investors_level_score = project_investors_level_result["score"]
         else:
-            investors_level = '-'
+            investors_level = 'Нет данных' if language == 'RU' else 'No data'
             investors_level_score = 0
 
+
+        print("1")
         tier_answer = determine_project_tier(
-            capitalization=tokenomics_data.capitalization if tokenomics_data else 'N/A',
-            fundraising=investing_metrics.fundraise if investing_metrics else 'N/A',
-            twitter_followers=social_metrics.twitter if social_metrics else 'N/A',
-            twitter_score=social_metrics.twitterscore if social_metrics else 'N/A',
-            category=project.category if project else 'N/A',
+            capitalization=tokenomics_data.capitalization if tokenomics_data and tokenomics_data.capitalization else 'N/A',
+            fundraising=investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
+            twitter_followers=social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A',
+            twitter_score=social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A',
+            category=project.category if project and project.category else 'N/A',
             investors=investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A',
             language=language
         )
 
+        print(tier_answer)
+
+        print("2")
         if existing_answer is None:
             data_for_tokenomics = []
             for index, coin_name, project_coin, expected_x, fair_price in row_data:
@@ -1005,9 +1009,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 growth_percent = expected_x
                 data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
 
-            logging.info(f"data_for_tokenomics: {data_for_tokenomics}")
             tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
-
+            print("3")
             project_rating_result = calculate_project_score(
                 investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
                 f"{tier_answer}",
@@ -1031,7 +1034,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             project_rating_text = project_rating_result["project_rating"]
             project_score = overal_final_score
             project_rating = project_rating_text
-
+            print("4")
 
             all_data_string_for_flags_agent = (
                 f"Проект: {project.category}\n"
@@ -1153,7 +1156,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 profitability_score=round(funds_score, 2),
                 preliminary_score=int(growth_and_fall_score),
                 top_100_percent=round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 0,
-                tvl_percent=int((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics.tvl and tokenomics_data.total_supply else 0,
+                tvl_percent=int((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and network_metrics.tvl and tokenomics_data and tokenomics_data.total_supply and tokenomics_data.capitalization else 0,
                 tier_coefficient=tier_coefficient,
             )
 
@@ -1295,7 +1298,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
             # Добавление в PDF
             pdf.set_font("TimesNewRoman", size=12)
-            pdf.cell(0, 6, f"{'Анализ проекта' if language == 'RU' else 'Project analysis'}", 0, 1, 'L')
+            pdf.cell(0, 6, f"{'Анализ проекта' if language == 'RU' else 'Project analysis'} {lower_name.capitalize()} (${coin_name.upper()})", 0, 1, 'L')
             pdf.cell(0, 6, current_date, 0, 1, 'L')
             pdf.ln(6)
 

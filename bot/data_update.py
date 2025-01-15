@@ -337,7 +337,7 @@ async def update_agent_answers(async_session):
             investors_level = project_investors_level_result["level"]
             investors_level_score = project_investors_level_result["score"]
         else:
-            investors_level = '-'
+            investors_level = 'Нет данных' if language == 'RU' else 'No data'
             investors_level_score = 0
 
         tier_answer = determine_project_tier(

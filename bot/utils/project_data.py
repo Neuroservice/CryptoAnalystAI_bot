@@ -266,10 +266,12 @@ async def get_twitter_link_by_symbol(symbol):
             if response.status == 200:
                 data = await response.json()
                 if symbol in data['data']:
+                    print(data['data'][symbol])
                     description = data['data'][symbol].get('description', None)
                     lower_name = data['data'][symbol].get('name', None)
                     urls = data['data'][symbol].get('urls', {})
                     twitter_links = urls.get('twitter', [])
+                    print(twitter_links)
                     if twitter_links and description:
                         twitter_link = twitter_links[0].lower()
                         return twitter_link, description, lower_name.lower()
@@ -1215,26 +1217,26 @@ def process_and_update_models(input_lines, field_mapping, model_mapping, session
 
 
 async def generate_flags_answer(
-    user_id=None,
-    session=None,
-    all_data_string_for_flags_agent=None,
-    user_languages=None,
-    project=None,
-    tokenomics_data=None,
-    investing_metrics=None,
-    social_metrics=None,
-    funds_profit=None,
-    market_metrics=None,
-    manipulative_metrics=None,
-    network_metrics=None,
-    tier=None,
-    funds_answer=None,
-    tokemonic_answer=None,
-    comparison_results=None,
-    category_answer=None,
-    twitter_link=None,
-    top_and_bottom=None,
-    language=None,
+        user_id=None,
+        session=None,
+        all_data_string_for_flags_agent=None,
+        user_languages=None,
+        project=None,
+        tokenomics_data=None,
+        investing_metrics=None,
+        social_metrics=None,
+        funds_profit=None,
+        market_metrics=None,
+        manipulative_metrics=None,
+        network_metrics=None,
+        tier=None,
+        funds_answer=None,
+        tokemonic_answer=None,
+        comparison_results=None,
+        category_answer=None,
+        twitter_link=None,
+        top_and_bottom=None,
+        language=None,
 ):
     flags_answer = None
     if (user_id and user_languages and user_languages.get(user_id) == 'RU') or (language and language == 'RU'):
@@ -1259,7 +1261,7 @@ async def generate_flags_answer(
             f"- Рост токена с минимальных значений (%): {round((market_metrics.growth_low - 1) * 100, 2) if market_metrics and market_metrics.growth_low else 'N/A'}\n"
             f"- Падение токена от максимальных значений (%): {round(market_metrics.fail_high * 100, 2) if market_metrics and market_metrics.fail_high else 'N/A'}\n"
             f"- Процент нахождения монет на топ 100 кошельков блокчейна: {round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 'N/A'}%\n"
-            f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data and  tokenomics_data.capitalization and network_metrics.tvl else 'N/A'}%\n\n"
+            f"- Заблокированные токены (TVL): {round((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and tokenomics_data and tokenomics_data.capitalization and network_metrics.tvl else 'N/A'}%\n\n"
             f"- Оценка доходности фондов: {funds_answer if funds_answer else 'N/A'}\n"
             f"- Оценка токеномики: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
         )
@@ -1352,7 +1354,7 @@ def map_data_to_model_fields(model_name, data):
         }
     elif model_name == "manipulative_metrics":
         return {
-            "top_100_wallet": safe_value(data[0] if data else None)
+            "top_100_wallet": safe_value(data if data else None)
         }
     elif model_name == "network_metrics":
         return {
