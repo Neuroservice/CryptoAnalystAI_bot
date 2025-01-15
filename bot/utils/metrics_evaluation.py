@@ -13,7 +13,8 @@ def determine_project_tier(
         investors,
         language
 ):
-    if any(value in ("N/A", None, "") for value in [capitalization, fundraising, twitter_followers, twitter_score, category]):
+    print("investors: ", investors)
+    if any(value in ("N/A", None, "") for value in [capitalization, fundraising, twitter_followers, twitter_score, category, investors]):
         return "Нет данных" if language == 'RU' else "No data"
 
     parsed_investors = []
@@ -43,6 +44,8 @@ def determine_project_tier(
                 and twitter_score != "N/A" and int(twitter_score) >= int(criteria["twitter_score"])
         )
 
+        print(capitalization, fundraising, twitter_followers, twitter_score, parsed_investors, category)
+
         if not passes_metrics:
             print(f"Metrics do not fit for {tier}, moving to the next tier.")
             continue
@@ -64,7 +67,7 @@ def determine_project_tier(
             return tier
 
     print("Project does not fit into any tier, assigning TIER 5.")
-    return "TIER 5"
+    return "Tier 5"
 
 
 def calculate_tokenomics_score(project_name, comparisons):
