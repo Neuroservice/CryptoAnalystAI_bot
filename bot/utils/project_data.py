@@ -29,7 +29,7 @@ from bot.database.models import (
     NetworkMetrics, AgentAnswer
 )
 from bot.utils.consts import tickers, MAX_MESSAGE_LENGTH, get_header_params, SessionLocal, get_cryptocompare_params, \
-    replaced_project_twitter
+    replaced_project_twitter, get_cryptocompare_params_with_full_name
 from bot.utils.gpt import agent_handler
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.utils.validations import is_async_session, save_execute
@@ -783,7 +783,7 @@ def fetch_binance_data(symbol):
         params = {
             "symbol": symbol,
             "interval": "1d",
-            "limit": 180  # 180 дней
+            "limit": 730
         }
         response = requests.get("https://api.binance.com/api/v3/klines", params=params)
         response.raise_for_status()  # Проверяем наличие ошибок HTTP
@@ -803,35 +803,79 @@ def fetch_binance_data(symbol):
         return None, None
 
 
-async def fetch_cryptocompare_data(cryptocompare_params, price, request_type=None):
+def get_coingecko_id_by_symbol(symbol):
+    url = "https://api.coingecko.com/api/v3/coins/list"
+    response = requests.get(url)
+    tokens = response.json()
+    for token in tokens:
+        if token['symbol'].lower() == symbol.lower():
+            return token['id']
+    return None
+
+
+async def fetch_cryptocompare_data(cryptocompare_params, cryptocompare_params_with_full_coin_name, price, request_type=None):
     max_price = None
     min_price = None
     fail_high = None
     growth_low = None
 
     try:
+        # Первый вариант запроса к CryptoCompare
         response = requests.get("https://min-api.cryptocompare.com/data/v2/histoday", params=cryptocompare_params)
         data = response.json()
+
+        print(cryptocompare_params, data)
+
         if 'Data' in data and 'Data' in data['Data']:
             daily_data = data['Data']['Data']
-            highs = [day['high'] for day in daily_data if day['high'] > 0]
-            lows = [day['low'] for day in daily_data if day['low'] > 0]
+            highs = [day['high'] for day in daily_data if day['high'] > 0.00001]
+            lows = [day['low'] for day in daily_data if day['low'] > 0.00001]
             max_price = max(highs)
             min_price = min(lows)
+
+            print(max_price)
+            print(min_price)
 
             fail_high = (price / max_price) - 1
             growth_low = price / min_price
         else:
-            logging.info("Нет данных от CryptoCompare, переключаемся на Binance API.")
-            symbol = cryptocompare_params['fsym'] + cryptocompare_params['tsym']
-            max_price, min_price = fetch_binance_data(symbol)
+            logging.info("Нет данных от первого запроса CryptoCompare, пробуем с полным названием токена.")
 
-            if max_price and min_price:
+            # Второй вариант запроса к CryptoCompare
+            response_full_name = requests.get("https://min-api.cryptocompare.com/data/v2/histoday", params=cryptocompare_params_with_full_coin_name)
+            data_full_name = response_full_name.json()
+
+            if 'Data' in data_full_name and 'Data' in data_full_name['Data']:
+                daily_data = data_full_name['Data']['Data']
+                highs = [day['high'] for day in daily_data if day['high'] > 0]
+                lows = [day['low'] for day in daily_data if day['low'] > 0]
+                max_price = max(highs)
+                min_price = min(lows)
+
                 fail_high = (price / max_price) - 1
                 growth_low = price / min_price
+            else:
+                logging.info("Нет данных от CryptoCompare, переключаемся на Binance API.")
 
-            logging.error("Нет данных от Binance API.")
+                # Попытка получения данных с Binance
+                symbol = cryptocompare_params['fsym'] + cryptocompare_params['tsym']
+                max_price, min_price = fetch_binance_data(symbol)
 
+                if max_price and min_price:
+                    fail_high = (price / max_price) - 1
+                    growth_low = price / min_price
+                else:
+                    logging.error("Нет данных от Binance API, переключаемся на CoinGecko API.")
+
+                    # Попытка получения данных с CoinGecko
+                    token_id = get_coingecko_id_by_symbol(cryptocompare_params['fsym'])
+                    max_price, min_price = fetch_coingecko_max_min_data(token_id, cryptocompare_params['tsym'])
+
+                    if max_price and min_price:
+                        fail_high = (price / max_price) - 1
+                        growth_low = price / min_price
+
+        # Возврат данных в зависимости от типа запроса
         if request_type == 'top_and_bottom':
             return max_price, min_price
         elif request_type == 'market_metrics':
@@ -851,6 +895,30 @@ async def fetch_cryptocompare_data(cryptocompare_params, price, request_type=Non
     except Exception as e:
         logging.error(f"Общая ошибка при извлечении исторических данных: {e}")
         return None
+
+
+def fetch_coingecko_max_min_data(fsym, tsym):
+    try:
+        # Подготовка параметров для CoinGecko
+        coingecko_symbol = fsym.lower()
+        vs_currency = tsym.lower()
+        url = f"https://api.coingecko.com/api/v3/coins/{coingecko_symbol}/market_chart?vs_currency={vs_currency}&days=730"
+
+        response = requests.get(url)
+        data = response.json()
+
+        if 'prices' in data:
+            prices = [price[1] for price in data['prices']]
+            max_price = max(prices)
+            min_price = min(prices)
+            return max_price, min_price
+        else:
+            logging.error("CoinGecko API не вернул данные о ценах.")
+            return None, None
+
+    except Exception as e:
+        logging.error(f"Ошибка при запросе к CoinGecko API: {e}")
+        return None, None
 
 
 async def fetch_twitter_data(name):
@@ -1064,14 +1132,14 @@ async def check_and_run_tasks(
         network_metrics,
         twitter_name,
         user_coin_name,
-        session: AsyncSession,
+        session,
         model_mapping: dict
 ):
-    logging.info(f"IN CHECK_AND_RUN_TASKS --- : {project}")
     tasks = []
     results = {}
 
     cryptocompare_params = get_cryptocompare_params(user_coin_name)
+    cryptocompare_params_with_full_coin_name = get_cryptocompare_params_with_full_name(lower_name.upper())
 
     if (investing_metrics and not all([
         getattr(investing_metrics, 'fundraise', None),
@@ -1100,8 +1168,8 @@ async def check_and_run_tasks(
         getattr(market_metrics, 'fail_high', None),
         getattr(market_metrics, 'growth_low', None)
     ]) and price:
-        tasks.append((fetch_cryptocompare_data(cryptocompare_params, price, "market_metrics"), "market_metrics"))
-        tasks.append((fetch_cryptocompare_data(cryptocompare_params, price, "top_and_bottom"), "top_and_bottom"))
+        tasks.append((fetch_cryptocompare_data(cryptocompare_params, cryptocompare_params_with_full_coin_name, price, "market_metrics"), "market_metrics"))
+        tasks.append((fetch_cryptocompare_data(cryptocompare_params, cryptocompare_params_with_full_coin_name, price, "top_and_bottom"), "top_and_bottom"))
 
     if (manipulative_metrics and not getattr(manipulative_metrics, 'top_100_wallet', None)) or not manipulative_metrics:
         tasks.append((fetch_top_100_wallets(lower_name), "manipulative_metrics"))
@@ -1119,21 +1187,22 @@ async def check_and_run_tasks(
             results[model_name].append(result)
 
     # Сохранение результатов в базу данных
-    for model_name, data_list in results.items():
-        model = model_mapping.get(model_name)
-        if not model:
-            logging.warning(f"Модель для {model_name} не найдена. Пропускаем.")
-            continue
-
-        for data in data_list:
-            # Преобразуем данные в формат для модели
-            data_dict = map_data_to_model_fields(model_name, data)
-            if not data_dict or "N/A" in data_dict.values():
-                logging.warning(f"Данные содержат N/A, пропускаем сохранение: {data}")
+    if results:
+        for model_name, data_list in results.items():
+            model = model_mapping.get(model_name)
+            if not model:
+                logging.warning(f"Модель для {model_name} не найдена. Пропускаем.")
                 continue
 
-            # Сохраняем в базу данных
-            await update_or_create(session, model, project_id=project.id, defaults=data_dict)
+            for data in data_list:
+                # Преобразуем данные в формат для модели
+                data_dict = map_data_to_model_fields(model_name, data)
+                if not data_dict or "N/A" in data_dict.values():
+                    logging.warning(f"Данные содержат N/A, пропускаем сохранение: {data}")
+                    continue
+
+                # Сохраняем в базу данных
+                await update_or_create(session, model, project_id=project.id, defaults=data_dict)
 
     logging.info(f"Результаты сохранены: {results}")
     return results
@@ -1240,8 +1309,6 @@ async def generate_flags_answer(
 ):
     flags_answer = None
     if (user_id and user_languages and user_languages.get(user_id) == 'RU') or (language and language == 'RU'):
-        logging.info("Ответ будет на русском")
-
         language = 'RU'
         flags_answer = agent_handler("flags", topic=all_data_string_for_flags_agent, language=language)
         flags_answer += (
@@ -1266,8 +1333,6 @@ async def generate_flags_answer(
             f"- Оценка токеномики: {tokemonic_answer if tokemonic_answer else 'N/A'}\n\n"
         )
     elif (user_id and user_languages and user_languages.get(user_id) == 'ENG') or (language and language == 'ENG'):
-        logging.info("Ответ будет на английском")
-
         language = 'ENG'
         flags_answer = agent_handler("flags", topic=all_data_string_for_flags_agent, language=language)
         flags_answer += (
@@ -1317,13 +1382,6 @@ async def find_records(model, session: AsyncSession, **filters):
 
 
 def map_data_to_model_fields(model_name, data):
-    """
-    Сопоставляет данные из results полям модели с обработкой None значений.
-
-    :param model_name: Название модели.
-    :param data: Кортеж или список данных из results.
-    :return: Словарь с данными для записи в модель, None если значения невалидные.
-    """
 
     def safe_value(value):
         return value if value is not None else "N/A"
@@ -1370,29 +1428,45 @@ async def update_or_create(session, model, project_id=None, id=None, defaults=No
     """ Вспомогательная функция для обновления или создания записи. """
     instance = None
 
-    logging.info(f"project_id {project_id} id {id}")
+    # Логирование входных данных
+    logging.info(f"project_id: {project_id}, id: {id}, defaults: {defaults}, kwargs: {kwargs}")
 
+    # Инициализация defaults и kwargs
+    defaults = defaults or {}
+    kwargs = kwargs or {}
+
+    # Оптимизация выборки записи
+    query = select(model)
     if id:
-        result = await session.execute(select(model).filter_by(id=id))
-        instance = result.scalars().first()
+        query = query.filter_by(id=id)
+    elif project_id:
+        query = query.filter_by(project_id=project_id)
     else:
-        result = await session.execute(select(model).filter_by(project_id=project_id))
-        instance = result.scalars().first()
+        raise ValueError("Необходимо указать id или project_id для поиска записи.")
 
+    # Выполняем запрос
+    result = await session.execute(query)
+    instance = result.scalars().first()
+
+    # Обновление или создание записи
     if instance:
         for key, value in defaults.items():
-            setattr(instance, key, value)
+            if hasattr(instance, key):
+                setattr(instance, key, value)
+            else:
+                logging.warning(f"Поле '{key}' отсутствует в модели '{model.__name__}'. Пропускаем.")
     else:
+        params = {**kwargs, **defaults}
         if id:
-            params = {**kwargs, **defaults}
             instance = model(id=id, **params)
-            session.add(instance)
-        else:
-            params = {**kwargs, **defaults}
+        elif project_id:
             instance = model(project_id=project_id, **params)
-            session.add(instance)
+        else:
+            raise ValueError("Необходимо указать id или project_id для создания записи.")
+        session.add(instance)
 
     await session.commit()
+
     return instance
 
 

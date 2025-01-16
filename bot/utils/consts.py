@@ -129,14 +129,18 @@ color_palette = ['#FF6633', '#FF33FF', '#00B3E6', '#E6B333', '#3366E6', '#B34D4D
 
 # Списки стейблкоинов и фундаментальных токенов
 stablecoins = [
-    "USDT",
-    "USDC",
-    "BUSD",
-    "DAI",
-    "TUSD",
-    "FRAX",
-    "GUSD",
-    "USTC",
+    "USDT", "USDC", "USDE",
+    "DAI", "FDUSD", "USD0",
+    "USDD", "FRAX", "PYUSD",
+    "TUSD", "USDY", "USDJ",
+    "USDL", "EURS", "USTC",
+    "USDP", "EURC", "USDB",
+    "SBD", "USDX", "BUSD",
+    "VBUSD", "LUSD", "GUSD",
+    "AEUR", "XSGD", "EURT",
+    "CUSD", "EURI", "USDG",
+    "RSV", "SUSD", "ZUSD",
+    "IDRT", "USDV"
 ]
 fundamental_tokens = [
     "BTC",
@@ -167,7 +171,15 @@ def get_cryptocompare_params(user_coin_name):
     return {
         'fsym': user_coin_name,
         'tsym': 'USD',
-        'allData': 'true'
+        'limit': 730
+    }
+
+
+def get_cryptocompare_params_with_full_name(full_coin_name):
+    return {
+        'fsym': full_coin_name,
+        'tsym': 'USD',
+        'limit': 730
     }
 
 
@@ -202,9 +214,6 @@ async_engine = create_async_engine(DATABASE_URL, echo=True)
 Session = sessionmaker(bind=engine)
 sync_session = Session()
 async_session = SessionLocal()
-
-# Папка сохранения бэкапов
-BACKUP_FOLDER = "fasolka_backups"
 
 
 # Данные для ответов:
