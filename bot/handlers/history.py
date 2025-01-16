@@ -5,7 +5,6 @@ import zipfile
 from io import BytesIO
 
 import matplotlib
-import xlsxwriter
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -13,24 +12,24 @@ from aiogram.types import BufferedInputFile
 from fpdf import FPDF
 from sqlalchemy import select
 
-from bot.database.models import Calculation, User
+from bot.database.models import Calculation
 from bot.handlers.start import user_languages
 from bot.utils.consts import (
-    column_widths,
     logo_path,
-    dejavu_path,
-    color_palette, SessionLocal, async_session, patterns, ai_help_ru, ai_help_ru_split, ai_help_en, ai_help_en_split,
-    dejavu_bold_path, dejavu_italic_path, times_new_roman_path, times_new_roman_bold_path, times_new_roman_italic_path
+    async_session,
+    patterns,
+    ai_help_ru,
+    ai_help_ru_split,
+    ai_help_en,
+    ai_help_en_split,
+    times_new_roman_path,
+    times_new_roman_bold_path,
+    times_new_roman_italic_path
 )
-from bot.utils.keyboards.history_keyboards import file_format_keyboard
-from bot.utils.metrics import create_project_data_row, generate_cells_content
-from bot.utils.project_data import get_full_info, calculate_expected_x, get_project_data
+from bot.utils.project_data import calculate_expected_x
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
-from bot.utils.resources.files_worker.pdf_worker import PDF, generate_pie_chart
-from bot.utils.resources.headers.headers import ru_results_headers, eng_results_headers, ru_additional_headers, \
-    eng_additional_headers
-from bot.utils.resources.headers.headers_handler import calculation_header_by_user, write_headers
-from bot.utils.validations import save_execute, extract_old_calculations
+from bot.utils.resources.files_worker.pdf_worker import PDF
+from bot.utils.validations import extract_old_calculations
 
 history_router = Router()
 matplotlib.use('Agg')
@@ -97,9 +96,9 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
     pdf = PDF(logo_path=logo_path, orientation='P')
     pdf.set_margins(left=20, top=10, right=20)
     pdf.add_page()
-    pdf.add_font("TimesNewRoman", '', times_new_roman_path, uni=True)  # Обычный
-    pdf.add_font("TimesNewRoman", 'B', times_new_roman_bold_path, uni=True)  # Жирный
-    pdf.add_font("TimesNewRoman", 'I', times_new_roman_italic_path, uni=True)  # Курсив
+    pdf.add_font("TimesNewRoman", '', times_new_roman_path, uni=True)
+    pdf.add_font("TimesNewRoman", 'B', times_new_roman_bold_path, uni=True)
+    pdf.add_font("TimesNewRoman", 'I', times_new_roman_italic_path, uni=True)
 
     agent_answer = calc.agent_answer if calc.agent_answer else "Ответ модели отсутствует"
     pdf.set_font("TimesNewRoman", size=12)
@@ -111,8 +110,8 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
         match = re.search(r"Overall project evaluation\s*([\d.]+)\s*points\s*\((.+?)\)", flags_answer)
 
     if match:
-        project_score = float(match.group(1))  # Извлекаем баллы
-        project_rating = match.group(2)  # Извлекаем оценку
+        project_score = float(match.group(1))
+        project_rating = match.group(2)
         print(f"Итоговые баллы: {project_score}")
         print(f"Оценка проекта: {project_rating}")
     else:
@@ -121,11 +120,8 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
         print("Не удалось найти итоговые баллы и/или оценку.")
 
     selected_patterns = patterns["RU"] if language == "RU" else patterns["EN"]
+    text_to_parse = flags_answer
 
-    # Обработка текста для PDF
-    text_to_parse = flags_answer  # Исходный текст для обработки
-
-    # Добавление в PDF
     pdf.set_font("TimesNewRoman", size=12)
     pdf.cell(0, 6, f"{'Анализ проекта' if language == 'RU' else 'Project analysis'}", 0, 1, 'L')
     pdf.cell(0, 6, current_date, 0, 1, 'L')
@@ -134,11 +130,9 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
     for pattern in selected_patterns:
         match = re.search(pattern, text_to_parse, re.IGNORECASE | re.DOTALL)
         if match:
-            # Извлекаем заголовок
             start, end = match.span()
             header = match.group(1)
 
-            # Извлекаем содержимое под заголовком
             content_start = end
             next_header_match = None
             for next_pattern in selected_patterns:
@@ -153,23 +147,20 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
                 parts = re.split(ai_help_ru_split, content, maxsplit=1)
                 before_text = parts[0].strip()
 
-                # Добавляем заголовок жирным
                 pdf.set_font("TimesNewRoman", style="B", size=12)
                 pdf.multi_cell(0, 6, header, 0)
 
                 pdf.ln(0.1)
 
-                # Обычный текст до фразы
                 pdf.set_font("TimesNewRoman", size=12)
                 if header == "«Ред» флаги и «грин» флаги:":
                     lines = before_text.splitlines()
                     cleaned_lines = []
                     for line in lines:
-                        stripped_line = " ".join(line.split())  # Убираем лишние пробелы внутри строки
-                        if stripped_line.startswith("-"):  # Если строка начинается с пункта списка
+                        stripped_line = " ".join(line.split())
+                        if stripped_line.startswith("-"):
                             cleaned_lines.append(stripped_line)
-                        elif cleaned_lines and not cleaned_lines[-1].endswith(
-                                ":"):  # Присоединяем к предыдущей строке
+                        elif cleaned_lines and not cleaned_lines[-1].endswith(":"):
                             cleaned_lines[-1] += f" {stripped_line}"
                         else:
                             cleaned_lines.append(stripped_line)
@@ -183,9 +174,7 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
 
                 # Текст с курсивом (фраза и ссылка)
                 pdf.set_font("TimesNewRoman", style="I", size=12)
-                pdf.multi_cell(0, 6,
-                               f"\n\n***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться нашим ИИ консультантом.",
-                               0)
+                pdf.multi_cell(0, 6,f"\n\n***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться нашим ИИ консультантом.",0)
                 pdf.ln(0.1)
                 # Устанавливаем цвет для ссылки (синий)
                 pdf.set_text_color(0, 0, 255)
@@ -195,9 +184,7 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
                 pdf.ln(0.1)
 
                 pdf.set_font("TimesNewRoman", style="I", size=12)
-                pdf.multi_cell(0, 6,
-                               f"\n\n***Сформированный ИИ агентом отчет не является финансовым советом или рекомендацией к покупке токена.",
-                               0)
+                pdf.multi_cell(0, 6,f"\n\n***Сформированный ИИ агентом отчет не является финансовым советом или рекомендацией к покупке токена.",0)
                 pdf.ln(0.1)
 
                 # Возвращаем цвет текста к обычному черному
@@ -210,18 +197,15 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
 
                 pdf.ln(0.1)
 
-                # Обычный текст до фразы
                 pdf.set_font("TimesNewRoman", size=12)
                 if header == "«Red» flags and «green» flags:":
                     lines = before_text.splitlines()
                     cleaned_lines = []
                     for line in lines:
-                        stripped_line = " ".join(line.split())  # Убираем лишние пробелы внутри строки
-                        print("stripped_line: ", stripped_line)
-                        if stripped_line.startswith("-"):  # Если строка начинается с пункта списка
+                        stripped_line = " ".join(line.split())
+                        if stripped_line.startswith("-"):
                             cleaned_lines.append(stripped_line)
-                        elif cleaned_lines and not cleaned_lines[-1].endswith(
-                                ":"):  # Присоединяем к предыдущей строке
+                        elif cleaned_lines and not cleaned_lines[-1].endswith(":"):
                             cleaned_lines[-1] += f" {stripped_line}"
                         else:
                             cleaned_lines.append(stripped_line)
@@ -234,34 +218,24 @@ async def create_pdf_file(zip_file, calc, session, user_id, language):
 
                 pdf.ln(0.1)
 
-                # Текст с курсивом (фраза и ссылка)
                 pdf.set_font("TimesNewRoman", style="I", size=12)
-                # Сначала выводим обычный текст
-                pdf.multi_cell(0, 6,
-                               f"\n\n***If you do not understand the terminology in the report, you can use our AI consultant.",
-                               0)
+                pdf.multi_cell(0, 6,f"\n\n***If you do not understand the terminology in the report, you can use our AI consultant.",0)
                 pdf.ln(0.1)
-                # Устанавливаем цвет для ссылки (синий)
                 pdf.set_text_color(0, 0, 255)
                 pdf.multi_cell(0, 6, "https://t.me/FasolkaAI_bot", 0)
 
-                # Возвращаем цвет текста к обычному черному
                 pdf.set_text_color(0, 0, 0)
                 pdf.ln(0.1)
 
                 pdf.set_font("TimesNewRoman", style="I", size=12)
-                pdf.multi_cell(0, 6,
-                               f"\n\n***The report generated by the AI agent is not financial advice or a recommendation to buy a token.",
-                               0)
+                pdf.multi_cell(0, 6,f"\n\n***The report generated by the AI agent is not financial advice or a recommendation to buy a token.", 0)
                 pdf.ln(0.1)
             else:
-                # Добавляем заголовок жирным
                 pdf.set_font("TimesNewRoman", style="B", size=12)
                 pdf.multi_cell(0, 6, header, 0)
 
                 pdf.ln(0.1)
 
-                # Добавляем основной текст
                 pdf.set_font("TimesNewRoman", size=12)
                 content_cleaned = content
 

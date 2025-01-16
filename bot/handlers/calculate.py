@@ -188,8 +188,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                 capitalization = coin_data["capitalization"]
                 coin_fdv = coin_data["coin_fdv"]
 
-                base_project = await find_record(Project, session_local, coin_name=project.coin_name)
-
                 fdv = tokenomics.fdv if tokenomics.fdv else 0
                 calculation_result = calculate_expected_x(
                     entry_price=price,
@@ -511,6 +509,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         else:
             logging.error(f"Общая ошибка при обработке данных токеномики для монеты {user_coin_name}: {e}")
 
+    logging.info("base_project", base_project, base_project.id)
     tasks = await check_and_run_tasks(
         project=base_project,
         price=price,
@@ -597,8 +596,15 @@ async def receive_data(message: types.Message, state: FSMContext):
     manipulative_metrics = project_info.get("manipulative_metrics")
     network_metrics = project_info.get("network_metrics")
 
-    new_project = await process_metrics(session_local, user_coin_name, base_project, chosen_project, tasks, price,
-                                        total_supply, fundraise, investors)
+    new_project = await process_metrics(session_local,
+                                        user_coin_name,
+                                        base_project,
+                                        chosen_project,
+                                        tasks,
+                                        price,
+                                        total_supply,
+                                        fundraise,
+                                        investors)
 
     if new_project:
         calculation_record = Calculation(
@@ -610,26 +616,6 @@ async def receive_data(message: types.Message, state: FSMContext):
         await session_local.commit()
         await session_local.refresh(calculation_record)
 
-    metrics_data = {
-        "circ_supply": tokenomics_data.circ_supply if tokenomics_data else None,
-        "total_supply": tokenomics_data.total_supply if tokenomics_data else None,
-        "capitalization": tokenomics_data.capitalization if tokenomics_data else None,
-        "fdv": tokenomics_data.fdv if tokenomics_data else None,
-        "entry_price": basic_metrics.entry_price if basic_metrics else None,
-        "market_price": basic_metrics.market_price if basic_metrics else None,
-        "sphere": basic_metrics.sphere if basic_metrics else None,
-        "fundraise": investing_metrics.fundraise if investing_metrics else None,
-        "fund_level": investing_metrics.fund_level if investing_metrics else None,
-        "twitter": social_metrics.twitter if social_metrics else None,
-        "twitterscore": social_metrics.twitterscore if social_metrics else None,
-        "distribution": funds_profit.distribution if funds_profit else None,
-        "lower_threshold": top_and_bottom.lower_threshold if top_and_bottom else None,
-        "upper_threshold": top_and_bottom.upper_threshold if top_and_bottom else None,
-        "fail_high": market_metrics.fail_high if market_metrics else None,
-        "growth_low": market_metrics.growth_low if market_metrics else None,
-        "top_100_wallet": manipulative_metrics.top_100_wallet if manipulative_metrics else None,
-        "tvl": network_metrics.tvl if network_metrics else None
-    }
     data = {
         "new_project": new_project.to_dict(),
         "calculation_record": calculation_record.to_dict(),
@@ -643,9 +629,6 @@ async def receive_data(message: types.Message, state: FSMContext):
         "total_supply": total_supply
     }
 
-    missing_fields, examples = check_missing_fields(metrics_data, checking_map)
-    missing_fields_string = ', '.join(missing_fields)
-
     await session_local.commit()
 
     await state.update_data(**data)
@@ -657,7 +640,6 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
     state_data = await state.get_data()
     user_coin_name = state_data.get("user_coin_name")
     category_answer = state_data.get("category_answer")
-    results = state_data.get("results")
     new_project = state_data.get("new_project")
     agents_info = state_data.get("agents_info")
     twitter_link = state_data.get("twitter_name")
@@ -735,8 +717,8 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
                 investors_level = project_investors_level_result["level"]
                 investors_level_score = project_investors_level_result["score"]
             else:
-                investors_level = '-'
-                investors_level_score = '-'
+                investors_level = 'Нет данных' if language == 'RU' else 'No data'
+                investors_level_score = 0
 
             tier_answer = determine_project_tier(
                 capitalization=tokenomics_data.capitalization if tokenomics_data else 'N/A',
@@ -755,9 +737,7 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
                 data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
             tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
 
-            all_data_string_for_funds_agent = (
-                f"Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
-            )
+            all_data_string_for_funds_agent = (f"Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n")
             funds_agent_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
 
             funds_answer, funds_scores = analyze_project_metrics(
@@ -825,7 +805,6 @@ async def create_basic_report(session, state: FSMContext, message: Optional[Unio
 
     except ValueError:
         error_message = traceback.format_exc()
-        # return phrase_by_user("error_not_valid_input_data", message.from_user.id if isinstance(message, Message) else user_id), error_message
 
         if isinstance(message, Message):
             await message.answer(f"{phrase_by_user('error_not_valid_input_data', message.from_user.id)}\n{error_message}")
@@ -847,11 +826,9 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
     price = state_data.get("price")
     total_supply = state_data.get("total_supply")
     calculation_record = state_data.get("calculation_record")
-    project_category = state_data.get("project_category")
     chosen_project_obj = await find_record(Project, session, coin_name=coin_name)
     user_input = message.text if isinstance(message, Message) else message
     row_data = []
-    cells_content = None
     language = 'RU' if user_languages.get(user_id if not isinstance(message, Message) else message.from_user.id) == 'RU' else 'ENG'
     coin_twitter, about, lower_name = twitter_link
     current_date = datetime.now().strftime("%d.%m.%Y")
@@ -897,9 +874,9 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
         pdf = PDF(logo_path=logo_path, orientation='P')
         pdf.set_margins(left=20, top=10, right=20)
         pdf.add_page()
-        pdf.add_font("TimesNewRoman", '', times_new_roman_path, uni=True)  # Обычный
-        pdf.add_font("TimesNewRoman", 'B', times_new_roman_bold_path, uni=True)  # Жирный
-        pdf.add_font("TimesNewRoman", 'I', times_new_roman_italic_path, uni=True)  # Курсив
+        pdf.add_font("TimesNewRoman", '', times_new_roman_path, uni=True)
+        pdf.add_font("TimesNewRoman", 'B', times_new_roman_bold_path, uni=True)
+        pdf.add_font("TimesNewRoman", 'I', times_new_roman_italic_path, uni=True)
         pdf.set_font("TimesNewRoman", size=8)
 
         project_info = await get_user_project_info(session, new_project["coin_name"])
@@ -918,7 +895,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
         comparison_results = ""
         result_index = 1
-
 
         for index, coin_name, project_coin, expected_x, fair_price in row_data:
             if project_coin != coin_name:
@@ -961,12 +937,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         print(f"fair_price: {fair_price}, type: {type(fair_price)}")
                         raise
 
-        all_data_string_for_funds_agent = (
-            f"Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n"
-        )
+        all_data_string_for_funds_agent = (f"Распределение токенов: {funds_profit.distribution if funds_profit else 'N/A'}\n")
         funds_agent_answer = agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
-
-        logging.info(f"funds_agent_answer: {funds_agent_answer, tokenomics_data.capitalization}")
 
         funds_answer, funds_scores, funds_score, growth_and_fall_score, top_100_score, tvl_score = analyze_project_metrics(
             funds_agent_answer,
@@ -987,8 +959,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             investors_level = 'Нет данных' if language == 'RU' else 'No data'
             investors_level_score = 0
 
-
-        print("1")
         tier_answer = determine_project_tier(
             capitalization=tokenomics_data.capitalization if tokenomics_data and tokenomics_data.capitalization else 'N/A',
             fundraising=investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
@@ -999,9 +969,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             language=language
         )
 
-        print(tier_answer)
-
-        print("2")
         if existing_answer is None:
             data_for_tokenomics = []
             for index, coin_name, project_coin, expected_x, fair_price in row_data:
@@ -1010,7 +977,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
 
             tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
-            print("3")
             project_rating_result = calculate_project_score(
                 investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
                 f"{tier_answer}",
@@ -1034,7 +1000,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             project_rating_text = project_rating_result["project_rating"]
             project_score = overal_final_score
             project_rating = project_rating_text
-            print("4")
 
             all_data_string_for_flags_agent = (
                 f"Проект: {project.category}\n"
@@ -1049,13 +1014,12 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                                         all_data_string_for_flags_agent, user_languages, project, tokenomics_data, investing_metrics, social_metrics,
                                         funds_profit, market_metrics, manipulative_metrics, network_metrics, tier_answer, funds_answer, tokemonic_answer,
                                         comparison_results, category_answer, twitter_link, top_and_bottom, language)
+
             answer = f"Итоговое общее количество баллов проекта: {project_rating_result['final_score']} ()"
             answer += flags_answer
             answer = answer.replace('**', '')
             answer += "**Данные для анализа токеномики**:\n" + comparison_results
             answer = re.sub(r'\n\s*\n', '\n', answer)
-
-            flags_answer = answer
 
             red_green_flags = extract_red_green_flags(answer, language)
             calculations = extract_calculations(answer, language)
@@ -1161,9 +1125,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             )
 
             pdf.set_font("TimesNewRoman", size=12)
-            pdf.cell(0, 6,
-                     f"{'Анализ проекта' if language == 'RU' else 'Project analysis'} {lower_name.capitalize()} (${coin_name.upper()})",
-                     0, 1, 'L')
+            pdf.cell(0, 6,f"{'Анализ проекта' if language == 'RU' else 'Project analysis'} {lower_name.capitalize()} (${coin_name.upper()})",0, 1, 'L')
             pdf.cell(0, 6, f"{current_date}", 0, 1, 'L')
 
             pdf.ln(6)
@@ -1177,18 +1139,14 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             pdf.ln(6)
 
             pdf.set_font("TimesNewRoman", style='B', size=12)
-            pdf.cell(0, 6,
-                     f"{'Проект относится к категории' if language == 'RU' else 'The project is categorized as'}:", 0,
-                     1, 'L')
+            pdf.cell(0, 6, f"{'Проект относится к категории' if language == 'RU' else 'The project is categorized as'}:", 0,1, 'L')
             pdf.set_font("TimesNewRoman", size=12)
             pdf.multi_cell(0, 6, chosen_project, 0)
 
             pdf.ln(6)
 
             pdf.set_font("TimesNewRoman", style='B', size=12)
-            pdf.multi_cell(0, 6,
-                           f"{f'Метрики проекта (уровень {tier_answer})' if language == 'RU' else f'Project metrics (level {tier_answer})'}:",
-                           0)
+            pdf.multi_cell(0, 6, f"{f'Метрики проекта (уровень {tier_answer})' if language == 'RU' else f'Project metrics (level {tier_answer})'}:", 0)
             pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, formatted_metrics_text, 0)
@@ -1204,8 +1162,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             pdf.ln(6)
 
             pdf.set_font("TimesNewRoman", style='B', size=12)
-            pdf.multi_cell(0, 6,
-                           f"{phrase_by_user('funds_profit_scores', message.from_user.id if isinstance(message, Message) else user_id)}:",0)
+            pdf.multi_cell(0, 6, f"{phrase_by_user('funds_profit_scores', message.from_user.id if isinstance(message, Message) else user_id)}:",0)
             pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, profit_text, 0)
@@ -1213,9 +1170,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             pdf.ln(6)
 
             pdf.set_font("TimesNewRoman", style='B', size=12)
-            pdf.multi_cell(0, 6,
-                           f"{phrase_by_user('top_bottom_2_years', message.from_user.id if isinstance(message, Message) else user_id)}",
-                           0)
+            pdf.multi_cell(0, 6,f"{phrase_by_user('top_bottom_2_years', message.from_user.id if isinstance(message, Message) else user_id)}",0)
             pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, top_and_bottom_answer, 0)
@@ -1223,9 +1178,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             pdf.ln(6)
 
             pdf.set_font("TimesNewRoman", style='B', size=12)
-            pdf.cell(0, 6,
-                     f"{phrase_by_user('comparing_calculations', message.from_user.id if isinstance(message, Message) else user_id)}",
-                     0, 1, 'L')
+            pdf.cell(0, 6,f"{phrase_by_user('comparing_calculations', message.from_user.id if isinstance(message, Message) else user_id)}",0, 1, 'L')
             pdf.set_font("TimesNewRoman", size=12)
             pdf.ln(0.1)
             pdf.multi_cell(0, 6, calculations, 0)
@@ -1241,23 +1194,20 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             pdf.ln(6)
 
             pdf.set_font("TimesNewRoman", style='B', size=12)
-            pdf.cell(0, 6,
-                     f"{f'Общая оценка проекта {overal_final_score} баллов ({project_rating_text})' if language == 'RU' else f'Overall project evaluation {overal_final_score} points ({project_rating_text})'}",0, 1, 'L')
+            pdf.cell(0, 6, f"{f'Общая оценка проекта {overal_final_score} баллов ({project_rating_text})' if language == 'RU' else f'Overall project evaluation {overal_final_score} points ({project_rating_text})'}",0, 1, 'L')
             pdf.set_font("TimesNewRoman", size=12)
 
             pdf.ln(6)
 
             pdf.set_font("TimesNewRoman", style='B', size=12)
-            pdf.cell(0, 6, f"{'«Ред» флаги и «грин» флаги' if language == 'RU' else '«Red» flags and «green» flags'}:",
-                     0, 1, 'L')
+            pdf.cell(0, 6, f"{'«Ред» флаги и «грин» флаги' if language == 'RU' else '«Red» flags and «green» flags'}:", 0, 1, 'L')
             pdf.set_font("TimesNewRoman", size=12)
             pdf.multi_cell(0, 6, red_green_flags, 0)
 
             pdf.ln(6)
 
             pdf.set_font("TimesNewRoman", style='I', size=12)
-            pdf.multi_cell(0, 6,
-                           f"***{phrase_by_user('ai_help', message.from_user.id if isinstance(message, Message) else user_id)}",
+            pdf.multi_cell(0, 6,f"***{phrase_by_user('ai_help', message.from_user.id if isinstance(message, Message) else user_id)}",
                            0)
             pdf.ln(0.1)
             pdf.set_font("TimesNewRoman", size=12, style='IU')
@@ -1268,9 +1218,7 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             pdf.ln(0.1)
 
             pdf.set_font("TimesNewRoman", style="I", size=12)
-            pdf.multi_cell(0, 6,
-                           f"\n{phrase_by_user('ai_answer_caution', message.from_user.id if isinstance(message, Message) else user_id)}",
-                           0)
+            pdf.multi_cell(0, 6,f"\n{phrase_by_user('ai_answer_caution', message.from_user.id if isinstance(message, Message) else user_id)}",0)
             pdf.ln(0.1)
 
         else:
@@ -1292,11 +1240,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 print("Не удалось найти итоговые баллы и/или оценку.")
 
             selected_patterns = patterns["RU"] if language == "RU" else patterns["EN"]
+            text_to_parse = flags_answer
 
-            # Обработка текста для PDF
-            text_to_parse = flags_answer  # Исходный текст для обработки
-
-            # Добавление в PDF
             pdf.set_font("TimesNewRoman", size=12)
             pdf.cell(0, 6, f"{'Анализ проекта' if language == 'RU' else 'Project analysis'} {lower_name.capitalize()} (${coin_name.upper()})", 0, 1, 'L')
             pdf.cell(0, 6, current_date, 0, 1, 'L')
@@ -1306,11 +1251,9 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 match = re.search(pattern, text_to_parse, re.IGNORECASE | re.DOTALL)
 
                 if match:
-                    # Проверка извлеченных данных
                     start, end = match.span()
                     header = match.group(1)
 
-                    # Извлекаем содержимое под заголовком
                     content_start = end
                     next_header_match = None
                     for next_pattern in selected_patterns:
@@ -1325,23 +1268,20 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                         parts = re.split(ai_help_ru_split, content, maxsplit=1)
                         before_text = parts[0].strip()
 
-                        # Добавляем заголовок жирным
                         pdf.set_font("TimesNewRoman", style="B", size=12)
                         pdf.multi_cell(0, 6, header, 0)
 
                         pdf.ln(0.1)
 
-                        # Обычный текст до фразы
                         pdf.set_font("TimesNewRoman", size=12)
                         if header == "«Ред» флаги и «грин» флаги:":
                             lines = before_text.splitlines()
                             cleaned_lines = []
                             for line in lines:
-                                stripped_line = " ".join(line.split())  # Убираем лишние пробелы внутри строки
-                                if stripped_line.startswith("-"):  # Если строка начинается с пункта списка
+                                stripped_line = " ".join(line.split())
+                                if stripped_line.startswith("-"):
                                     cleaned_lines.append(stripped_line)
-                                elif cleaned_lines and not cleaned_lines[-1].endswith(
-                                        ":"):  # Присоединяем к предыдущей строке
+                                elif cleaned_lines and not cleaned_lines[-1].endswith(":"):
                                     cleaned_lines[-1] += f" {stripped_line}"
                                 else:
                                     cleaned_lines.append(stripped_line)
@@ -1354,11 +1294,10 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
                         pdf.ln(0.1)
 
-                        # Текст с курсивом (фраза и ссылка)
                         pdf.set_font("TimesNewRoman", style="I", size=12)
                         pdf.multi_cell(0, 6,f"\n\n***Если Вам не понятна терминология, изложенная в отчете, Вы можете воспользоваться нашим ИИ консультантом.",0)
                         pdf.ln(0.1)
-                        # Устанавливаем цвет для ссылки (синий)
+
                         pdf.set_text_color(0, 0, 255)
                         pdf.set_font("TimesNewRoman", style="IU", size=12)
                         pdf.multi_cell(0, 6, "https://t.me/FasolkaAI_bot", 0)
@@ -1379,18 +1318,16 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
 
                         pdf.ln(0.1)
 
-                        # Обычный текст до фразы
+
                         pdf.set_font("TimesNewRoman", size=12)
                         if header == "«Red» flags and «green» flags:":
                             lines = before_text.splitlines()
                             cleaned_lines = []
                             for line in lines:
-                                stripped_line = " ".join(line.split())  # Убираем лишние пробелы внутри строки
-                                print("stripped_line: ", stripped_line)
-                                if stripped_line.startswith("-"):  # Если строка начинается с пункта списка
+                                stripped_line = " ".join(line.split())
+                                if stripped_line.startswith("-"):
                                     cleaned_lines.append(stripped_line)
-                                elif cleaned_lines and not cleaned_lines[-1].endswith(
-                                        ":"):  # Присоединяем к предыдущей строке
+                                elif cleaned_lines and not cleaned_lines[-1].endswith(":"):
                                     cleaned_lines[-1] += f" {stripped_line}"
                                 else:
                                     cleaned_lines.append(stripped_line)
@@ -1441,11 +1378,8 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
         pdf_output = BytesIO()
         pdf.output(pdf_output)
 
-        # Сбросим указатель на начало
         pdf_output.seek(0)
-
         pdf_data = pdf_output.read()
-
         pdf_output.seek(0)
 
         doc = fitz.open(stream=pdf_data, filetype="pdf")
@@ -1479,7 +1413,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
             await message.answer_document(BufferedInputFile(pdf_output.read(), filename=f"{phrase_by_language('analyse_filename', language).format(token_name=lower_name.capitalize())}.pdf"))
             await message.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", message.from_user.id), reply_markup=ReplyKeyboardRemove())
 
-            # Очищаем состояние и устанавливаем новое состояние на ожидание ввода нового токена
             await state.set_state(None)
             await state.set_state(CalculateProject.waiting_for_data)
 
@@ -1500,7 +1433,6 @@ async def create_pdf(session, state: FSMContext, message: Optional[Union[Message
                 await bot.send_document(chat_id=user_id, document=BufferedInputFile(pdf_output.read(), filename=f"{phrase_by_language('analyse_filename', language).format(token_name=lower_name.capitalize())}.pdf"))
                 await bot.send_message(chat_id=user_id, text=phrase_by_user("input_next_token_for_analysis", user_id), reply_markup=ReplyKeyboardRemove())
 
-                # Очищаем состояние и устанавливаем новое состояние на ожидание ввода нового токена
                 await state.set_state(None)
                 await state.set_state(CalculateProject.waiting_for_data)
 
