@@ -166,8 +166,6 @@ async def create_pdf_report(
     try:
         result = await get_project_and_tokenomics(session, chosen_project, coin_name)
 
-        print("result", result)
-
         if not isinstance(result, tuple) or len(result) != 2:
             raise ValueProcessingError("Unexpected result format from get_project_and_tokenomics.")
 
@@ -212,8 +210,6 @@ async def create_pdf_report(
         manipulative_metrics = project_info.get("manipulative_metrics")
         top_and_bottom = project_info.get("top_and_bottom")
         network_metrics = project_info.get("network_metrics")
-
-        print("_________ТУТ_________")
 
         existing_answer = await get_one(session, AgentAnswer, project_id=project.id, language=language)
 

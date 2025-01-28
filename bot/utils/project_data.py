@@ -183,12 +183,10 @@ async def get_twitter_link_by_symbol(symbol: str):
         if response.status == 200:
             data = await response.json()
             if symbol in data['data']:
-                print(data['data'][symbol])
                 description = data['data'][symbol].get('description', None)
                 lower_name = data['data'][symbol].get('name', None)
                 urls = data['data'][symbol].get('urls', {})
                 twitter_links = urls.get('twitter', [])
-                print(twitter_links)
                 if twitter_links and description:
                     twitter_link = twitter_links[0].lower()
                     return twitter_link, description, lower_name.lower()
