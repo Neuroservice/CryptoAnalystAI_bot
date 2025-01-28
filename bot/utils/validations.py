@@ -1,25 +1,39 @@
 import re
-import logging
+from typing import Any, Optional, Callable
 
-from sqlalchemy.ext.asyncio.session import AsyncSession
+from aiogram import types
+from aiogram.fsm.context import FSMContext
 
-from bot.utils.consts import stablecoins, fundamental_tokens
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
+from bot.utils.common.sessions import session_local
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user, phrase_by_language
+from bot.utils.resources.exceptions.exceptions import (
+    ExceptionError,
+    ValueProcessingError,
+    MissingKeyError,
+    AttributeAccessError
+)
+from bot.utils.common.consts import (
+    STABLECOINS,
+    FUNDAMENTAL_TOKENS,
+    OVERALL_PROJECT_CATEGORY_PATTERN,
+    PROJECT_DESCRIPTION_PATTERN,
+    POSITIVE_PATTERN_RU,
+    NEGATIVE_PATTERN_RU,
+    POSITIVE_PATTERN_ENG,
+    NEGATIVE_PATTERN_ENG,
+    TOKENOMICS_PATTERN_ENG,
+    TOKENOMICS_PATTERN_RU,
+    COMPARISON_PATTERN_ENG,
+    COMPARISON_PATTERN_RU,
+    CALCULATIONS_PATTERN_ENG,
+    CALCULATIONS_PATTERN_RU,
+    METRICS_MAPPING,
+    NO_DATA_TEXT,
+    CATEGORY_MAP, MAX_MESSAGE_LENGTH
+)
 
 
-def save_execute(f):
-    async def wrapper(session, *args, **kwargs):
-        try:
-            return await f(session, *args, **kwargs)
-        except Exception as e:
-            if hasattr(session, 'rollback'):
-                await session.rollback()
-            logging.error(e)
-
-    return wrapper
-
-
-async def validate_user_input(user_coin_name, message, state):
+async def validate_user_input(user_coin_name: str, message: types.Message, state: FSMContext):
     """
     Проверяет введенный пользователем токен и выполняет соответствующие действия.
     """
@@ -28,31 +42,21 @@ async def validate_user_input(user_coin_name, message, state):
 
     # Проверка на команду выхода
     if user_coin_name.lower() == "/exit":
-        await message.answer(phrase_by_user("calculations_end", message.from_user.id))
+        await message.answer(await phrase_by_user("calculations_end", message.from_user.id, session_local))
         await state.clear()
         return True
 
     # Проверка на стейблкоин
-    if user_coin_name in stablecoins:
-        await message.answer(phrase_by_user("stablecoins_answer", message.from_user.id))
+    if user_coin_name in STABLECOINS:
+        await message.answer(await phrase_by_user("stablecoins_answer", message.from_user.id, session_local))
         return True
 
     # Проверка на фундаментальный токен
-    if user_coin_name in fundamental_tokens:
-        await message.answer(phrase_by_user("fundamental_tokens_answer", message.from_user.id))
+    if user_coin_name in FUNDAMENTAL_TOKENS:
+        await message.answer(await phrase_by_user("fundamental_tokens_answer", message.from_user.id, session_local))
         return True
 
     return False
-
-
-def format_number(value):
-    """Функция для округления числа до 2 знаков после запятой и преобразования в строку."""
-    if value is None:
-        return "-"
-    try:
-        return "{:.2f}".format(round(value, 6))
-    except (TypeError, ValueError):
-        return "-"
 
 
 def extract_overall_category(category_answer: str) -> str:
@@ -61,67 +65,61 @@ def extract_overall_category(category_answer: str) -> str:
     Находит текст в кавычках после "Общая категория проекта:".
     """
 
-    match = re.search(r'Общая категория проекта:\s*"([^"]+)"', category_answer)
+    match = re.search(OVERALL_PROJECT_CATEGORY_PATTERN, category_answer)
     return match.group(1) if match else "Неизвестная категория"
 
 
-def extract_description(topic: str) -> str:
+def extract_description(topic: str, language: str) -> str:
     """
     Функция для извлечения описания проекта.
     """
 
-    match = re.search(r'Описание проекта:\s*(.+?)(?=\n\s*\n|$)', topic, re.DOTALL)
-    return match.group(1) if match else "Нет описания"
+    match = re.search(PROJECT_DESCRIPTION_PATTERN, topic, re.DOTALL)
+    return match.group(1) if match else phrase_by_language("no_green_flags", language)
 
 
 def extract_red_green_flags(answer: str, language: str) -> str:
     """
     Функция для извлечения ред и грин флагов на русском и английском языках.
     """
+
+    positive_pattern = POSITIVE_PATTERN_ENG
+    negative_pattern = NEGATIVE_PATTERN_ENG
+
     if language == "RU":
-        # Регулярное выражение для извлечения положительных характеристик
-        positive_pattern = r'(Положительные характеристики:.*?)(?=\s*Отрицательные характеристики|$)'
-        # Регулярное выражение для извлечения отрицательных характеристик до "Данные для анализа"
-        negative_pattern = r'(Отрицательные характеристики:.*?)(?=\s*Данные для анализа|$)'
-        positive_label = "Отрицательные характеристики:"
-        negative_label = "Данные для анализа"
-    else:  # Предполагается, что язык - английский
-        # Регулярное выражение для извлечения положительных характеристик
-        positive_pattern = r'(?i)(Positive Characteristics:.*?)(?=\s*Negative Characteristics|$)'
-        negative_pattern = r'(?i)(Negative Characteristics:.*?)(?=\s*Data to analyze|$)'
-        positive_label = "Negative Characteristics:"
-        negative_label = "Data to analyze"
+        positive_pattern = POSITIVE_PATTERN_RU
+        negative_pattern = NEGATIVE_PATTERN_RU
 
     # Извлекаем положительные характеристики
     positive_match = re.search(positive_pattern, answer, re.S)
-    positive_text = positive_match.group(1) if positive_match else "Нет 'грин' флагов" if language == "RU" else "No 'green' flags"
+    positive_text = positive_match.group(1) if positive_match else phrase_by_language("no_green_flags", language)
 
     # Извлекаем отрицательные характеристики
     negative_match = re.search(negative_pattern, answer, re.S)
-    negative_text = negative_match.group(1) if negative_match else "Нет 'ред' флагов" if language == "RU" else "No 'red' flags"
+    negative_text = negative_match.group(1) if negative_match else phrase_by_language("no_red_flags", language)
 
     # Возвращаем объединенные результаты
-    return f"{positive_text}\n\n{negative_text}"
+    return f"{positive_text}\n{negative_text}"
 
 
-def extract_calculations(answer, language):
+def extract_calculations(answer: str, language: str):
     """
     Функция для извлечения описания проекта без заголовка.
     """
 
     if language == "ENG":
-        pattern = r'Data for tokenomic analysis:\s*'
+        pattern = TOKENOMICS_PATTERN_ENG
     else:
-        pattern = r'Данные для анализа токеномики:\s*'
+        pattern = TOKENOMICS_PATTERN_RU
 
     # Удаляем заголовок и пробел после него
     answer = re.sub(pattern, '', answer, count=1)
 
     # Ищем расчёты с учетом языка
     if language == "ENG":
-        match = re.search(r'(Calculation results for.*?)$', answer, re.DOTALL)
+        match = re.search(CALCULATIONS_PATTERN_ENG, answer, re.DOTALL)
     else:
-        match = re.search(r'(Результаты расчета для.*?)$', answer, re.DOTALL)
+        match = re.search(CALCULATIONS_PATTERN_RU, answer, re.DOTALL)
 
     if match:
         extracted_text = match.group(1)
@@ -134,27 +132,26 @@ def extract_calculations(answer, language):
 
         return '\n'.join(lines)
 
-    return "Нет данных" if language == "RU" else "No data"
+    return phrase_by_language("no_data", language)
 
 
-def extract_old_calculations(answer, language):
+def extract_old_calculations(answer: str, language: str):
     """
     Функция для извлечения описания проекта без заголовка.
     """
 
     if language == "ENG":
-        comparison_pattern = r'Comparing\s*the\s*project\s*with\s*others\s*similar\s*in\s*level\s*and\s*category:'
+        comparison_pattern = COMPARISON_PATTERN_RU
     else:
-        comparison_pattern = r'Сравнение\s*проекта\s*с\s*другими,\s*схожими\s*по\s*уровню\s*и\s*категории:'
+        comparison_pattern = COMPARISON_PATTERN_ENG
 
     # Удаляем заголовок и пробел после него
     answer = re.sub(comparison_pattern, '', answer, count=1)
 
     # Ищем расчёты с учетом языка
-    if language == "ENG":
-        match = re.search(r'(Calculation results for.*?)$', answer, re.DOTALL)
-    else:
-        match = re.search(r'(Результаты расчета для.*?)$', answer, re.DOTALL)
+    match = re.search(CALCULATIONS_PATTERN_ENG, answer, re.DOTALL)
+    if language == "RU":
+        match = re.search(CALCULATIONS_PATTERN_RU, answer, re.DOTALL)
 
     if match:
         extracted_text = match.group(1)
@@ -170,10 +167,165 @@ def extract_old_calculations(answer, language):
     return answer
 
 
-def is_async_session(session):
-    return isinstance(session, AsyncSession)
+# Функция для форматирования метрик
+def format_metric(metric_key: str, value: str, language: str, extra=""):
+    """
+    Форматирует строку для метрики.
+    """
+
+    if value and value != 'N/A':
+        return f"- {METRICS_MAPPING[metric_key][language]}{extra}: {value}"
+    else:
+        return f"- {METRICS_MAPPING[metric_key][language]}: {NO_DATA_TEXT[language]}"
 
 
-def if_exist_instance(instance, field):
-    return instance and len(instance) > 1 and isinstance(instance[1], list) and len(
-        instance[1]) > 0 and field is not None
+def clean_fundraise_data(fundraise_str: str):
+    """
+    Преобразует текстовую информацию о фандрейзе в числовой формат.
+    """
+
+    try:
+        clean_str = fundraise_str.replace('$', '').strip()
+        parts = clean_str.split()
+        amount = 1
+
+        for part in parts:
+            clean_part = part
+
+            if clean_part[-1] in ['B', 'M', 'K']:
+                suffix = clean_part[-1]
+                if suffix == 'B':
+                    amount = float(clean_part[:-1])
+                    amount *= 1e9
+                elif suffix == 'M':
+                    amount = float(clean_part[:-1])
+                    amount *= 1e6
+                elif suffix == 'K':
+                    amount = float(clean_part[:-1])
+                    amount *= 1e3
+
+            amount = float(amount)
+
+        return amount
+    except AttributeError as attr_error:
+        raise AttributeAccessError(str(attr_error))
+    except KeyError as key_error:
+        raise MissingKeyError(str(key_error))
+    except ValueError as value_error:
+        raise ValueProcessingError(str(value_error))
+    except Exception as e:
+        raise ExceptionError(str(e))
+
+
+def clean_twitter_subs(twitter_subs: str):
+    """
+    Преобразует текстовую информацию о подписчиках в числовой формат.
+    """
+
+    try:
+        # Если входное значение уже является числом, возвращаем его
+        if isinstance(twitter_subs, (int, float)):
+            return float(twitter_subs)
+
+        # Удаляем символы и обрабатываем строку
+        clean_str = twitter_subs.strip()
+        parts = clean_str.split()
+        amount = 1
+
+        for part in parts:
+            clean_part = part
+
+            if clean_part[-1] in ['B', 'M', 'K']:
+                suffix = clean_part[-1]
+                if suffix == 'B':
+                    amount = float(clean_part[:-1]) * 1e9
+                elif suffix == 'M':
+                    amount = float(clean_part[:-1]) * 1e6
+                elif suffix == 'K':
+                    amount = float(clean_part[:-1]) * 1e3
+            else:
+                amount = float(clean_part)
+
+        return amount
+
+    except AttributeError as attr_error:
+        raise AttributeAccessError(str(attr_error))
+    except KeyError as key_error:
+        raise MissingKeyError(str(key_error))
+    except ValueError as value_error:
+        raise ValueProcessingError(str(value_error))
+    except Exception as e:
+        raise ExceptionError(str(e))
+
+
+def extract_tokenomics(data: str):
+    """
+    Извлекает данные о распределении токенов из текста.
+    """
+
+    tokenomics_data = []
+    clean_data = data.replace('\n', '').replace('\r', '').strip()
+    entries = re.split(r'\)\s*', clean_data)
+
+    for entry in entries:
+        if entry:
+            tokenomics_data.append(entry.strip() + ")")
+
+    return tokenomics_data
+
+
+def standardize_category(overall_category: str) -> str:
+    """
+    Преобразование общей категории в соответствующее английское название.
+    """
+
+    return CATEGORY_MAP.get(overall_category, "Unknown Category")
+
+
+def process_metric(value: Any, default=0.0):
+    """
+    Проверяет значение на наличие 'N/A' или неподходящего типа,
+    и возвращает преобразованное значение (float) или значение по умолчанию.
+
+    :param value: Входное значение для проверки.
+    :param default: Значение по умолчанию, если проверка не пройдена.
+    :return: Преобразованное значение (float) или default.
+    """
+    if value == 'N/A' or not isinstance(value, (int, float)):
+        return default
+    return float(value)
+
+
+def split_long_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
+    """
+    Разбивает длинный текст на части, если он превышает заданный лимит длины.
+    """
+    parts = []
+    while text:
+        part = text[:max_length]
+        parts.append(part)
+        text = text[max_length:]
+    return parts
+
+
+def get_metric_value(
+    obj: Any,
+    attr_chain: Optional[str] = None,
+    fallback: Any = 'N/A',
+    transform: Optional[Callable[[Any], Any]] = None
+):
+    try:
+        if obj is None:
+            return fallback
+        # Проходим по цепочке атрибутов
+        value = obj
+        if attr_chain:
+            for attr in attr_chain.split('.'):
+                value = getattr(value, attr, None)
+                if value is None:
+                    return fallback
+        # Применяем преобразование, если указано
+        return transform(value) if transform else value
+    except (TypeError, ValueError, ZeroDivisionError, AttributeError):
+        return fallback
+

@@ -1,21 +1,50 @@
 import logging
+from typing import Any
 
-from bot.utils.consts import tier_rank, tier_criteria
-from bot.utils.project_data import clean_fundraise_data, clean_twitter_subs
+from bot.utils.common.consts import (
+    TIER_RANK,
+    TIER_CRITERIA,
+    TIER_RANK_LIST,
+    RESULT_STRING,
+    FUNDRAISING_DIVISOR,
+    FOLLOWERS_DIVISOR,
+    TIER_SCORES,
+    TWITTER_SCORE_MULTIPLIER,
+    TIER_COEFFICIENTS,
+    CALCULATIONS_SUMMARY_STR,
+    LEVEL_TO_SCORE,
+    NO_COEFFICIENT
+)
+from bot.utils.project_data import get_project_rating
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_language
+from bot.utils.validations import clean_twitter_subs, process_metric
 
 
 def determine_project_tier(
+        capitalization: float,
+        fundraising: float,
+        twitter_followers: str,
+        twitter_score: int,
+        category: str,
+        investors: str,
+        language: str
+):
+    """
+    Функция определения тира проекта.
+    Принимает данные о проекте (капитализация, фандрейз, кол-во подписчиков в твиттере,
+    баллы твиттерскора, категория, инвесторы). На основе этих входящих метрик делает сравнение с
+    минимальными требованиями для каждого тира. Определяет общий тир проекта и возвращает его.
+    """
+
+    if any(value in ("N/A", None, "") for value in [
         capitalization,
         fundraising,
         twitter_followers,
         twitter_score,
         category,
-        investors,
-        language
-):
-    print("investors: ", investors)
-    if any(value in ("N/A", None, "") for value in [capitalization, fundraising, twitter_followers, twitter_score, category, investors]):
-        return "Нет данных" if language == 'RU' else "No data"
+        investors
+    ]):
+        return phrase_by_language("no_data", language)
 
     parsed_investors = []
     if isinstance(investors, str):
@@ -27,13 +56,13 @@ def determine_project_tier(
             tier = tier.strip(")").replace("+", "")
             parsed_investors.append(tier)
 
-    investor_counts = {tier: 0 for tier in tier_rank}
+    investor_counts = {tier: 0 for tier in TIER_RANK}
     for tier in parsed_investors:
-        if tier in tier_rank:
+        if tier in TIER_RANK:
             investor_counts[tier] += 1
 
     # Determine tier
-    for tier, criteria in tier_criteria.items():
+    for tier, criteria in TIER_CRITERIA.items():
 
         # Проверка всех основных метрик
         passes_metrics = (
@@ -57,8 +86,8 @@ def determine_project_tier(
         # Проверка инвесторов
         remaining_requirements = criteria["required_investors"].copy()
         for inv_tier, required_count in remaining_requirements.items():
-            for higher_tier in tier_rank:
-                if tier_rank[higher_tier] <= tier_rank[inv_tier]:
+            for higher_tier in TIER_RANK:
+                if TIER_RANK[higher_tier] <= TIER_RANK[inv_tier]:
                     satisfied = min(investor_counts[higher_tier], required_count)
                     remaining_requirements[inv_tier] -= satisfied
                     investor_counts[higher_tier] -= satisfied
@@ -70,7 +99,11 @@ def determine_project_tier(
     return "Tier 5"
 
 
-def calculate_tokenomics_score(project_name, comparisons):
+def calculate_tokenomics_score(project_name: str, comparisons: list[dict[str, dict[str, Any]]]):
+    """
+    Функция расчета баллов по оценке токеномики проекта.
+    """
+
     total_score = 0
     results = []
 
@@ -89,17 +122,29 @@ def calculate_tokenomics_score(project_name, comparisons):
 
     total_score = max(-50, min(100, round(total_score, 2)))
 
-    result_string = (
-            f"Общая оценка токеномики проекта {project_name}: {total_score} баллов.\n\n"
-            f"Отдельные набранные баллы в сравнении с другими проектами:\n"
-            + ",\n".join(results) + "."
+    result_string = RESULT_STRING.format(
+        project_name=project_name,
+        total_score=total_score,
+        results=",\n".join(results)
     )
 
     return result_string, total_score
 
 
-def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_price, growth_percentage,
-                            fall_percentage, top_100_percentage, tvl_percentage):
+def analyze_project_metrics(
+        fund_distribution: str,
+        fundraise: float,
+        total_supply: float,
+        market_price: float,
+        growth_percentage: float,
+        fall_percentage: float,
+        top_100_percentage: float,
+        tvl_percentage: float
+):
+    """
+    Функция анализа проекта по показателям.
+    """
+
     tvl_score = 0
     top_100_score = 0
     growth_and_fall_score = 0
@@ -231,126 +276,13 @@ def analyze_project_metrics(fund_distribution, fundraise, total_supply, market_p
     total_score = tvl_score + top_100_score + growth_and_fall_score + funds_score
     detailed_report += f"\n[Total Score]: {total_score}\n"
 
-    return detailed_report, total_score, funds_score, growth_and_fall_score, top_100_score, tvl_score
+    return detailed_report, total_score, funds_score, growth_and_fall_score
 
 
-def calculate_project_score(fundraising, tier, twitter_followers, twitter_score, tokenomics_score, profitability_score, language):
-    FUNDRAISING_DIVISOR = 5_000_000
-    FOLLOWERS_DIVISOR = 15_000
-    TWITTER_SCORE_MULTIPLIER = 0.1
-    TIER_SCORES = {
-        "Tier 1": 100,
-        "Tier 2": 80,
-        "Tier 3": 60,
-        "Tier 4": 30,
-        "Tier 5": 0
-    }
-    TIER_COEFFICIENTS = {
-        "Tier 1": 1.00,
-        "Tier 2": 0.90,
-        "Tier 3": 0.80,
-        "Tier 4": 0.70,
-        "Tier 5": 0.60
-    }
-
-    # Обработка значений N/A и их замена на 0
-    if fundraising == 'N/A' or not isinstance(fundraising, (int, float)):
-        fundraising = 0
-    else:
-        fundraising = float(fundraising)
-
-    if tier == 'N/A' or tier == '-':
-        tier = '-'
-
-    twitter_followers = clean_twitter_subs(twitter_followers)
-    if twitter_followers == 'N/A' or not isinstance(twitter_followers, (int, float)):
-        twitter_followers = 0
-    else:
-        twitter_followers = float(twitter_followers)  # Преобразуем в число
-
-    if twitter_score == 'N/A' or not isinstance(twitter_score, (int, float)):
-        twitter_score = 0
-    else:
-        twitter_score = float(twitter_score)  # Преобразуем в число
-
-    if tokenomics_score == 'N/A' or not isinstance(tokenomics_score, (int, float)):
-        tokenomics_score = 0
-    else:
-        tokenomics_score = float(tokenomics_score)  # Преобразуем в число
-
-    if profitability_score == 'N/A' or not isinstance(profitability_score, (int, float)):
-        profitability_score = 0
-    else:
-        profitability_score = float(profitability_score)  # Преобразуем в число
-
-    fundraising_score = round(fundraising / FUNDRAISING_DIVISOR, 2)
-    tier_score = TIER_SCORES.get(tier, 0)
-    followers_score = round(twitter_followers / FOLLOWERS_DIVISOR, 2)
-
-    twitter_engagement_score = round(twitter_score * TWITTER_SCORE_MULTIPLIER, 2)
-
-    preliminary_score = (
-            fundraising_score +
-            tier_score +
-            followers_score +
-            twitter_engagement_score +
-            tokenomics_score +
-            profitability_score
-    )
-
-    tier_coefficient = TIER_COEFFICIENTS.get(tier, "Нет данных, коэффициент не применен" if language == 'RU' else "No data, coefficient not applied")
-    final_score = round(preliminary_score * tier_coefficient, 2) if tier_coefficient not in ["Нет данных, коэффициент не применен", "No data, coefficient not applied"] else round(preliminary_score, 2)
-
-    calculations_summary = """
-    Расчеты:
-        Баллы за привлеченные инвестиции: {fundraising_score} баллов.
-        Баллы за Тир проекта: {tier_score} баллов.
-        Баллы за количество подписчиков в Twitter: {followers_score} баллов.
-        Баллы за Twitter Score: {twitter_engagement_score} баллов.
-        Баллы от оценки токеномики: {tokenomics_score} баллов.
-        Оценка прибыльности фондов: {profitability_score} баллов.
-
-    Предварительное общее количество баллов проекта до снижения: {preliminary_score} баллов.
-    Применен снижающий коэффициент: {tier_coefficient}.
-    Итоговое общее количество баллов проекта: {final_score} баллов.
-    """.format(
-        fundraising_score=fundraising_score,
-        tier_score=tier_score,
-        followers_score=followers_score,
-        twitter_engagement_score=twitter_engagement_score,
-        tokenomics_score=tokenomics_score,
-        profitability_score=profitability_score,
-        preliminary_score=preliminary_score,
-        tier_coefficient=tier_coefficient,
-        final_score=final_score
-    )
-
-    project_rating = (
-        "Плохо" if final_score < 50 else
-        "Нейтрально" if 50 <= final_score <= 100 else
-        "Хорошо" if 101 <= final_score <= 200 else
-        "Отлично"
-    )
-
-    result = {
-        "fundraising_score": fundraising_score,
-        "tier_score": tier_score,
-        "followers_score": followers_score,
-        "twitter_engagement_score": twitter_engagement_score,
-        "tokenomics_score": tokenomics_score,
-        "profitability_score": profitability_score,
-        "preliminary_score": preliminary_score,
-        "tier_coefficient": tier_coefficient,
-        "final_score": final_score,
-        "project_rating": project_rating,
-        "calculations_summary": calculations_summary
-    }
-
-    return result
-
-
-def project_investors_level(investors):
-    tier_rank = ["TIER 1", "TIER 2", "TIER 3", "TIER 4", "TIER 5"]
+def project_investors_level(investors: str):
+    """
+    Получает строку с инвесторами и определяет общий тир инвесторов.
+    """
 
     # Парсинг инвесторов
     parsed_investors = []
@@ -364,23 +296,19 @@ def project_investors_level(investors):
             parsed_investors.append(tier)
 
     # Считаем количество фондов по каждому Тиру
-    investor_counts = {tier: 0 for tier in tier_rank}
+    investor_counts = {tier: 0 for tier in TIER_RANK_LIST}
     for tier in parsed_investors:
-        if tier in tier_rank:
+        if tier in TIER_RANK_LIST:
             investor_counts[tier] += 1
 
-    print(f"Изначальные фонды: {investor_counts}")
-
-    # Логика перекрытия требований
-    remaining_counts = investor_counts.copy()  # Создаем копию для работы
-    for i in range(len(tier_rank) - 1):  # Пропускаем TIER 5
-        higher_tier = tier_rank[i]
-        lower_tier = tier_rank[i + 1]
+    # Логика перекрытия требований по метрикам
+    remaining_counts = investor_counts.copy()
+    for i in range(len(TIER_RANK_LIST) - 1):  # Пропускаем TIER 5
+        higher_tier = TIER_RANK_LIST[i]
+        lower_tier = TIER_RANK_LIST[i + 1]
         if remaining_counts[higher_tier] > 0:
             transferable = remaining_counts[higher_tier]  # Все, что можно использовать
             remaining_counts[lower_tier] = max(0, remaining_counts[lower_tier] - transferable)
-
-    print(f"Оставшиеся фонды после перекрытия: {remaining_counts}")
 
     # Определяем уровень инвесторов
     investor_level = 5  # По умолчанию Тир 5
@@ -393,15 +321,7 @@ def project_investors_level(investors):
     elif remaining_counts["TIER 4"] >= 1:
         investor_level = 4
 
-    # Присваиваем баллы в зависимости от уровня
-    level_to_score = {
-        1: 100,
-        2: 60,
-        3: 40,
-        4: 20,
-        5: 0,
-    }
-    score = level_to_score[investor_level]
+    score = LEVEL_TO_SCORE[investor_level]
 
     return {
         "level": investor_level,
@@ -409,3 +329,73 @@ def project_investors_level(investors):
         "details": investor_counts,
         "remaining_counts": remaining_counts,
     }
+
+
+def calculate_project_score(
+        fundraising: float,
+        tier: str,
+        twitter_followers: str,
+        twitter_score: int,
+        tokenomics_score: float,
+        profitability_score: float,
+        language: str
+):
+    """
+    Функция расчета баллов по метрикам проекта.
+    """
+
+    # Обработка значений с использованием process_metric
+    fundraising = process_metric(fundraising)
+    twitter_followers = process_metric(clean_twitter_subs(twitter_followers))
+    twitter_score = process_metric(twitter_score)
+    tokenomics_score = process_metric(tokenomics_score)
+    profitability_score = process_metric(profitability_score)
+
+    if tier == 'N/A':
+        tier = '-'
+
+    fundraising_score = round(fundraising / FUNDRAISING_DIVISOR, 2)
+    tier_score = TIER_SCORES.get(tier, 0)
+    followers_score = round(twitter_followers / FOLLOWERS_DIVISOR, 2)
+    twitter_engagement_score = round(twitter_score * TWITTER_SCORE_MULTIPLIER, 2)
+
+    preliminary_score = (
+            fundraising_score +
+            tier_score +
+            followers_score +
+            twitter_engagement_score +
+            tokenomics_score +
+            profitability_score
+    )
+
+    tier_coefficient = TIER_COEFFICIENTS.get(tier, NO_COEFFICIENT[0] if language == 'RU' else NO_COEFFICIENT[1])
+    final_score = round(preliminary_score * tier_coefficient, 2) if tier_coefficient not in NO_COEFFICIENT else round(preliminary_score, 2)
+
+    calculations_summary = CALCULATIONS_SUMMARY_STR.format(
+        fundraising_score=fundraising_score,
+        tier_score=tier_score,
+        followers_score=followers_score,
+        twitter_engagement_score=twitter_engagement_score,
+        tokenomics_score=tokenomics_score,
+        profitability_score=profitability_score,
+        preliminary_score=preliminary_score,
+        tier_coefficient=tier_coefficient,
+        final_score=final_score
+    )
+
+    project_rating = get_project_rating(final_score, language)
+
+    return {
+        "fundraising_score": fundraising_score,
+        "tier_score": tier_score,
+        "followers_score": followers_score,
+        "twitter_engagement_score": twitter_engagement_score,
+        "tokenomics_score": tokenomics_score,
+        "profitability_score": profitability_score,
+        "preliminary_score": preliminary_score,
+        "tier_coefficient": tier_coefficient,
+        "final_score": final_score,
+        "project_rating": project_rating,
+        "calculations_summary": calculations_summary
+    }
+
