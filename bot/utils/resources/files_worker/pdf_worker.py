@@ -6,6 +6,8 @@ from PIL import Image, ImageDraw
 from fpdf import FPDF
 
 from bot.database.models import Calculation
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_language
+from bot.utils.validations import extract_old_calculations
 from bot.utils.common.consts import (
     TIMES_NEW_ROMAN_PATH,
     TIMES_NEW_ROMAN_BOLD_PATH,
@@ -18,8 +20,6 @@ from bot.utils.common.consts import (
     AI_HELP_EN_SPLIT,
     FASOLKA_TG, PROJECT_ANALYSIS
 )
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_language
-from bot.utils.validations import extract_old_calculations
 
 
 class PDF(FPDF):

@@ -161,6 +161,7 @@ REPLACED_PROJECT_TWITTER = {
 }
 
 
+# Оценка проекта
 RATING_LABELS = {
     "RU": {
         "bad": "Плохо",
@@ -206,6 +207,10 @@ PATTERNS = {
 }
 
 
+# Телеграм Фасольки
+AI_LINK = "https://t.me/FasolkaAI_bot"
+
+
 # Шаблоны для поиска текста на русском и английском
 AI_HELP_RU = (
     r"\*\*\*Если\s+Вам\s+не\s+понятна\s+терминология,\s+изложенная\s+в\s+отчете,\s+Вы\s+можете\s+воспользоваться\s+нашим\s+ИИ\s+консультантом\."
@@ -217,7 +222,6 @@ AI_HELP_EN = (
     r"\s+https://t\.me/FasolkaAI_bot"
     r"\s+\*\*\*The\s+report\s+generated\s+by\s+the\s+AI\s+agent\s+is\s+not\s+financial\s+advice\s+or\s+a\s+recommendation\s+to\s+purchase\s+the\s+token\."
 )
-AI_LINK = "https://t.me/FasolkaAI_bot"
 
 # Добавление новых текстов взамен найденных через шаблоны
 AI_HELP_RU_SPLIT = (
@@ -368,6 +372,7 @@ CALCULATIONS_SUMMARY_STR = """
 """
 
 
+# Словарь хранящий метрики для их вставки в PDF-файл
 METRICS_MAPPING = {
     'capitalization': {'RU': 'Капитализация проекта', 'ENG': 'Project capitalization'},
     'fdv': {'RU': 'Полная капитализация проекта (FDV)', 'ENG': 'Fully Diluted Valuation (FDV)'},
@@ -380,13 +385,17 @@ METRICS_MAPPING = {
     'investors': {'RU': 'Инвесторы', 'ENG': 'Investors'},
 }
 
+
+# Текстовые константы о недостающей информации
 NO_DATA_TEXT = {'RU': 'Нет данных', 'ENG': 'No info'}
 NO_COEFFICIENT = ["Нет данных, коэффициент не применен", "No data, coefficient not applied"]
 
 
+# Текст для добавления в отчет модели
 DATA_FOR_ANALYSIS_TEXT = "**Данные для анализа токеномики**:\n"
 
 
+# Словарь полей, по которым проверяется наличие спаршенных метрик
 EXPECTED_KEYS = {
     'coin_name',
     'circulating_supply',
@@ -396,6 +405,8 @@ EXPECTED_KEYS = {
     'coin_fdv'
 }
 
+
+# Словарь для маппинга категорий проекта на стандартизированный формат
 CATEGORY_MAP = {
     "Новые блокчейны 1 уровня": "Layer 1",
     "Новые блокчейны 1 уровня (после 2022 года)": "Layer 1",
@@ -444,6 +455,8 @@ SELECTOR_GET_INVESTORS = 'p.sc-56567222-0'
 SELECTOR_PERCENTAGE_DATA = 'div[class*="overflow-y-auto"]'
 SELECTOR_PERCENTAGE_TOKEN = 'div.flex.items-center.w-'
 
+
+# Информация для анализа моделью
 ALL_DATA_STRING_FUNDS_AGENT = "Распределение токенов: {funds_profit_distribution}\n"
 ALL_DATA_STRING_FLAGS_AGENT = (
     "Проект: {project_coin_name}\n"

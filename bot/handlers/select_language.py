@@ -1,7 +1,6 @@
 import logging
 
-from aiogram import Router
-from aiogram import types
+from aiogram import Router, types
 from aiogram.filters import Command
 
 from bot.database.db_operations import get_user_from_redis_or_db

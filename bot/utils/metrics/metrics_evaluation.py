@@ -1,6 +1,10 @@
 import logging
+
 from typing import Any
 
+from bot.utils.project_data import get_project_rating
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_language
+from bot.utils.validations import clean_twitter_subs, process_metric
 from bot.utils.common.consts import (
     TIER_RANK,
     TIER_CRITERIA,
@@ -15,9 +19,6 @@ from bot.utils.common.consts import (
     LEVEL_TO_SCORE,
     NO_COEFFICIENT
 )
-from bot.utils.project_data import get_project_rating
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_language
-from bot.utils.validations import clean_twitter_subs, process_metric
 
 
 def determine_project_tier(
