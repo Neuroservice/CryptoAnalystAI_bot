@@ -1,18 +1,20 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton
-from aiogram.types.inline_keyboard_markup import InlineKeyboardMarkup
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-from bot.utils.resources.buttons.button_strings_handler import button_text_by_language
+from bot.utils.resources.buttons.button_strings_handler import button_text_by_user
 
 
-def main_menu_keyboard(language):
+async def main_menu_keyboard(user_id: int):
+    """
+    Создает и возвращает клавиатуру для главного меню бота.
+    """
+
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text=button_text_by_language("help_button", language=language)),
-                KeyboardButton(text=button_text_by_language("start_calculate_button", language=language)),
-                KeyboardButton(text=button_text_by_language("start_history_button", language=language)),
-                KeyboardButton(text=button_text_by_language("donate", language=language)),
+                KeyboardButton(text=await button_text_by_user("help_button", user_id=user_id)),
+                KeyboardButton(text=await button_text_by_user("start_calculate_button", user_id=user_id)),
+                KeyboardButton(text=await button_text_by_user("start_history_button", user_id=user_id)),
+                KeyboardButton(text=await button_text_by_user("donate", user_id=user_id)),
             ],
         ],
         resize_keyboard=True,
@@ -22,6 +24,10 @@ def main_menu_keyboard(language):
 
 
 def language_keyboard():
+    """
+    Создает и возвращает клавиатуру для выбора языка.
+    """
+
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [

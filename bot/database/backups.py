@@ -1,18 +1,36 @@
 import os
 import logging
 import boto3
-from datetime import datetime, timedelta
-
 import pytz
+
+from datetime import datetime, timedelta
 from botocore.exceptions import NoCredentialsError
 
-from bot.config import DB_PASSWORD, DB_USER, DB_HOST, DB_PORT, DB_NAME, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION, S3_URL
+from bot.utils.common.config import (
+    DB_PASSWORD,
+    DB_USER,
+    DB_HOST,
+    DB_PORT,
+    DB_NAME,
+    S3_ACCESS_KEY,
+    S3_SECRET_KEY,
+    S3_REGION,
+    S3_URL
+)
+from bot.utils.resources.exceptions.exceptions import ExceptionError, ValueProcessingError, MissingKeyError, \
+    AttributeAccessError
 
 logger = logging.getLogger(__name__)
 os.environ['PGPASSWORD'] = DB_PASSWORD
 
 
 async def create_backup():
+    """
+    Главная функция создания бэкапа базы данных.
+    Происходит соединение с базой данных, создается бэкап, файл бэкапа и
+    путь к его сохранению передаются в функцию upload_backup_to_s3
+    """
+
     logger.info('Начинаем процесс создания резервной копии базы данных')
 
     # Путь к временной папке для хранения бэкапов
@@ -28,14 +46,16 @@ async def create_backup():
         f'pg_dump -U {DB_USER} '
         f'-h {DB_HOST} '
         f'-p {DB_PORT} '
-        f'{DB_NAME} > {backup_file}'
+        f'{DB_NAME} > {backup_file} 2> {local_backup_dir}/pg_dump_error.log'
     )
 
     if os.path.exists(backup_file):
         # Загружаем бэкап в S3
-        upload_backup_to_s3(backup_file, f'fasolka_backups/{os.path.basename(backup_file)}')
-        # Удаляем временный файл после загрузки
-        os.remove(backup_file)
+        if os.path.exists(backup_file) and os.path.getsize(backup_file) > 0:
+            upload_backup_to_s3(backup_file, f'fasolka_backups/{os.path.basename(backup_file)}')
+            os.remove(backup_file)
+        else:
+            logger.error(f'Файл бэкапа не создан или пуст: {backup_file}')
         logger.info('Временный файл бэкапа успешно удален')
         # Удаляем старые бэкапы из S3
         delete_old_backups_from_s3()
@@ -43,7 +63,12 @@ async def create_backup():
         logger.error(f'Не удалось создать файл бэкапа: {backup_file}')
 
 
-def upload_backup_to_s3(local_file, s3_file):
+def upload_backup_to_s3(local_file: str, s3_file: str):
+    """
+    Функция загрузки бэкапа в хранилище.
+    Происходит подключение к хранилищу, загрузка файла бэкапа по пути '/tmp/fasolka_backups'
+    """
+
     logger.info(f'Загрузка файла {local_file} в S3: {s3_file}')
     s3 = boto3.client(
         's3',
@@ -64,6 +89,10 @@ def upload_backup_to_s3(local_file, s3_file):
 
 
 def delete_old_backups_from_s3():
+    """
+    Функция удаления бэкапов из хранилища, которым больше 5 дней
+    """
+
     logger.info('Удаление старых бэкапов из S3')
     s3 = boto3.client(
         's3',
@@ -88,5 +117,14 @@ def delete_old_backups_from_s3():
                     if obj_date < cutoff_date:
                         s3.delete_object(Bucket='c462de58-1673afa0-028c-4482-9d49-87f46960a44f', Key=obj['Key'])
                         logger.info(f'Удален старый бэкап: {obj["Key"]}')
+
+    except AttributeError as attr_error:
+        raise AttributeAccessError(str(attr_error))
+    except KeyError as key_error:
+        raise MissingKeyError(str(key_error))
+    except ValueError as value_error:
+        raise ValueProcessingError(str(value_error))
     except Exception as e:
-        logger.error(f'Ошибка при удалении старых бэкапов: {str(e)}')
+        raise ExceptionError(str(e))
+
+

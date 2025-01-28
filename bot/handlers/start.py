@@ -1,54 +1,66 @@
 from aiogram import Router, types
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from sqlalchemy import select
 
-from bot.database.models import User
-from bot.utils.consts import user_languages, session_local
 from bot.utils.keyboards.start_keyboards import main_menu_keyboard, language_keyboard
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
+from bot.database.db_operations import get_user_from_redis_or_db
+from bot.utils.common.sessions import session_local, redis_client
 
-router = Router()
+start_router = Router()
 
 
-@router.message(CommandStart())
+@start_router.message(CommandStart())
 async def start_command(message: types.Message, state: FSMContext):
-    session = session_local
+    """
+    Хендлер для команды /start. Получает пользователя из Redis, БД или создаёт нового.
+    """
     await state.clear()
-    await state.set_state(None)
-
-    result = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
-    user = result.scalars().first()
-
-    if not user:
-        user = User(telegram_id=message.from_user.id)
-        session.add(user)
-        await session.commit()
-
-    if user.language:
-        user_languages[user.telegram_id] = user.language
-        await message.answer(phrase_by_user("hello_phrase", user.telegram_id),
-                             reply_markup=main_menu_keyboard(language=user.language))
-
-    else:
-        await message.answer("Please choose your language / Пожалуйста, выберите язык:",
-                             reply_markup=language_keyboard())
-
-
-@router.message(lambda message: message.text in ['Русский', 'English'])
-async def language_choice(message: types.Message):
-    session = session_local
     user_id = message.from_user.id
-    chosen_language = 'RU' if message.text == 'Русский' else 'ENG'
 
-    result = await session.execute(select(User).where(User.telegram_id == user_id))
-    user = result.scalars().first()
+    # Получаем пользователя из Redis или базы данных
+    user = await get_user_from_redis_or_db(user_id=user_id, session=session_local)
+
+    if user:  # Если пользователь найден или создан
+        language = user.language or "ENG"
+
+        if language:  # Если язык уже установлен
+            await message.answer(
+                await phrase_by_user("hello_phrase", user_id, session_local),
+                reply_markup=await main_menu_keyboard(user_id=user_id)
+            )
+        else:  # Новый пользователь должен выбрать язык
+            await message.answer(
+                "Please choose your language / Пожалуйста, выберите язык:",
+                reply_markup=language_keyboard()
+            )
+    else:
+        await message.answer("Ошибка при работе с базой данных. Попробуйте позже.")
+
+
+@start_router.message(lambda message: message.text in ["Русский", "English"])
+async def language_choice(message: types.Message):
+    """
+    Хендлер для выбора языка. Сохраняет язык в Redis и базе данных.
+    """
+    user_id = message.from_user.id
+    chosen_language = "RU" if message.text == "Русский" else "ENG"
+
+    # Получаем пользователя из Redis или базы данных
+    user = await get_user_from_redis_or_db(user_id=user_id, session=session_local)
 
     if user:
+        # Обновляем Redis
+        await redis_client.hset(f"user:{user_id}", "language", chosen_language)
+
+        # Обновляем язык в базе данных
         user.language = chosen_language
-        await session.commit()
+        async with session_local() as session:
+            await session.commit()
 
-    user_languages[user.telegram_id] = user.language
-
-    await message.answer(phrase_by_user("hello_phrase", user.telegram_id), reply_markup=main_menu_keyboard(chosen_language))
-
+        await message.answer(
+            await phrase_by_user("hello_phrase", user_id, session_local),
+            reply_markup=await main_menu_keyboard(user_id=user_id)
+        )
+    else:
+        await message.answer("Ошибка при работе с базой данных. Попробуйте позже.")
