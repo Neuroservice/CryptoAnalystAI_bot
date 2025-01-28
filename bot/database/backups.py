@@ -17,8 +17,12 @@ from bot.utils.common.config import (
     S3_REGION,
     S3_URL
 )
-from bot.utils.resources.exceptions.exceptions import ExceptionError, ValueProcessingError, MissingKeyError, \
+from bot.utils.resources.exceptions.exceptions import (
+    ExceptionError,
+    ValueProcessingError,
+    MissingKeyError,
     AttributeAccessError
+)
 
 logger = logging.getLogger(__name__)
 os.environ['PGPASSWORD'] = DB_PASSWORD

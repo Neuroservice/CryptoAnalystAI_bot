@@ -1,5 +1,3 @@
-
-
 calculations_choices = {
     'RU': (
         "Результаты расчета для {user_coin_name} в сравнении с {project_coin_name}:\n"

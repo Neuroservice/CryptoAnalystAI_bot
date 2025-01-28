@@ -7,6 +7,28 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.database.db_operations import get_one, update_or_create, get_all
+from bot.utils.common.decorators import save_execute
+from bot.utils.common.params import get_header_params
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_language
+from bot.utils.resources.bot_phrases.bot_phrase_strings import calculations_choices
+from bot.utils.resources.exceptions.exceptions import ExceptionError
+from bot.utils.resources.files_worker.pdf_worker import generate_pdf
+from bot.utils.resources.gpt.gpt import agent_handler
+from bot.utils.common.consts import (
+    TICKERS,
+    PROJECT_TYPES,
+    EXPECTED_KEYS,
+    DATA_FOR_ANALYSIS_TEXT,
+    ALL_DATA_STRING_FUNDS_AGENT,
+    ALL_DATA_STRING_FLAGS_AGENT
+)
+from bot.utils.metrics.metrics_evaluation import (
+    determine_project_tier,
+    calculate_tokenomics_score,
+    analyze_project_metrics,
+    calculate_project_score,
+    project_investors_level
+)
 from bot.database.models import (
     Project,
     Tokenomics,
@@ -16,23 +38,6 @@ from bot.database.models import (
     NetworkMetrics,
     FundsProfit,
     AgentAnswer
-)
-from bot.utils.common.consts import (
-    TICKERS,
-    PROJECT_TYPES,
-    EXPECTED_KEYS,
-    DATA_FOR_ANALYSIS_TEXT,
-    ALL_DATA_STRING_FUNDS_AGENT,
-    ALL_DATA_STRING_FLAGS_AGENT
-)
-from bot.utils.common.decorators import save_execute
-from bot.utils.common.params import get_header_params
-from bot.utils.metrics.metrics_evaluation import (
-    determine_project_tier,
-    calculate_tokenomics_score,
-    analyze_project_metrics,
-    calculate_project_score,
-    project_investors_level
 )
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
@@ -48,11 +53,6 @@ from bot.utils.project_data import (
     generate_flags_answer,
     get_coin_description
 )
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_language
-from bot.utils.resources.bot_phrases.bot_phrase_strings import calculations_choices
-from bot.utils.resources.exceptions.exceptions import ExceptionError
-from bot.utils.resources.files_worker.pdf_worker import generate_pdf
-from bot.utils.resources.gpt.gpt import agent_handler
 from bot.utils.validations import (
     extract_red_green_flags,
     extract_calculations,

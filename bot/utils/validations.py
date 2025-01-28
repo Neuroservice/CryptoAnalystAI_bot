@@ -1,7 +1,7 @@
 import re
-from typing import Any, Optional, Callable
 
 from aiogram import types
+from typing import Any, Optional, Callable
 from aiogram.fsm.context import FSMContext
 
 from bot.utils.common.sessions import session_local

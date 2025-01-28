@@ -1,25 +1,32 @@
 import logging
 import re
 import traceback
-from datetime import datetime
-from typing import Optional, Union
 
-import fitz
+from typing import Optional, Union
+from datetime import datetime
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.database.db_operations import get_user_language, get_one
 from bot.database.models import Calculation, AgentAnswer
+from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.decorators import save_execute
 from bot.utils.common.sessions import session_local
-from bot.utils.common.bot_states import CalculateProject
-from bot.utils.resources.gpt.gpt import agent_handler
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user, phrase_by_language
 from bot.utils.resources.bot_phrases.bot_phrase_strings import calculations_choices
 from bot.utils.resources.exceptions.exceptions import ValueProcessingError
 from bot.utils.resources.files_worker.pdf_worker import generate_pdf, create_pdf_file
+from bot.utils.resources.gpt.gpt import agent_handler
 from bot.utils.validations import format_metric, extract_calculations, extract_red_green_flags, get_metric_value
+from bot.utils.common.consts import (
+    PROJECT_POINTS_ENG,
+    PROJECT_POINTS_RU,
+    TICKERS,
+    DATA_FOR_ANALYSIS_TEXT,
+    ALL_DATA_STRING_FLAGS_AGENT,
+    ALL_DATA_STRING_FUNDS_AGENT
+)
 from bot.utils.metrics.metrics_evaluation import (
     calculate_tokenomics_score,
     calculate_project_score,
@@ -33,11 +40,6 @@ from bot.utils.project_data import (
     calculate_expected_x,
     get_project_and_tokenomics,
     get_top_projects_by_capitalization_and_category,
-)
-from bot.utils.common.consts import (
-    PROJECT_POINTS_ENG,
-    PROJECT_POINTS_RU,
-    TICKERS, DATA_FOR_ANALYSIS_TEXT, ALL_DATA_STRING_FLAGS_AGENT, ALL_DATA_STRING_FUNDS_AGENT
 )
 
 

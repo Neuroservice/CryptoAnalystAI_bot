@@ -1,20 +1,23 @@
 import asyncio
 import logging
-import re
-from typing import Any, Dict, Optional
-from urllib.parse import urljoin
-
 import aiohttp
-import fitz
 import httpx
 import requests
+
+from urllib.parse import urljoin
+from typing import Any, Dict, Optional
 from aiogram.types import Message
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.database.db_operations import get_one, get_all, get_user_language, get_or_create, update_or_create
+from bot.utils.common.decorators import save_execute
+from bot.utils.common.params import get_header_params, get_cryptocompare_params, get_cryptocompare_params_with_full_name
+from bot.utils.common.sessions import client_session, session_local
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
+from bot.utils.resources.gpt.gpt import agent_handler
+from bot.utils.validations import clean_fundraise_data, extract_tokenomics
 from bot.database.models import (
     Project,
     Tokenomics,
@@ -39,18 +42,12 @@ from bot.utils.common.consts import (
     BINANCE_API,
     LLAMA_API_BASE,
     LLAMA_API_PROTOCOL,
-    PROJECT_OVERALL_SCORE_RU,
-    PROJECT_OVERALL_SCORE_ENG,
     SELECTOR_TOP_100_WALLETS,
     SELECTOR_TWITTERSCORE,
     SELECTOR_GET_INVESTORS,
     SELECTOR_PERCENTAGE_DATA,
     SELECTOR_PERCENTAGE_TOKEN, RATING_LABELS
 )
-from bot.utils.common.decorators import save_execute
-from bot.utils.common.params import get_header_params, get_cryptocompare_params, get_cryptocompare_params_with_full_name
-from bot.utils.common.sessions import client_session, session_local
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user, phrase_by_language
 from bot.utils.resources.exceptions.exceptions import (
     DataTypeError,
     MissingKeyError,
@@ -59,8 +56,6 @@ from bot.utils.resources.exceptions.exceptions import (
     ExceptionError,
     TimeOutError, DatabaseFetchError
 )
-from bot.utils.resources.gpt.gpt import agent_handler
-from bot.utils.validations import clean_fundraise_data, extract_tokenomics
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

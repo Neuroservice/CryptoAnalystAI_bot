@@ -1,3 +1,5 @@
+from bot.utils.resources.exceptions.exceptions import ExceptionError
+from bot.utils.common.sessions import async_engine
 from bot.database.models import (
     User,
     Project,
@@ -13,8 +15,6 @@ from bot.database.models import (
     NetworkMetrics,
     AgentAnswer,
 )
-from bot.utils.resources.exceptions.exceptions import ExceptionError
-from bot.utils.common.sessions import async_engine
 
 
 async def create_db():

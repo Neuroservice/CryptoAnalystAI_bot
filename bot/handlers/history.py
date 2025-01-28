@@ -1,9 +1,9 @@
 import logging
 import traceback
 import zipfile
-from io import BytesIO
-
 import matplotlib
+
+from io import BytesIO
 from aiogram import Router, types
 from aiogram.types import BufferedInputFile
 from fpdf import FPDF
