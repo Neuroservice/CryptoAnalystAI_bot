@@ -196,11 +196,8 @@ async def fetch_crypto_data(async_session: AsyncSession):
                     if not funds_profit or not funds_profit.distribution or funds_profit.distribution == '-':
                         print("7.1")
                         twitter_link, description, lower_name = await get_twitter_link_by_symbol(symbol)
-                        print(twitter_link, description, lower_name)
                         tokenomics_percentage_data = await get_percantage_data(async_session, twitter_link, symbol)
-                        print(tokenomics_percentage_data)
                         output_string = '\n'.join(tokenomics_percentage_data) if tokenomics_percentage_data else '-'
-                        print("output_string: ", output_string)
                         await update_or_create(
                             async_session, FundsProfit,
                             project_id=project.id,
