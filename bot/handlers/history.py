@@ -59,11 +59,12 @@ async def history_command(message: types.Message):
                 readable_date = calculation.date.strftime("%Y-%m-%d_%H-%M-%S")
                 file_name = f"calculation_{readable_date}.pdf"
                 pdf.add_page()
-                pdf_output = create_pdf_file(calculation, language, )
-                zip_archive.writestr(file_name, pdf_output.read())
                 pdf_output = BytesIO()
                 pdf.output(pdf_output)
                 pdf_output.seek(0)
+                pdf_output, extracted_text = create_pdf_file(calculation, language)
+                print("pdf_output, extracted_text: ", pdf_output, extracted_text)
+                zip_archive.writestr(file_name, pdf_output.getvalue())
 
         zip_buffer.seek(0)
 

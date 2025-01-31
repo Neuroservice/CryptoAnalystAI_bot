@@ -367,6 +367,8 @@ async def receive_data(message: types.Message, state: FSMContext):
 
     category_answer = await agent_handler("category", topic=coin_description, language=language)
 
+    print("category_answer: ", category_answer)
+
     overall_category = extract_overall_category(category_answer)
     token_description = extract_description(category_answer, language)
     chosen_project = standardize_category(overall_category)
