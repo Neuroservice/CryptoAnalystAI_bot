@@ -7,7 +7,7 @@ from aiogram.types import BufferedInputFile, ReplyKeyboardRemove
 
 from bot.database.db_operations import get_user_language, get_one, update_or_create
 from bot.utils.common.bot_states import CalculateProject
-from bot.utils.common.consts import TICKERS, MODEL_MAPPING
+from bot.utils.common.consts import TICKERS, MODEL_MAPPING, REPLACED_PROJECT_TWITTER
 from bot.utils.common.params import get_header_params
 from bot.utils.common.sessions import session_local
 from bot.utils.create_report import create_pdf_report, create_basic_report
@@ -110,6 +110,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         await message.answer(await phrase_by_user("wait_for_calculations", message.from_user.id, session_local))
 
     twitter_name, description, lower_name = await get_twitter_link_by_symbol(user_coin_name)
+    twitter_name = REPLACED_PROJECT_TWITTER.get(twitter_name, twitter_name)
     if not lower_name:
         lower_name = await get_lower_name(user_coin_name)
 
@@ -366,9 +367,6 @@ async def receive_data(message: types.Message, state: FSMContext):
         coin_description += description
 
     category_answer = await agent_handler("category", topic=coin_description, language=language)
-
-    print("category_answer: ", category_answer)
-
     overall_category = extract_overall_category(category_answer)
     token_description = extract_description(category_answer, language)
     chosen_project = standardize_category(overall_category)
@@ -380,7 +378,6 @@ async def receive_data(message: types.Message, state: FSMContext):
     base_project = project_info.get("project")
     tokenomics_data = project_info.get("tokenomics_data")
     basic_metrics = project_info.get("basic_metrics")
-
     investing_metrics = project_info.get("investing_metrics")
     social_metrics = project_info.get("social_metrics")
     funds_profit = project_info.get("funds_profit")

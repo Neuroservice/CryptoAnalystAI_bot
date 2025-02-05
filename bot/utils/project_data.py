@@ -68,9 +68,11 @@ async def get_user_project_info(session: AsyncSession, user_coin_name: str):
     """
 
     try:
-        project = await get_one(session, Project, coin_name=user_coin_name)
-        if not project:
-            raise ValueProcessingError(f"Project '{user_coin_name}' not found.")
+        project, created = await get_or_create(session, Project, coin_name=user_coin_name)
+        if created:
+            logging.info(f"Создан новый проект: {user_coin_name}")
+        else:
+            logging.info(f"Найден существующий проект: {user_coin_name}")
 
         tokenomics_data = await get_one(session, Tokenomics, project_id=project.id)
         basic_metrics = await get_one(session, BasicMetrics, project_id=project.id)
@@ -111,6 +113,8 @@ async def get_project_and_tokenomics(session: AsyncSession, project_name: str, u
     Получает информацию о проекте и связанных метриках по категории и токену пользователя.
     """
 
+    user_coin_added = False  # Флаг для отслеживания добавленного токена
+
     try:
         project_name = project_name.strip()
 
@@ -124,6 +128,7 @@ async def get_project_and_tokenomics(session: AsyncSession, project_name: str, u
         if user_coin_name and user_coin_name not in TICKERS:
             logger.info(f"Добавление монеты {user_coin_name} в список тикеров.")
             TICKERS.insert(0, user_coin_name)
+            user_coin_added = True  # Запоминаем, что токен был добавлен
 
         for project in projects:
             tokenomics_data = None
@@ -163,6 +168,12 @@ async def get_project_and_tokenomics(session: AsyncSession, project_name: str, u
         raise ValueProcessingError(str(value_error))
     except Exception as e:
         raise ExceptionError(str(e))
+
+    finally:
+        # Удаляем пользовательский токен из TICKERS, если он был добавлен
+        if user_coin_added and user_coin_name in TICKERS:
+            logger.info(f"Удаление монеты {user_coin_name} из списка тикеров.")
+            TICKERS.remove(user_coin_name)
 
 
 async def get_twitter_link_by_symbol(symbol: str):
@@ -210,217 +221,216 @@ async def get_twitter(name: str):
         else:
             coin_name, about, lower_name = name
 
-        await page.route("**/*", lambda
-            route: route.continue_() if "image" not in route.request.resource_type else route.abort())
+        await page.route("**/*", lambda route: route.continue_() if "image" not in route.request.resource_type else route.abort())
         coin = coin_name.split('/')[-1]
 
         try:
             await page.goto(f"{TWITTERSCORE_API}twitter/{coin}/overview/?i=16846")
-            await page.wait_for_selector('div.target-element')
-
+            await asyncio.sleep(15)
         except Exception as e:
-            raise ExceptionError(str(e))
+            await browser.close()
+            return None
 
-        await page.wait_for_selector(SELECTOR_TWITTERSCORE)
-        twitter = await page.locator(SELECTOR_TWITTERSCORE).first.inner_text()
-        twitterscore = await page.locator("#insideChartCount").inner_text()
+        try:
+            await page.wait_for_selector(SELECTOR_TWITTERSCORE, timeout=15000)
+            twitter = await page.locator(SELECTOR_TWITTERSCORE).first.inner_text()
+        except:
+            twitter = None
+
+        try:
+            twitterscore = await page.locator("#insideChartCount").inner_text()
+        except:
+            twitterscore = None
 
         await browser.close()
 
-        return {"twitter": twitter, "twitterscore": twitterscore}
+        return {"twitter": twitter, "twitterscore": twitterscore} if twitter or twitterscore else None
 
 
 async def get_top_100_wallets(user_coin_name: str):
     """
     Получает процент токенов на топ 100 кошельках блокчейна.
     """
-
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
             coin = user_coin_name.split('/')[-1]
-            logging.info(f"{user_coin_name, coin}")
+            logging.info(f"Запрашиваем данные для {coin}")
 
             try:
-                # Переход на страницу с richlist для заданной монеты
-                await page.goto(f"{COINCARP_API}{coin}/richlist/")
+                # Переход на страницу richlist
+                await page.goto(f"{COINCARP_API}{coin}/richlist/", timeout=120000)
 
-                # Ожидание, пока страница полностью загрузится
+                # Даем время для загрузки JS
                 await page.wait_for_load_state("networkidle")
+                await asyncio.sleep(5)  # Подстраховка
 
-                # Указание полного пути к элементу с процентом топ-100 холдеров
-                await page.wait_for_selector(SELECTOR_TOP_100_WALLETS, timeout=60000)
-                top_100_text = await page.locator(SELECTOR_TOP_100_WALLETS).inner_text()
+                # Проверяем наличие элемента
+                element = await page.query_selector(SELECTOR_TOP_100_WALLETS)
 
-                # Вывод значения в лог и преобразование
-                logging.info(f"top100 text: {top_100_text}")
-                top_100_percentage = float(top_100_text.replace('%', '').strip())
-                return round(top_100_percentage / 100, 2)
+                if not element:
+                    logging.warning(f"Элемент {SELECTOR_TOP_100_WALLETS} не найден для {coin}")
+                    return None  # Возвращаем None, если элемент не найден
+
+                top_100_text = await element.inner_text()
+
+                logging.info(f"Текст топ-100: {top_100_text}")
+
+                # Преобразуем в число
+                try:
+                    top_100_percentage = float(top_100_text.replace('%', '').strip())
+                    return round(top_100_percentage / 100, 2)
+                except ValueError:
+                    return None
 
             except TimeoutError as time_error:
-                raise TimeOutError(str(time_error))
+                raise TimeOutError(f"Таймаут ожидания страницы: {time_error}")
             except ValueError as value_error:
-                raise ValueProcessingError(str(value_error))
+                raise ValueProcessingError(f"Ошибка обработки данных: {value_error}")
             except Exception as e:
-                raise ExceptionError(str(e))
+                raise ExceptionError(f"Непредвиденная ошибка: {e}")
 
             finally:
                 await browser.close()
 
     except AttributeError as attr_error:
-        raise AttributeAccessError(str(attr_error))
+        raise AttributeAccessError(f"Ошибка доступа к атрибуту: {attr_error}")
     except KeyError as key_error:
-        raise MissingKeyError(str(key_error))
+        raise MissingKeyError(f"Отсутствует ключ в данных: {key_error}")
     except ValueError as value_error:
-        raise ValueProcessingError(str(value_error))
+        raise ValueProcessingError(f"Ошибка обработки значения: {value_error}")
     except Exception as e:
-        raise ExceptionError(str(e))
+        raise ExceptionError(f"Общая ошибка: {e}")
 
 
-async def get_percantage_data(async_session: AsyncSession, lower_name: str, user_coin_name: str):
+async def fetch_tokenomics_data(url: str) -> list:
+    """
+    Загружает данные о распределении токенов с указанного URL.
+    """
+    tokenomics_data = []
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        try:
+
+            # Поиск таблицы на Cryptorank (для 'vesting' запросов)
+            if 'vesting' in url:
+                try:
+                    await page.goto(url, wait_until='networkidle')
+
+                    # Ждем появление контента с увеличенным таймаутом
+                    await page.wait_for_selector("table", timeout=5000)
+                    content = await page.content()
+                    soup = BeautifulSoup(content, 'html.parser')
+
+                    table = soup.find('table')
+                    if table:
+                        rows = table.find_all('tr')[1:]
+                        for row in rows:
+                            columns = row.find_all('td')
+                            if len(columns) >= 2:
+                                name = columns[0].get_text(strip=True)
+                                percentage = columns[1].get_text(strip=True)
+                                tokenomics_data.append(f"{name} ({percentage})")
+                except Exception as e:
+                    print(f"❌ Ошибка при поиске таблицы: {e}")
+
+            # Парсим ICO-токеномику (Cryptorank API - ico)
+            elif 'ico' in url:
+                await page.goto(url, wait_until='networkidle')
+
+                # Ждем появления списка <ul>, иначе пробуем через XPath
+                try:
+                    await page.wait_for_selector("ul.sc-3c81cf8-0.ffoUXx > li", timeout=5000)
+                except Exception:
+                    print("⚠️ Элемент не найден, пробуем XPath...")
+                    await page.wait_for_timeout(3000)
+
+                # Пробуем сначала CSS, затем XPath
+                token_list = await page.query_selector_all("ul.sc-3c81cf8-0.ffoUXx > li")
+                if not token_list:
+                    token_list = await page.query_selector_all("xpath=//ul[contains(@class, 'sc-') and contains(@class, 'ffoUXx')]/li")
+
+                if not token_list:
+                    print("❌ Токеномика не найдена!")
+                else:
+                    print(f"✅ Найдено {len(token_list)} элементов")
+
+                for item in token_list:
+                    print(f"Обрабатываем элемент: {await item.inner_html()}")
+
+                    try:
+                        name_tag = await item.query_selector("p.sc-3c81cf8-3.dISENB")
+                        name = await name_tag.inner_text() if name_tag else "Не найдено"
+
+                        percentage_tag = await item.query_selector("div.sc-3c81cf8-4.iugGsJ > span")
+                        percentage = await percentage_tag.inner_text() if percentage_tag else "Не найдено"
+
+                        tokenomics_data.append(f"{name} ({percentage})")
+
+                    except Exception as e:
+                        print(f"❌ Ошибка при обработке элемента: {e}")
+                        print(f"🚨 Проблемный элемент: {await item.inner_html()}")
+
+            # Для Tokenomist API
+            else:
+                try:
+                    await page.wait_for_selector("div.tokenomics-container > div", timeout=5000)
+                    content = await page.content()
+                    soup = BeautifulSoup(content, 'html.parser')
+
+                    allocation_divs = soup.select("div.tokenomics-container > div")
+                    for div in allocation_divs:
+                        try:
+                            name = div.select_one("p").get_text(strip=True)
+                            percentage = div.select_one("span").get_text(strip=True)
+                            tokenomics_data.append(f"{name} ({percentage})")
+                        except AttributeError:
+                            continue
+                except Exception as e:
+                    print(f"❌ Ошибка при поиске данных Tokenomist: {e}")
+
+        except Exception as e:
+            logging.error(f"🚨 Ошибка при получении данных: {e}")
+
+        finally:
+            await browser.close()
+
+    return tokenomics_data
+
+
+async def get_percentage_data(async_session: AsyncSession, lower_name: str, user_coin_name: str):
     """
     Получает данные о распределении токенов в проекте.
     """
-
-    tokenomics_data = []
 
     try:
         project = await get_one(async_session, Project, coin_name=user_coin_name)
         if project:
             user_tokenomics = await get_one(async_session, FundsProfit, project_id=project.id)
-            if user_tokenomics and user_tokenomics.distribution != '':
-                tokenomics_data = extract_tokenomics(user_tokenomics.distribution) if user_tokenomics else []
+            if user_tokenomics and user_tokenomics.distribution and user_tokenomics.distribution not in ["--)", "-", "-)", ""]:
+                return extract_tokenomics(user_tokenomics.distribution)
 
-            else:
-                async with async_playwright() as p:
-                    browser = await p.chromium.launch(headless=True)
-                    page = await browser.new_page()
-                    try:
-                        await page.goto(f"{CRYPTORANK_API}price/{lower_name}/vesting", wait_until='networkidle')
-                        await page.wait_for_selector('table', timeout=60000)
+        # Запрос к Cryptorank
+        tokenomics_data = await fetch_tokenomics_data(f"{CRYPTORANK_API}price/{lower_name}/vesting")
 
-                        # Получение HTML-страницы
-                        content = await page.content()
+        # Если не удалось получить данные с Cryptorank, пробуем Tokenomist.ai
+        if not tokenomics_data:
+            logging.warning("Не удалось найти таблицу на Cryptorank. Пробуем из ico...")
+            tokenomics_data = await fetch_tokenomics_data(f"{CRYPTORANK_API}ico/{lower_name}")
 
-                        soup = BeautifulSoup(content, 'html.parser')
 
-                        # Поиск нужной таблицы с заголовками
-                        target_table = None
-                        tables = soup.find_all('table')
+        if not tokenomics_data:
+            logging.warning("Не удалось найти таблицу с заданными заголовками на Cryptorank. Пробуем Tokenomist.ai...")
+            tokenomics_data = await fetch_tokenomics_data(f"{TOKENOMIST_API}{lower_name}")
 
-                        for table in tables:
-                            header = table.find('thead')
-                            if header:
-                                headers = [th.get_text(strip=True) for th in header.find_all('th')]
-                                if headers == ["Name", "Total", "Unlocked", "Locked"]:
-                                    target_table = table
-                                    break
+        return tokenomics_data if tokenomics_data else None
 
-                        if target_table:
-                            rows = target_table.find_all('tr')[1:]
-                            for row in rows:
-                                columns = row.find_all('td')
-                                if len(columns) >= 2:
-                                    name = columns[0].get_text(strip=True)
-                                    percentage = columns[1].get_text(strip=True)
-                                    tokenomics_data.append(f"{name} ({percentage})")
-                        else:
-                            logging.warning("Не удалось найти таблицу с заданными заголовками на Cryptorank. Пробуем Tokenomist.ai...")
-                            await page.goto(f"{TOKENOMIST_API}{lower_name}", wait_until='networkidle')
-                            await page.wait_for_selector(f'{SELECTOR_PERCENTAGE_DATA}', timeout=60000)
-
-                            content = await page.content()
-                            soup = BeautifulSoup(content, 'html.parser')
-
-                            # Поиск таблицы с распределением
-                            allocation_divs = soup.select(f'{SELECTOR_PERCENTAGE_DATA} > div')
-                            for div in allocation_divs:
-                                try:
-                                    name = div.select_one(
-                                        f'{SELECTOR_PERCENTAGE_TOKEN}[60px], {SELECTOR_PERCENTAGE_TOKEN}[90px]').get_text(
-                                        strip=True)
-                                    percentage = div.select_one('div.font-medium.mr-1.w-8.text-right').get_text(
-                                        strip=True)
-                                    tokenomics_data.append(f"{name} ({percentage})")
-
-                                except AttributeError as attr_error:
-                                    raise AttributeAccessError(str(attr_error))
-
-                        return tokenomics_data
-
-                    except Exception as e:
-                        raise ExceptionError(str(e))
-
-                    finally:
-                        # Закрытие браузера
-                        await browser.close()
-
-            return tokenomics_data
-
-        else:
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page()
-
-                try:
-                    # Переход на страницу проекта и ожидание загрузки
-                    await page.goto(f"{CRYPTORANK_API}price/{lower_name}/vesting", wait_until='networkidle')
-
-                    # Получение HTML-страницы
-                    content = await page.content()
-                    soup = BeautifulSoup(content, 'html.parser')
-
-                    # Поиск нужной таблицы
-                    table = soup.find('table', class_='sc-5f77eb9d-0')
-
-                    if table:
-                        rows = table.find_all('tr')[1:]  # Пропустить заголовок
-
-                        # Извлечение названий и первых процентов
-                        for row in rows:
-                            columns = row.find_all('td')
-                            if len(columns) >= 2:  # Проверка, что есть как минимум 2 столбца
-                                name = columns[0].get_text(strip=True)
-                                percentage = columns[1].get_text(strip=True)
-                                tokenomics_data.append(f"{name} ({percentage})")
-                    else:
-                        logging.warning("Не удалось найти таблицу с заданными заголовками на Cryptorank. Пробуем Tokenomist.ai...")
-                        await page.goto(f"{TOKENOMIST_API}{lower_name}", wait_until='networkidle')
-                        await page.wait_for_selector(SELECTOR_PERCENTAGE_DATA, timeout=60000)
-
-                        content = await page.content()
-                        soup = BeautifulSoup(content, 'html.parser')
-
-                        # Поиск таблицы с распределением токенов
-                        allocation_divs = soup.select(f'{SELECTOR_PERCENTAGE_DATA} > div')
-                        for div in allocation_divs:
-                            try:
-                                name = div.select_one(
-                                    f'{SELECTOR_PERCENTAGE_TOKEN}[60px], {SELECTOR_PERCENTAGE_TOKEN}[90px]').get_text(
-                                    strip=True)
-                                percentage = div.select_one('div.font-medium.mr-1.w-8.text-right').get_text(
-                                    strip=True)
-                                tokenomics_data.append(f"{name} ({percentage})")
-
-                            except AttributeError as attr_error:
-                                raise AttributeAccessError(str(attr_error))
-
-                    return tokenomics_data
-
-                except Exception as e:
-                    raise ExceptionError(str(e))
-
-                finally:
-                    # Закрытие браузера
-                    await browser.close()
-
-    except AttributeError as attr_error:
-        raise AttributeAccessError(str(attr_error))
-    except KeyError as key_error:
-        raise MissingKeyError(str(key_error))
-    except ValueError as value_error:
-        raise ValueProcessingError(str(value_error))
+    except (AttributeError, KeyError, ValueError) as e:
+        raise ExceptionError(str(e))
     except Exception as e:
         raise ExceptionError(str(e))
 
@@ -484,11 +494,26 @@ async def get_fundraise(user_coin_name: str, message: Message = None):
                     investors_data = ''
 
                     # Получение инвесторов и их тиров
-                    investors_elements = soup.select('div.sc-2ff0cdb7-0.bNrhHj table tbody tr')
-                    for i, investor in enumerate(investors_elements[:5]):  # Ограничение до 5 элементов
-                        name = investor.select_one(f'{SELECTOR_GET_INVESTORS}.ktClAm').text
-                        tier = investor.select_one(f'td:nth-child(2) {SELECTOR_GET_INVESTORS}').text
-                        investors_data += f"{name} (Tier: {tier}); "
+                    investors_rows = soup.select("table.sc-9b3136d-1.cnOWhJ tbody tr")
+
+                    if not investors_rows:
+                        print("❌ Таблица инвесторов не найдена!")
+
+                    for investor in investors_rows[:5]:  # Ограничение до 5 элементов
+                        try:
+                            # Извлекаем название инвестора
+                            name_tag = investor.select_one("td.sc-4b43e9a5-0.dpEQjJ p.sc-56567222-0.ktClAm")
+                            name = name_tag.get_text(strip=True) if name_tag else "Не найдено"
+
+                            # Извлекаем Tier
+                            tier_tag = investor.select_one("td.sc-4b43e9a5-0.hMDMTF p.sc-56567222-0.ktClAm")
+                            tier = tier_tag.get_text(strip=True) if tier_tag else "Не найдено"
+
+                            investors_data += f"{name} (Tier: {tier}), "
+
+                        except AttributeError as e:
+                            print(f"❌ Ошибка при обработке инвестора: {e}")
+                            continue
 
                     logging.info(f"Инвесторы, fundraise: {investors_data, clean_data}")
                     return clean_data, investors_data
@@ -546,7 +571,8 @@ async def fetch_coingecko_data(user_coin_name: str = None):
         raise ExceptionError(str(e))
 
 
-async def fetch_coinmarketcap_data(message: Message = None, user_coin_name: str = None, headers: dict = None, parameters: dict = None):
+async def fetch_coinmarketcap_data(message: Message = None, user_coin_name: str = None, headers: dict = None,
+                                   parameters: dict = None):
     """
     Получение основных данных о токене из CoinMarketCap
     """
@@ -633,7 +659,8 @@ def get_coingecko_id_by_symbol(symbol: str):
     return None
 
 
-async def fetch_cryptocompare_data(cryptocompare_params: dict, cryptocompare_params_with_full_coin_name: dict, price: float, request_type: str = None):
+async def fetch_cryptocompare_data(cryptocompare_params: dict, cryptocompare_params_with_full_coin_name: dict,
+                                   price: float, request_type: str = None):
     """
     Получение макс/мин цены токена из CryptoCompare
     """
@@ -742,10 +769,14 @@ async def fetch_twitter_data(name: str):
     """
     Получение данных о Twitter пользователе по его имени.
     """
-
     try:
         twitter_response = await get_twitter(name)
-        return twitter_response['twitter'], int(twitter_response['twitterscore'])
+
+        if not twitter_response:
+            return None, None
+
+        return twitter_response.get("twitter"), int(twitter_response.get("twitterscore", 0))
+
     except AttributeError as attr_error:
         raise AttributeAccessError(str(attr_error))
     except KeyError as key_error:
@@ -970,21 +1001,21 @@ async def check_and_run_tasks(
     if (investing_metrics and not all([
         getattr(investing_metrics, 'fundraise', None),
         getattr(investing_metrics, 'fund_level', None),
-        getattr(investing_metrics, 'fund_level', '-') != '-'
+        getattr(investing_metrics, 'fund_level', '-') not in ['-', None, ""]
     ])) or not investing_metrics:
         tasks.append((fetch_fundraise_data(lower_name), "investing_metrics"))
 
     if (social_metrics and not all([
-        getattr(social_metrics, 'twitter', '') != '',
-        getattr(social_metrics, 'twitterscore', '') != ''
+        getattr(social_metrics, 'twitter', '') not in ['-', None, ""],
+        getattr(social_metrics, 'twitterscore', '') not in ['-', None, ""]
     ])) or not social_metrics:
         tasks.append((fetch_twitter_data(twitter_name), "social_metrics"))
 
     if (funds_profit and not all([
         getattr(funds_profit, 'distribution', None),
-        getattr(funds_profit, 'distribution', '') != ''
+        getattr(funds_profit, 'distribution', '') not in ["--)", "-", "-)", ""],
     ])) or not funds_profit:
-        tasks.append((get_percantage_data(session, lower_name, user_coin_name), "funds_profit"))
+        tasks.append((get_percentage_data(session, lower_name, user_coin_name), "funds_profit"))
 
     if not all([
         top_and_bottom,
@@ -994,8 +1025,10 @@ async def check_and_run_tasks(
         getattr(market_metrics, 'fail_high', None),
         getattr(market_metrics, 'growth_low', None)
     ]) and price:
-        tasks.append((fetch_cryptocompare_data(cryptocompare_params, cryptocompare_params_with_full_coin_name, price, "market_metrics"), "market_metrics"))
-        tasks.append((fetch_cryptocompare_data(cryptocompare_params, cryptocompare_params_with_full_coin_name, price, "top_and_bottom"), "top_and_bottom"))
+        tasks.append((fetch_cryptocompare_data(cryptocompare_params, cryptocompare_params_with_full_coin_name, price,
+                                               "market_metrics"), "market_metrics"))
+        tasks.append((fetch_cryptocompare_data(cryptocompare_params, cryptocompare_params_with_full_coin_name, price,
+                                               "top_and_bottom"), "top_and_bottom"))
 
     if (manipulative_metrics and not getattr(manipulative_metrics, 'top_100_wallet', None)) or not manipulative_metrics:
         tasks.append((fetch_top_100_wallets(lower_name), "manipulative_metrics"))
@@ -1005,6 +1038,7 @@ async def check_and_run_tasks(
 
     # Выполняем задачи
     if tasks:
+        print("tasks: ", tasks)
         task_results = await asyncio.gather(*(task for task, _ in tasks))
         logging.info(f"Результаты выполнения задач: {task_results}")
         for (result, (_, model_name)) in zip(task_results, tasks):

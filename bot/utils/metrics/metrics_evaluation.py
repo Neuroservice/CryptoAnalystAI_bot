@@ -12,7 +12,6 @@ from bot.utils.common.consts import (
     RESULT_STRING,
     FUNDRAISING_DIVISOR,
     FOLLOWERS_DIVISOR,
-    TIER_SCORES,
     TWITTER_SCORE_MULTIPLIER,
     TIER_COEFFICIENTS,
     CALCULATIONS_SUMMARY_STR,
@@ -54,7 +53,14 @@ def determine_project_tier(
     for investor in investors:
         if "(" in investor and ")" in investor:
             name, tier = investor.rsplit("(", 1)
-            tier = tier.strip(")").replace("+", "")
+            tier = tier.strip(")").replace("+", "").strip()  # Убираем "+" и пробелы
+
+            # Приводим к формату "Tier: {цифра}"
+            if tier.upper().startswith("TIER"):
+                tier = tier.split()[-1]  # Берем число после "TIER"
+            if tier.isdigit():
+                tier = f"Tier: {tier}"
+
             parsed_investors.append(tier)
 
     investor_counts = {tier: 0 for tier in TIER_RANK}
@@ -69,32 +75,22 @@ def determine_project_tier(
         passes_metrics = (
                 capitalization != "N/A" and int(capitalization) >= int(criteria["capitalization"])
                 and fundraising != "N/A" and int(fundraising) >= int(criteria["fundraising"])
-                and twitter_followers != "N/A" and int(clean_twitter_subs(twitter_followers)) >= int(
-            clean_twitter_subs(criteria["twitter_followers"]))
+                and twitter_followers != "N/A" and int(clean_twitter_subs(twitter_followers)) >= int(clean_twitter_subs(criteria["twitter_followers"]))
                 and twitter_score != "N/A" and int(twitter_score) >= int(criteria["twitter_score"])
         )
-
-        print(capitalization, fundraising, twitter_followers, twitter_score, parsed_investors, category)
 
         if not passes_metrics:
             print(f"Metrics do not fit for {tier}, moving to the next tier.")
             continue
 
-        if category not in criteria["categories"]:
-            print(f"Category {category} does not fit for {tier}, but metrics fit. Moving to the next tier.")
-            continue
-
-        # Проверка инвесторов
-        remaining_requirements = criteria["required_investors"].copy()
-        for inv_tier, required_count in remaining_requirements.items():
-            for higher_tier in TIER_RANK:
-                if TIER_RANK[higher_tier] <= TIER_RANK[inv_tier]:
-                    satisfied = min(investor_counts[higher_tier], required_count)
-                    remaining_requirements[inv_tier] -= satisfied
-                    investor_counts[higher_tier] -= satisfied
-
-        if all(count <= 0 for count in remaining_requirements.values()):
-            return tier
+        if "Tier: 1" in parsed_investors:
+            return "Tier 1"
+        elif "Tier: 2" in investor_counts:
+            return "Tier 2"
+        elif "Tier: 3" in investor_counts:
+            return "Tier 3"
+        elif "Tier: 4" in investor_counts:
+            return "Tier 4"
 
     print("Project does not fit into any tier, assigning TIER 5.")
     return "Tier 5"
@@ -293,7 +289,14 @@ def project_investors_level(investors: str):
     for investor in investors:
         if "(" in investor and ")" in investor:
             name, tier = investor.rsplit("(", 1)
-            tier = tier.strip(")").replace("+", "")  # Убираем "+" в конце
+            tier = tier.strip(")").replace("+", "").strip()  # Убираем "+" и пробелы
+
+            # Приводим к формату "Tier: {цифра}"
+            if tier.upper().startswith("TIER"):
+                tier = tier.split()[-1]  # Берем число после "TIER"
+            if tier.isdigit():
+                tier = f"Tier: {tier}"
+
             parsed_investors.append(tier)
 
     # Считаем количество фондов по каждому Тиру
@@ -304,6 +307,7 @@ def project_investors_level(investors: str):
 
     # Логика перекрытия требований по метрикам
     remaining_counts = investor_counts.copy()
+    print("investor_counts: ", investor_counts, "parsed_investors: ", parsed_investors)
     for i in range(len(TIER_RANK_LIST) - 1):  # Пропускаем TIER 5
         higher_tier = TIER_RANK_LIST[i]
         lower_tier = TIER_RANK_LIST[i + 1]
@@ -313,13 +317,13 @@ def project_investors_level(investors: str):
 
     # Определяем уровень инвесторов
     investor_level = 5  # По умолчанию Тир 5
-    if remaining_counts["TIER 1"] >= 1 and (remaining_counts["TIER 1"] + remaining_counts["TIER 2"]) >= 3:
+    if remaining_counts["Tier: 1"] >= 1 and (remaining_counts["Tier: 1"] + remaining_counts["Tier: 2"]) >= 3:
         investor_level = 1
-    elif remaining_counts["TIER 2"] >= 1 and (remaining_counts["TIER 2"] + remaining_counts["TIER 3"]) >= 2:
+    elif remaining_counts["Tier: 2"] >= 1 and (remaining_counts["Tier: 2"] + remaining_counts["Tier: 3"]) >= 2:
         investor_level = 2
-    elif remaining_counts["TIER 3"] >= 1 and (remaining_counts["TIER 3"] + remaining_counts["TIER 4"]) >= 2:
+    elif remaining_counts["Tier: 3"] >= 1 and (remaining_counts["Tier: 3"] + remaining_counts["Tier: 4"]) >= 2:
         investor_level = 3
-    elif remaining_counts["TIER 4"] >= 1:
+    elif remaining_counts["Tier: 4"] >= 1:
         investor_level = 4
 
     score = LEVEL_TO_SCORE[investor_level]
@@ -335,9 +339,13 @@ def project_investors_level(investors: str):
 def calculate_project_score(
         fundraising: float,
         tier: str,
+        investors_level_score: int,
         twitter_followers: str,
         twitter_score: int,
         tokenomics_score: float,
+        tvl: int,
+        top_100_wallet: float,
+        growth_and_fall_score: int,
         profitability_score: float,
         language: str
 ):
@@ -352,20 +360,19 @@ def calculate_project_score(
     tokenomics_score = process_metric(tokenomics_score)
     profitability_score = process_metric(profitability_score)
 
-    if tier == 'N/A':
-        tier = '-'
-
     fundraising_score = round(fundraising / FUNDRAISING_DIVISOR, 2)
-    tier_score = TIER_SCORES.get(tier, 0)
     followers_score = round(twitter_followers / FOLLOWERS_DIVISOR, 2)
     twitter_engagement_score = round(twitter_score * TWITTER_SCORE_MULTIPLIER, 2)
 
     preliminary_score = (
             fundraising_score +
-            tier_score +
+            investors_level_score +
             followers_score +
             twitter_engagement_score +
             tokenomics_score +
+            tvl +
+            top_100_wallet +
+            growth_and_fall_score +
             profitability_score
     )
 
@@ -374,7 +381,7 @@ def calculate_project_score(
 
     calculations_summary = CALCULATIONS_SUMMARY_STR.format(
         fundraising_score=fundraising_score,
-        tier_score=tier_score,
+        tier_score=tier,
         followers_score=followers_score,
         twitter_engagement_score=twitter_engagement_score,
         tokenomics_score=tokenomics_score,
@@ -388,7 +395,7 @@ def calculate_project_score(
 
     return {
         "fundraising_score": fundraising_score,
-        "tier_score": tier_score,
+        "tier_score": tier,
         "followers_score": followers_score,
         "twitter_engagement_score": twitter_engagement_score,
         "tokenomics_score": tokenomics_score,

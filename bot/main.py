@@ -7,6 +7,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand
 
+from bot.database.db_setup import create_db
 from bot.utils.common.config import API_TOKEN
 from bot.data_processing.data_update import fetch_crypto_data, update_agent_answers
 from bot.database.backups import create_backup

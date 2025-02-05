@@ -183,7 +183,7 @@ PATTERNS = {
     "RU": [
         r"(Описание проекта:)",
         r"(Проект относится к категории:)",
-        r"(Метрики проекта \(уровень Tier \d+\):)",
+        r"(Метрики проекта.*?:)",
         r"(Распределение токенов:)",
         r"(Оценка прибыльности инвесторов:)",
         r"(Данные\s*роста/падения\s*токена\s*с\s*минимальных\s*и\s*максимальных\s*значений\s*\(за\s*последние\s*2\s*года\):)",
@@ -195,7 +195,7 @@ PATTERNS = {
     "EN": [
         r"(Project description:)",
         r"(The project is categorized as:)",
-        r"(Project metrics \(level Tier \d+\):)",
+        r"(Project metrics.*?:)",
         r"(Token distribution:)",
         r"(Evaluating investor profitability:)",
         r"(Token growth/decline data from minimum and maximum values \(for the last 2 years\):)",
@@ -245,7 +245,7 @@ PROJECT_ANALYSIS = r"Анализ проекта .+?\(\$\w+?\)|Project analysis 
 
 # Константы для оценки метрик
 TIER_RANK = {"TIER 1": 1, "TIER 2": 2, "TIER 3": 3, "TIER 4": 4}
-TIER_RANK_LIST = ["TIER 1", "TIER 2", "TIER 3", "TIER 4", "TIER 5"]
+TIER_RANK_LIST = ["Tier: 1", "Tier: 2", "Tier: 3", "Tier: 4", "Tier: 5"]
 TIER_CRITERIA = {
         "Tier 1": {
             "capitalization": 1_000_000_000,
@@ -328,13 +328,6 @@ TIER_CRITERIA = {
 FUNDRAISING_DIVISOR = 5_000_000
 FOLLOWERS_DIVISOR = 15_000
 TWITTER_SCORE_MULTIPLIER = 0.1
-TIER_SCORES = {
-    "Tier 1": 100,
-    "Tier 2": 80,
-    "Tier 3": 60,
-    "Tier 4": 30,
-    "Tier 5": 0
-}
 TIER_COEFFICIENTS = {
     "Tier 1": 1.00,
     "Tier 2": 0.90,
@@ -360,7 +353,7 @@ RESULT_STRING = (
 CALCULATIONS_SUMMARY_STR = """
 Расчеты:
     Баллы за привлеченные инвестиции: {fundraising_score} баллов.
-    Баллы за Тир проекта: {tier_score} баллов.
+    Баллы за Уровень инвесторов проекта: {tier_score} баллов.
     Баллы за количество подписчиков в Twitter: {followers_score} баллов.
     Баллы за Twitter Score: {twitter_engagement_score} баллов.
     Баллы от оценки токеномики: {tokenomics_score} баллов.
