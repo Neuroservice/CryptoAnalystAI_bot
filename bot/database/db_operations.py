@@ -67,7 +67,10 @@ async def get_user_from_redis_or_db(user_id: int, session: AsyncSession) -> Any:
     # Проверяем наличие пользователя в Redis
     user_data = await redis_client.hgetall(f"user:{user_id}")
     if user_data:
-        return await get_one(session, User, telegram_id=user_id)
+        user = await get_one(session, User, telegram_id=user_id)
+        if not user:
+            user = await create_user(user_id, session)
+        return user
 
     # Если пользователя нет в Redis, ищем в базе данных
     try:
@@ -96,6 +99,8 @@ async def create_user(user_id: int, session: AsyncSession) -> Any:
         "telegram_id": user_id,
         "language": "ENG",
     }
+
+    print("defaults: ", defaults)
     try:
         user, _ = await get_or_create(session, User, defaults=defaults, telegram_id=user_id)
 

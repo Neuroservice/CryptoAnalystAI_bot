@@ -25,7 +25,8 @@ from bot.utils.common.consts import (
     TICKERS,
     DATA_FOR_ANALYSIS_TEXT,
     ALL_DATA_STRING_FLAGS_AGENT,
-    ALL_DATA_STRING_FUNDS_AGENT
+    ALL_DATA_STRING_FUNDS_AGENT,
+    REPLACED_PROJECT_TWITTER
 )
 from bot.utils.metrics.metrics_evaluation import (
     calculate_tokenomics_score,
@@ -161,6 +162,7 @@ async def create_pdf_report(
 
     row_data = []
     coin_twitter, about, lower_name = twitter_link
+    twitter_name = REPLACED_PROJECT_TWITTER.get(coin_twitter, twitter_link)
     language = await get_user_language(message.from_user.id, session)
     current_date = datetime.now().strftime("%d.%m.%Y")
     existing_calculation = await get_one(session, Calculation, id=calculation_record["id"])
@@ -283,6 +285,7 @@ async def create_pdf_report(
             )
         )
 
+
         if investing_metrics and investing_metrics.fund_level:
             project_investors_level_result = project_investors_level(investors=investing_metrics.fund_level)
             investors_level = project_investors_level_result["level"]
@@ -310,12 +313,16 @@ async def create_pdf_report(
 
             tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
             project_rating_result = calculate_project_score(
-                investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 'N/A',
+                investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 0.0,
                 f"{tier_answer}",
-                social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A',
-                social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A',
-                tokemonic_score if tokemonic_answer else 'N/A',
-                funds_scores if funds_scores else 'N/A',
+                investors_level_score,
+                social_metrics.twitter if social_metrics and social_metrics.twitter else 0,
+                social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 0.0,
+                tokemonic_score if tokemonic_score else 0.0,
+                int((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and network_metrics.tvl and tokenomics_data and tokenomics_data.total_supply and tokenomics_data.capitalization else 0,
+                round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 0,
+                int(growth_and_fall_score),
+                funds_score if funds_score else 'N/A',
                 language
             )
 
@@ -336,7 +343,7 @@ async def create_pdf_report(
                 funds_answer=funds_answer,
                 project_rating_answer=project_rating_answer,
                 social_metrics_twitter=social_metrics.twitter,
-                twitter_link=twitter_link,
+                twitter_link=twitter_name,
                 social_metrics_twitterscore=social_metrics.twitterscore
             )
 
@@ -410,7 +417,9 @@ async def create_pdf_report(
             )
 
             if funds_profit and funds_profit.distribution:
+                print(funds_profit, funds_profit.distribution)
                 distribution_items = funds_profit.distribution.split('\n')
+                print(distribution_items)
                 formatted_distribution = "\n".join([f"- {item}" for item in distribution_items])
             else:
                 formatted_distribution = phrase_by_language("no_token_distribution", language)
@@ -429,7 +438,7 @@ async def create_pdf_report(
                               f"${round(get_metric_value(investing_metrics, 'fundraise', 0), 0)}" if get_metric_value(investing_metrics, 'fundraise') else None,
                               language),
                 format_metric('twitter_followers',
-                              f"{get_metric_value(social_metrics, 'twitter')} ({twitter_link[0]})" if get_metric_value(social_metrics, 'twitter') else None,
+                              f"{get_metric_value(social_metrics, 'twitter')} ({twitter_name})" if get_metric_value(social_metrics, 'twitter') else None,
                               language),
                 format_metric('twitter_score',
                               f"{get_metric_value(social_metrics, 'twitterscore')}" if get_metric_value(social_metrics, 'twitterscore') else None,

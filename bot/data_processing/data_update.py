@@ -43,7 +43,6 @@ from bot.utils.project_data import (
     get_twitter_link_by_symbol,
     fetch_top_100_wallets,
     fetch_tvl_data,
-    get_percantage_data,
     get_user_project_info,
     get_project_and_tokenomics,
     calculate_expected_x,
@@ -51,7 +50,8 @@ from bot.utils.project_data import (
     fetch_coinmarketcap_data,
     fetch_coingecko_data,
     generate_flags_answer,
-    get_coin_description
+    get_coin_description,
+    get_percentage_data
 )
 from bot.utils.validations import (
     extract_red_green_flags,
@@ -196,7 +196,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
                     if not funds_profit or not funds_profit.distribution or funds_profit.distribution == '-':
                         print("7.1")
                         twitter_link, description, lower_name = await get_twitter_link_by_symbol(symbol)
-                        tokenomics_percentage_data = await get_percantage_data(async_session, twitter_link, symbol)
+                        tokenomics_percentage_data = await get_percentage_data(async_session, twitter_link, symbol)
                         output_string = '\n'.join(tokenomics_percentage_data) if tokenomics_percentage_data else '-'
                         await update_or_create(
                             async_session, FundsProfit,

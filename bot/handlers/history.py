@@ -63,7 +63,6 @@ async def history_command(message: types.Message):
                 pdf.output(pdf_output)
                 pdf_output.seek(0)
                 pdf_output, extracted_text = create_pdf_file(calculation, language)
-                print("pdf_output, extracted_text: ", pdf_output, extracted_text)
                 zip_archive.writestr(file_name, pdf_output.getvalue())
 
         zip_buffer.seek(0)
