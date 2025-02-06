@@ -838,7 +838,8 @@ async def fetch_tvl_data(coin_name: str):
                     data = await response.json()
                     if isinstance(data, list) and data:
                         last_entry = data[-1]
-                        last_tvl = last_entry.get('totalLiquidityUSD', 0)
+                        logging.info(f"last_entry: {last_entry}")
+                        last_tvl = last_entry.get('tvl', 0)
                         logging.info(f"Последний TVL (base_url): {last_tvl}")
                         return float(last_tvl)
                     else:

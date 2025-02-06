@@ -285,7 +285,6 @@ async def create_pdf_report(
             )
         )
 
-
         if investing_metrics and investing_metrics.fund_level:
             project_investors_level_result = project_investors_level(investors=investing_metrics.fund_level)
             investors_level = project_investors_level_result["level"]
