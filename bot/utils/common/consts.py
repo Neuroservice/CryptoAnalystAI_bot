@@ -18,6 +18,10 @@ from bot.database.models import (
 FASOLKA_TG = 'https://t.me/FasolkaAI_bot'
 
 
+LOCAL_BACKUP_DIR = '/tmp/fasolka_backups'
+BUCKET = 'c462de58-1673afa0-028c-4482-9d49-87f46960a44f'
+
+
 # Пути к файлам
 DATABASE_URL = engine_url
 # DATABASE_URL = "sqlite+aiosqlite:///./crypto_analysis.db"  # Локалка
