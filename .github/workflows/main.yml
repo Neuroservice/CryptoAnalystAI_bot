@@ -1,0 +1,48 @@
+name: Auto (push OR PR)
+
+on:
+  push:
+    branches:
+      - test
+
+jobs:
+  push_docker_hub_test:
+    if: github.ref == 'refs/heads/test'
+    name: Push Docker image for test dir
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to Docker
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Push to Docker Hub
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/bot_cryptoanalyst:test
+
+  deploy_to_test_dir:
+    if: github.ref == 'refs/heads/test'
+    runs-on: ubuntu-latest
+    needs: push_docker_hub_test
+
+    steps:
+      - name: executing remote ssh commands to deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/CryptoAnalyst_bot/test
+            echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
+            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_test stop
+            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_test pull
+            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_test up --build -d --no-recreate
+            sudo docker image prune --force
+            sudo docker volume prune --force
