@@ -19,6 +19,7 @@ from bot.utils.common.config import (
     S3_REGION,
     S3_URL
 )
+from bot.utils.common.consts import LOCAL_BACKUP_DIR, BUCKET
 from bot.utils.resources.exceptions.exceptions import (
     ExceptionError,
     ValueProcessingError,
@@ -41,7 +42,7 @@ async def create_backup():
     # Путь к временной папке для хранения бэкапов.
     # Если работаете в Linux/MacOS, можно использовать '/tmp/fasolka_backups'.
     # Если на Windows — укажите соответствующий путь.
-    local_backup_dir = '/tmp/fasolka_backups'
+    local_backup_dir = LOCAL_BACKUP_DIR
     os.makedirs(local_backup_dir, exist_ok=True)
 
     # Имя файла бэкапа и файла для логирования ошибок
@@ -104,7 +105,7 @@ def upload_backup_to_s3(local_file: str, s3_file: str):
         endpoint_url=S3_URL
     )
     try:
-        s3.upload_file(local_file, 'c462de58-1673afa0-028c-4482-9d49-87f46960a44f', s3_file)
+        s3.upload_file(local_file, BUCKET, s3_file)
         logger.info(f'Файл {local_file} успешно загружен в S3: {s3_file}')
     except FileNotFoundError:
         logger.error(f'Файл {local_file} не найден')
@@ -131,7 +132,7 @@ def delete_old_backups_from_s3():
 
     try:
         paginator = s3.get_paginator('list_objects_v2')
-        for page in paginator.paginate(Bucket='c462de58-1673afa0-028c-4482-9d49-87f46960a44f', Prefix='fasolka_backups/'):
+        for page in paginator.paginate(Bucket=BUCKET, Prefix='fasolka_backups/'):
             if 'Contents' in page:
                 for obj in page['Contents']:
                     obj_date = obj['LastModified']
@@ -141,7 +142,7 @@ def delete_old_backups_from_s3():
                         obj_date = pytz.utc.localize(obj_date)
 
                     if obj_date < cutoff_date:
-                        s3.delete_object(Bucket='c462de58-1673afa0-028c-4482-9d49-87f46960a44f', Key=obj['Key'])
+                        s3.delete_object(Bucket=BUCKET, Key=obj['Key'])
                         logger.info(f'Удален старый бэкап: {obj["Key"]}')
 
     except AttributeError as attr_error:
