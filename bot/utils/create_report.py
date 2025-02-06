@@ -236,7 +236,6 @@ async def create_pdf_report(
                         if not isinstance(project_coin, str):
                             raise ValueProcessingError(f"Unexpected type for project_coin_name: {type(project_coin)}")
 
-                        # Форматируем строку
                         comparison_results += calculations_choices[language].format(
                             index=index,
                             user_coin_name=coin_name,
