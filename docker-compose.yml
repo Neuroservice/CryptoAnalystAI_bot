@@ -11,14 +11,14 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5455:5432"
 
   redis:
     image: redis:latest
     container_name: redis
     restart: always
     ports:
-      - "6379:6379"
+      - "6330:6379"
 
   crypto-bot:
     image: na3810/bot_cryptoanalyst:test
