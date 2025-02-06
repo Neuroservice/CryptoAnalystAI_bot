@@ -15,7 +15,7 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 REDIS_HOST = os.getenv("DB_HOST")
-REDIS_PORT = 6379
+REDIS_PORT = os.getenv("REDIS_PORT")
 
 S3_URL = os.getenv("S3_URL")
 S3_AWS_STORAGE_BUCKET_NAME = os.getenv("S3_AWS_STORAGE_BUCKET_NAME")
