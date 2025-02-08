@@ -22,7 +22,7 @@ services:
 
   cryptoanalyst_test:
     image: na3810/bot_cryptoanalyst:test
-    container_name: cryptoanalyst_test
+    container_name: cryptoanalyst
     restart: always
     env_file:
       - ./.env
