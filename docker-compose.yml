@@ -20,9 +20,9 @@ services:
     ports:
       - "6330:6379"
 
-  crypto-bot:
+  cryptoanalyst_test:
     image: na3810/bot_cryptoanalyst:test
-    container_name: crypto_analyst_bot
+    container_name: cryptoanalyst_test
     restart: always
     env_file:
       - ./.env
