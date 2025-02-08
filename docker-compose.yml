@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  db-test:
+  db-analyst-test:
     image: postgres:16.6
     container_name: postgres
     environment:
@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - analyst_postgres_data:/var/lib/postgresql/data
     ports:
       - "5455:5432"
 
@@ -30,8 +30,8 @@ services:
     env_file:
       - ./.env
     depends_on:
-      - db-test
+      - db-analyst-test
       - redis
 
 volumes:
-  postgres_data:
+  analyst_postgres_data:
