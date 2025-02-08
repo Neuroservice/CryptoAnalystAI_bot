@@ -41,8 +41,8 @@ jobs:
           script: |
             cd /home/CryptoAnalyst_bot/test
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
-            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_test stop
-            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_test pull
-            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_test up --build -d --no-recreate --remove-orphans
+            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_bot stop
+            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_bot pull
+            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_bot up --build -d --no-recreate --remove-orphans
             sudo docker image prune --force
             sudo docker volume prune --force
