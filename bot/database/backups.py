@@ -19,7 +19,7 @@ from bot.utils.common.config import (
     S3_REGION,
     S3_URL
 )
-from bot.utils.common.consts import LOCAL_BACKUP_DIR, BUCKET
+from bot.utils.common.consts import LOCAL_BACKUP_DIR, BUCKET, PREFIX
 from bot.utils.resources.exceptions.exceptions import (
     ExceptionError,
     ValueProcessingError,
@@ -132,7 +132,7 @@ def delete_old_backups_from_s3():
 
     try:
         paginator = s3.get_paginator('list_objects_v2')
-        for page in paginator.paginate(Bucket=BUCKET, Prefix='fasolka_backups/'):
+        for page in paginator.paginate(Bucket=BUCKET, Prefix=PREFIX):
             if 'Contents' in page:
                 for obj in page['Contents']:
                     obj_date = obj['LastModified']

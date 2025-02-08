@@ -7,7 +7,9 @@ from aiogram.types import BufferedInputFile, ReplyKeyboardRemove
 
 from bot.database.db_operations import get_user_language, get_one, update_or_create
 from bot.utils.common.bot_states import CalculateProject
-from bot.utils.common.consts import TICKERS, MODEL_MAPPING, REPLACED_PROJECT_TWITTER
+from bot.utils.common.consts import TICKERS, MODEL_MAPPING, REPLACED_PROJECT_TWITTER, PROJECT_ANALYSIS_RU, \
+    PROJECT_ANALYSIS_ENG, NEW_PROJECT, LISTING_PRICE_BETA_RU, LISTING_PRICE_BETA_ENG, \
+    LIST_OF_TEXT_FOR_REBALANCING_BLOCK, LIST_OF_TEXT_FOR_ANALYSIS_BLOCK
 from bot.utils.common.params import get_header_params
 from bot.utils.common.sessions import session_local
 from bot.utils.create_report import create_pdf_report, create_basic_report
@@ -50,7 +52,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-@calculate_router.message(lambda message: message.text == 'Анализ проектов' or message.text == 'Project analysis' or message.text == "Пожалуйста, выберите новый проект для расчета.")
+@calculate_router.message(lambda message: message.text == PROJECT_ANALYSIS_RU or message.text == PROJECT_ANALYSIS_ENG or message.text == NEW_PROJECT)
 async def project_chosen(message: types.Message, state: FSMContext):
     """
     Хендлер для обработки пункта меню 'Анализ проектов'.
@@ -61,7 +63,7 @@ async def project_chosen(message: types.Message, state: FSMContext):
     await state.set_state(CalculateProject.choosing_analysis_type)
 
 
-@calculate_router.message(lambda message: message.text == 'Блок анализа цены на листинге (бета)' or message.text == 'Block of price analysis on the listing (beta)')
+@calculate_router.message(lambda message: message.text == LISTING_PRICE_BETA_RU or message.text == LISTING_PRICE_BETA_ENG)
 async def project_chosen(message: types.Message, state: FSMContext):
     """
     Хендлер для обработки пункта меню 'Блок анализа цены на листинге'.
@@ -81,11 +83,11 @@ async def analysis_type_chosen(message: types.Message, state: FSMContext):
 
     analysis_type = message.text.lower()
 
-    if analysis_type in ['блок ребалансировки портфеля', 'block of portfolio rebalancing']:
+    if analysis_type in LIST_OF_TEXT_FOR_REBALANCING_BLOCK:
         await message.answer(await phrase_by_user("rebalancing_input_token", message.from_user.id, session_local))
         await state.set_state(CalculateProject.waiting_for_basic_data)
 
-    elif analysis_type in ['блок анализа и оценки проектов', 'block of projects analysis and evaluation']:
+    elif analysis_type in LIST_OF_TEXT_FOR_ANALYSIS_BLOCK:
         await message.answer(await phrase_by_user("analysis_input_token", message.from_user.id, session_local))
         await state.set_state(CalculateProject.waiting_for_data)
 
