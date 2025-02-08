@@ -20,25 +20,36 @@ FASOLKA_TG = 'https://t.me/FasolkaAI_bot'
 
 LOCAL_BACKUP_DIR = '/tmp/fasolka_backups'
 BUCKET = 'c462de58-1673afa0-028c-4482-9d49-87f46960a44f'
+PREFIX = 'fasolka_backups/'
+
+
+PROJECT_ANALYSIS_RU = 'Анализ проектов'
+PROJECT_ANALYSIS_ENG = 'Project analysis'
+NEW_PROJECT = "Пожалуйста, выберите новый проект для расчета."
+LISTING_PRICE_BETA_RU = 'Блок анализа цены на листинге (бета)'
+LISTING_PRICE_BETA_ENG = 'Block of price analysis on the listing (beta)'
+LIST_OF_TEXT_FOR_REBALANCING_BLOCK = ['блок ребалансировки портфеля', 'block of portfolio rebalancing']
+LIST_OF_TEXT_FOR_ANALYSIS_BLOCK = ['блок анализа и оценки проектов', 'block of projects analysis and evaluation']
+DONATE_TEXT_RU = 'Донат'
+DONATE_TEXT_ENG = 'Donate'
+HELP_TEXT_RU = 'Помощь'
+HELP_TEXT_ENG = 'Help'
+CALC_HISTORY_TEXT_RU = 'История расчетов'
+CALC_HISTORY_TEXT_ENG = 'Calculation History'
 
 
 # Пути к файлам
 DATABASE_URL = engine_url
-# DATABASE_URL = "sqlite+aiosqlite:///./crypto_analysis.db"  # Локалка
-# DATABASE_URL = "sqlite+aiosqlite:///bot/crypto_analysis.db" # Прод
 
-LOGO_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\bot\\media\\fasolka.jpg"  # Для локалки
-# LOGO_PATH = "/app/bot/media/fasolka.jpg" # Для прода
+# LOGO_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\bot\\media\\fasolka.jpg"  # Для локалки
+LOGO_PATH = "/app/bot/media/fasolka.jpg" # Для прода
 
-TIMES_NEW_ROMAN_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
-TIMES_NEW_ROMAN_BOLD_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
-TIMES_NEW_ROMAN_ITALIC_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
-# TIMES_NEW_ROMAN_PATH = '/fonts/TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
-# TIMES_NEW_ROMAN_BOLD_PATH = '/fonts/TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
-# TIMES_NEW_ROMAN_ITALIC_PATH = '/fonts/TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
-# DEJAVU_PATH = '/app/fonts/DejaVuSansCondensed.ttf'
-# DEJAVU_BOLD_PATH = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed-Bold.ttf'
-# DEJAVU_ITALIC_PATH = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed-Oblique.ttf'
+# TIMES_NEW_ROMAN_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
+# TIMES_NEW_ROMAN_BOLD_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
+# TIMES_NEW_ROMAN_ITALIC_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
+TIMES_NEW_ROMAN_PATH = '/fonts/TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
+TIMES_NEW_ROMAN_BOLD_PATH = '/fonts/TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
+TIMES_NEW_ROMAN_ITALIC_PATH = '/fonts/TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
 
 
 # Числовые константы

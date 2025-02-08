@@ -1,13 +1,13 @@
 from aiogram import Router, types
 
-from bot.utils.common.consts import WALLET_ADDRESS
+from bot.utils.common.consts import WALLET_ADDRESS, DONATE_TEXT_RU, DONATE_TEXT_ENG
 from bot.utils.common.sessions import session_local
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 
 donate_router = Router()
 
 
-@donate_router.message(lambda message: message.text == 'Донат' or message.text == 'Donate')
+@donate_router.message(lambda message: message.text == DONATE_TEXT_RU or message.text == DONATE_TEXT_ENG)
 async def donate_command(message: types.Message):
     """
     Хендлер для обработки пункта главного меню 'Донат'.

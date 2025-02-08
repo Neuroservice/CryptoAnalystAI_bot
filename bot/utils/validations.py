@@ -29,7 +29,8 @@ from bot.utils.common.consts import (
     CALCULATIONS_PATTERN_RU,
     METRICS_MAPPING,
     NO_DATA_TEXT,
-    CATEGORY_MAP, MAX_MESSAGE_LENGTH
+    CATEGORY_MAP,
+    MAX_MESSAGE_LENGTH
 )
 
 
@@ -314,6 +315,9 @@ def get_metric_value(
     fallback: Any = 'N/A',
     transform: Optional[Callable[[Any], Any]] = None
 ):
+    """
+    Получение поля из базы данных по таблице
+    """
     try:
         if obj is None:
             return fallback

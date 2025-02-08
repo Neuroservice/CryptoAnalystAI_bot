@@ -114,10 +114,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
                     fdv = coin_data.get('coin_fdv')
                     # ШАГ 3: Обновление Tokenomics
                     print("3")
-                    tokenomics = await async_session.execute(
-                        select(Tokenomics).filter_by(project_id=project.id)
-                    )
-                    tokenomics = tokenomics.scalars().first()
+                    tokenomics = await get_one(async_session, Tokenomics, project_id=project.id)
 
                     if not tokenomics:
                         tokenomics = Tokenomics(
@@ -135,10 +132,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
                     async_session.add(tokenomics)
                     # ШАГ 4: Обновление BasicMetrics
                     print("4")
-                    basic_metrics = await async_session.execute(
-                        select(BasicMetrics).filter_by(project_id=project.id)
-                    )
-                    basic_metrics = basic_metrics.scalars().first()
+                    basic_metrics = await get_one(async_session, BasicMetrics, project_id=project.id)
 
                     if not basic_metrics:
                         basic_metrics = BasicMetrics(
@@ -152,15 +146,9 @@ async def fetch_crypto_data(async_session: AsyncSession):
 
                     # ШАГ 5: Обновление ManipulativeMetrics и других метрик
                     print("5")
-                    investing_metrics = await async_session.execute(
-                        select(InvestingMetrics).filter_by(project_id=project.id)
-                    )
-                    investing_metrics = investing_metrics.scalars().first()
+                    investing_metrics = await get_one(async_session, InvestingMetrics, project_id=project.id)
+                    manipulative_metrics = await get_one(async_session, ManipulativeMetrics, project_id=project.id)
 
-                    manipulative_metrics = await async_session.execute(
-                        select(ManipulativeMetrics).filter_by(project_id=project.id)
-                    )
-                    manipulative_metrics = manipulative_metrics.scalars().first()
                     if manipulative_metrics and investing_metrics:
                         fundraise = investing_metrics.fundraise
                         top_100_wallets = await fetch_top_100_wallets(symbol.lower())
@@ -189,10 +177,8 @@ async def fetch_crypto_data(async_session: AsyncSession):
 
                     # ШАГ 7: Обновление FundsProfit
                     print("7")
-                    funds_profit = await async_session.execute(
-                        select(FundsProfit).filter_by(project_id=project.id).limit(1)
-                    )
-                    funds_profit = funds_profit.scalars().first()
+                    funds_profit = await get_one(async_session, FundsProfit, project_id=project.id)
+
                     if not funds_profit or not funds_profit.distribution or funds_profit.distribution == '-':
                         print("7.1")
                         twitter_link, description, lower_name = await get_twitter_link_by_symbol(symbol)
@@ -407,10 +393,7 @@ async def update_agent_answers(async_session: AsyncSession):
             language=agent_answer.language
         )
 
-        answer = flags_answer
-        answer = answer.replace('**', '')
-        answer += DATA_FOR_ANALYSIS_TEXT + comparison_results
-        answer = re.sub(r'\n\s*\n', '\n', answer)
+        answer = re.sub(r'\n\s*\n', '\n', flags_answer.replace('**', '') + DATA_FOR_ANALYSIS_TEXT + comparison_results)
 
         red_green_flags = extract_red_green_flags(answer, language)
         calculations = extract_calculations(answer, language)

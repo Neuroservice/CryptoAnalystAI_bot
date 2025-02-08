@@ -10,6 +10,7 @@ from fpdf import FPDF
 
 from bot.database.db_operations import get_all
 from bot.database.models import Calculation
+from bot.utils.common.consts import CALC_HISTORY_TEXT_RU, CALC_HISTORY_TEXT_ENG
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.utils.resources.files_worker.pdf_worker import create_pdf_file
 from bot.utils.common.sessions import session_local, redis_client
@@ -20,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-@history_router.message(lambda message: message.text == 'История расчетов' or message.text == 'Calculation History')
+@history_router.message(lambda message: message.text == CALC_HISTORY_TEXT_RU or message.text == CALC_HISTORY_TEXT_ENG)
 async def history_command(message: types.Message):
     """
     Хендлер для обработки пункта главного меню 'История расчетов'.
