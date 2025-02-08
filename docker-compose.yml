@@ -24,9 +24,6 @@ services:
     image: na3810/bot_cryptoanalyst:test
     container_name: crypto_analyst_bot
     restart: always
-    volumes:
-      - .:/app
-      - ./data:/app/database
     env_file:
       - ./.env
     depends_on:
