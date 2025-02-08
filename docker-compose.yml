@@ -18,7 +18,7 @@ services:
     container_name: redis_crypto_analyst
     restart: always
     ports:
-      - "6330:6379"
+      - "6331:6379"
 
   crypto-bot:
     image: na3810/bot_cryptoanalyst:test
