@@ -13,12 +13,12 @@ services:
     ports:
       - "5455:5432"
 
-  redis:
+  redis-analyst-test:
     image: redis:latest
     container_name: redis_crypto_analyst
     restart: always
     ports:
-      - "6331:6379"
+      - "6330:6379"
 
   crypto-bot:
     image: na3810/bot_cryptoanalyst:test
@@ -31,7 +31,7 @@ services:
       - ./.env
     depends_on:
       - db-analyst-test
-      - redis
+      - redis-analyst-test
 
 volumes:
   analyst_postgres_data:
