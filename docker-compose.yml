@@ -12,7 +12,7 @@ services:
       - analyst_postgres_data:/var/lib/postgresql/data
     ports:
       - "5455:5432"
-      -
+
   pgadmin-analyst-test:
     image: dpage/pgadmin4:latest
     container_name: crypto_analyst_pgadmin
