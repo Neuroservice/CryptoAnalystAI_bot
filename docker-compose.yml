@@ -3,7 +3,7 @@ version: '3.8'
 services:
   db-analyst-test:
     image: postgres:16.6
-    container_name: analyst_postgres
+    container_name: crypto_analyst_postgres
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -15,14 +15,14 @@ services:
 
   redis-analyst-test:
     image: redis:latest
-    container_name: redis_crypto_analyst
+    container_name: crypto_analyst_redis
     restart: always
     ports:
       - "6330:6379"
 
   cryptoanalyst_test:
     image: na3810/bot_cryptoanalyst:test
-    container_name: cryptoanalyst
+    container_name: crypto_analyst_ai_bot
     restart: always
     env_file:
       - ./.env
