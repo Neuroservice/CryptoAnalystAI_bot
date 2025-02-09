@@ -10,6 +10,8 @@ from bot.utils.common.consts import DATABASE_URL
 async_engine: AsyncEngine = create_async_engine(
     DATABASE_URL,
     echo=False,
+    pool_size=20,
+    max_overflow=10,
     pool_timeout=60,
     connect_args={"timeout": 60},
 )
