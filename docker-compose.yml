@@ -20,7 +20,7 @@ services:
     ports:
       - "6330:6379"
 
-  cryptoanalyst_test:
+  cryptoanalyst_bot_test:
     image: na3810/bot_cryptoanalyst:test
     container_name: crypto_analyst_ai_bot
     restart: always
