@@ -32,9 +32,9 @@ async def check_redis_connection():
 
     try:
         await redis_client.ping()
-        print("Подключение к Redis успешно!")
+        logging.info("Подключение к Redis успешно!")
     except ConnectionError:
-        print("Не удалось подключиться к Redis!")
+        logging.info("Не удалось подключиться к Redis!")
         raise Exception("Не удалось подключиться к Redis!")
 
 
