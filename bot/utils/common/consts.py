@@ -47,9 +47,9 @@ LOGO_PATH = "/app/bot/media/fasolka.jpg" # Для прода
 # TIMES_NEW_ROMAN_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
 # TIMES_NEW_ROMAN_BOLD_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
 # TIMES_NEW_ROMAN_ITALIC_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
-TIMES_NEW_ROMAN_PATH = '/fonts/TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
-TIMES_NEW_ROMAN_BOLD_PATH = '/fonts/TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
-TIMES_NEW_ROMAN_ITALIC_PATH = '/fonts/TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
+TIMES_NEW_ROMAN_PATH = '/app/fonts/TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
+TIMES_NEW_ROMAN_BOLD_PATH = '/app/fonts/TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
+TIMES_NEW_ROMAN_ITALIC_PATH = '/app/fonts/TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
 
 
 # Числовые константы
