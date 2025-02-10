@@ -19,7 +19,7 @@ async def start_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
 
     # Получаем пользователя из Redis или базы данных
-    user = await get_user_from_redis_or_db(user_id=user_id, session=session_local)
+    user = await get_user_from_redis_or_db(user_id=user_id)
 
     if user:  # Если пользователь найден или создан
         language = user.language or "ENG"
@@ -47,7 +47,7 @@ async def language_choice(message: types.Message):
     chosen_language = "RU" if message.text == "Русский" else "ENG"
 
     # Получаем пользователя из Redis или базы данных
-    user = await get_user_from_redis_or_db(user_id=user_id, session=session_local)
+    user = await get_user_from_redis_or_db(user_id=user_id)
 
     if user:
         # Обновляем Redis

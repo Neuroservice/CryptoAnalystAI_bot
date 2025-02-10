@@ -59,7 +59,7 @@ async def create_basic_report(
     state_data = await state.get_data()
     user_coin_name = state_data.get("user_coin_name")
     chosen_project = state_data.get("chosen_project")
-    language = await get_user_language(user_id or message.from_user.id, session)
+    language = await get_user_language(message.from_user.id)
     agents_info = []
 
     try:
@@ -163,9 +163,9 @@ async def create_pdf_report(
     row_data = []
     coin_twitter, about, lower_name = twitter_link
     twitter_name = REPLACED_PROJECT_TWITTER.get(coin_twitter, twitter_link)
-    language = await get_user_language(message.from_user.id, session)
+    language = await get_user_language(message.from_user.id)
     current_date = datetime.now().strftime("%d.%m.%Y")
-    existing_calculation = await get_one(session, Calculation, id=calculation_record["id"])
+    existing_calculation = await get_one(Calculation, id=calculation_record["id"])
 
     try:
         result = await get_project_and_tokenomics(session, chosen_project, coin_name)
@@ -215,7 +215,7 @@ async def create_pdf_report(
         top_and_bottom = project_info.get("top_and_bottom")
         network_metrics = project_info.get("network_metrics")
 
-        existing_answer = await get_one(session, AgentAnswer, project_id=project.id, language=language)
+        existing_answer = await get_one(AgentAnswer, project_id=project.id, language=language)
 
         comparison_results = ""
         result_index = 1

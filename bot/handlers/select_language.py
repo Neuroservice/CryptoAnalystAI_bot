@@ -25,7 +25,7 @@ async def change_language(message: types.Message):
     user_id = message.from_user.id
 
     try:
-        user = await get_user_from_redis_or_db(user_id, session_local)
+        user = await get_user_from_redis_or_db(user_id)
 
         # Меняем язык на противоположный
         new_language = 'ENG' if user.language == 'RU' else 'RU'

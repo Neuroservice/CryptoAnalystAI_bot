@@ -68,21 +68,21 @@ async def get_user_project_info(session: AsyncSession, user_coin_name: str):
     """
 
     try:
-        project, created = await get_or_create(session, Project, coin_name=user_coin_name)
+        project, created = await get_or_create(Project, coin_name=user_coin_name)
         if created:
             logging.info(f"Создан новый проект: {user_coin_name}")
         else:
             logging.info(f"Найден существующий проект: {user_coin_name}")
 
-        tokenomics_data = await get_one(session, Tokenomics, project_id=project.id)
-        basic_metrics = await get_one(session, BasicMetrics, project_id=project.id)
-        investing_metrics = await get_one(session, InvestingMetrics, project_id=project.id)
-        social_metrics = await get_one(session, SocialMetrics, project_id=project.id)
-        funds_profit = await get_one(session, FundsProfit, project_id=project.id)
-        top_and_bottom = await get_one(session, TopAndBottom, project_id=project.id)
-        market_metrics = await get_one(session, MarketMetrics, project_id=project.id)
-        manipulative_metrics = await get_one(session, ManipulativeMetrics, project_id=project.id)
-        network_metrics = await get_one(session, NetworkMetrics, project_id=project.id)
+        tokenomics_data = await get_one(Tokenomics, project_id=project.id)
+        basic_metrics = await get_one(BasicMetrics, project_id=project.id)
+        investing_metrics = await get_one(InvestingMetrics, project_id=project.id)
+        social_metrics = await get_one(SocialMetrics, project_id=project.id)
+        funds_profit = await get_one(FundsProfit, project_id=project.id)
+        top_and_bottom = await get_one(TopAndBottom, project_id=project.id)
+        market_metrics = await get_one(MarketMetrics, project_id=project.id)
+        manipulative_metrics = await get_one(ManipulativeMetrics, project_id=project.id)
+        network_metrics = await get_one(NetworkMetrics, project_id=project.id)
 
         return {
             "project": project,
@@ -136,7 +136,6 @@ async def get_project_and_tokenomics(session: AsyncSession, project_name: str, u
                 logger.info(f"Получение данных токеномики для проекта: {project.coin_name}")
 
                 tokenomics_data, _ = await get_or_create(
-                    session,
                     Tokenomics,
                     defaults={"project_id": project.id},
                     project_id=project.id,
@@ -150,7 +149,6 @@ async def get_project_and_tokenomics(session: AsyncSession, project_name: str, u
 
                 # Создание новой записи токеномики, если она отсутствует
                 tokenomics_data, _ = await get_or_create(
-                    session,
                     Tokenomics,
                     defaults={"project_id": project.id},
                     project_id=project.id,
@@ -408,9 +406,9 @@ async def get_percentage_data(async_session: AsyncSession, lower_name: str, user
     """
 
     try:
-        project = await get_one(async_session, Project, coin_name=user_coin_name)
+        project = await get_one(Project, coin_name=user_coin_name)
         if project:
-            user_tokenomics = await get_one(async_session, FundsProfit, project_id=project.id)
+            user_tokenomics = await get_one(FundsProfit, project_id=project.id)
             if user_tokenomics and user_tokenomics.distribution and user_tokenomics.distribution not in ["--)", "-", "-)", ""]:
                 return extract_tokenomics(user_tokenomics.distribution)
 
@@ -937,7 +935,6 @@ async def get_top_projects_by_capitalization(
 
         # Получение топ-тикеров по капитализации
         top_ticker_projects = await get_all(
-            session,
             Project,
             category=project_type,
             coin_name=lambda col: col.in_(tickers),
@@ -947,7 +944,6 @@ async def get_top_projects_by_capitalization(
 
         # Получение других проектов по капитализации
         top_other_projects = await get_all(
-            session,
             Project,
             category=project_type,
             coin_name=lambda col: col.in_(tickers),
@@ -1117,7 +1113,7 @@ async def generate_flags_answer(
     Функция генерации ответа анализа метрик проекта
     """
     flags_answer = None
-    user_language = await get_user_language(user_id, session_local)
+    user_language = await get_user_language(user_id)
 
     if (user_id and user_language == 'RU') or (language and language == 'RU'):
         language = 'RU'

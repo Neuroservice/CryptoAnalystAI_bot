@@ -29,7 +29,7 @@ async def history_command(message: types.Message):
     """
 
     user_id = message.from_user.id
-    user = await get_user_from_redis_or_db(user_id, session_local)
+    user = await get_user_from_redis_or_db(user_id)
 
     # Меняем язык на противоположный
     language = user.language
@@ -38,7 +38,6 @@ async def history_command(message: types.Message):
 
     try:
         last_calculations = await get_all(
-            session=session_local,
             model=Calculation,
             user_id=user_id
         )
