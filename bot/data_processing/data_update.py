@@ -86,7 +86,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
                 try:
                     # ШАГ 1: Получение данных проекта
                     print("1")
-                    project = await get_one(async_session, Project, coin_name=symbol)
+                    project = await get_one(Project, coin_name=symbol)
                     if not project:
                         logging.error(f"Project not found for {symbol}")
                         continue
@@ -135,15 +135,15 @@ async def fetch_crypto_data(async_session: AsyncSession):
                     )
                     # ШАГ 5: Обновление ManipulativeMetrics и других метрик
                     print("5")
-                    investing_metrics = await get_one(async_session, InvestingMetrics, project_id=project.id)
-                    manipulative_metrics = await get_one(async_session, ManipulativeMetrics, project_id=project.id)
+                    investing_metrics = await get_one(InvestingMetrics, project_id=project.id)
+                    manipulative_metrics = await get_one(ManipulativeMetrics, project_id=project.id)
 
                     if manipulative_metrics and investing_metrics:
                         fundraise = investing_metrics.fundraise
                         top_100_wallets = await fetch_top_100_wallets(symbol.lower())
                         if top_100_wallets and fdv and fundraise:
                             await update_or_create(
-                                async_session, ManipulativeMetrics,
+                                ManipulativeMetrics,
                                 project_id=project.id,
                                 defaults={
                                     'fdv_fundraise': fdv / fundraise,
@@ -156,7 +156,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
                     tvl = await fetch_tvl_data(lower_name)
                     if tvl and fdv:
                         await update_or_create(
-                            async_session, NetworkMetrics,
+                            NetworkMetrics,
                             project_id=project.id,
                             defaults={
                                 'tvl': tvl,
@@ -166,7 +166,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
 
                     # ШАГ 7: Обновление FundsProfit
                     print("7")
-                    funds_profit = await get_one(async_session, FundsProfit, project_id=project.id)
+                    funds_profit = await get_one(FundsProfit, project_id=project.id)
 
                     if not funds_profit or not funds_profit.distribution or funds_profit.distribution == '-':
                         print("7.1")
@@ -214,13 +214,12 @@ async def update_agent_answers(async_session: AsyncSession):
     data_for_tokenomics = []
 
     outdated_answers = await get_all(
-        async_session,
         AgentAnswer,
         updated_at=f"<={three_days_ago}"
     )
 
     for agent_answer in outdated_answers:
-        project = await get_one(async_session, Project, id=agent_answer.project_id)
+        project = await get_one(Project, id=agent_answer.project_id)
 
         if not project:
             continue

@@ -34,7 +34,7 @@ async def update_project(session: AsyncSession, user_coin_name: str, chosen_proj
         )
         return instance
     else:
-        return await get_one(session, Project, coin_name=user_coin_name)
+        return await get_one(Project, coin_name=user_coin_name)
 
 
 @save_execute

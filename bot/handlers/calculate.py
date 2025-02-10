@@ -103,7 +103,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
     user_coin_name = message.text.upper().replace(" ", "")
     fundraise = None
-    language = await get_user_language(message.from_user.id, session_local)
+    language = await get_user_language(message.from_user.id)
 
     if await validate_user_input(user_coin_name, message, state):
         return
@@ -217,7 +217,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                 },
             )
         else:
-            new_project = await get_one(session_local, Project, coin_name=user_coin_name)
+            new_project = await get_one(Project, coin_name=user_coin_name)
 
         await update_or_create(
             BasicMetrics,
@@ -344,7 +344,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     total_supply = None
     fundraise = None
     calculation_record = None
-    language = await get_user_language(message.from_user.id, session_local)
+    language = await get_user_language(message.from_user.id)
 
     if await validate_user_input(user_coin_name, message, state):
         return

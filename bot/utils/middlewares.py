@@ -23,7 +23,7 @@ class RestoreStateMiddleware(BaseMiddleware):
         user_id = message.from_user.id
 
         # Получаем пользователя из базы данных
-        user = await get_one(session=session_local, model=User, telegram_id=user_id)
+        user = await get_one(model=User, telegram_id=user_id)
 
         if user and user.language:
             # Сохраняем язык пользователя в Redis
