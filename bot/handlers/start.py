@@ -26,7 +26,7 @@ async def start_command(message: types.Message, state: FSMContext):
 
         if language:  # Если язык уже установлен
             await message.answer(
-                await phrase_by_user("hello_phrase", user_id, session_local),
+                await phrase_by_user("hello_phrase", user_id, session_local, language),
                 reply_markup=await main_menu_keyboard(user_id=user_id)
             )
         else:  # Новый пользователь должен выбрать язык

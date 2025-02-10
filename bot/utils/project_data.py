@@ -1062,7 +1062,7 @@ async def check_and_run_tasks(
                     continue
 
                 # Сохраняем в базу данных
-                await update_or_create(session, model, project_id=project.id, defaults=data_dict)
+                await update_or_create(model, project_id=project.id, defaults=data_dict)
 
     logging.info(f"Результаты сохранены: {results}")
     return results

@@ -8,7 +8,7 @@ from aiogram import Router, types
 from aiogram.types import BufferedInputFile
 from fpdf import FPDF
 
-from bot.database.db_operations import get_all
+from bot.database.db_operations import get_all, get_user_from_redis_or_db
 from bot.database.models import Calculation
 from bot.utils.common.consts import CALC_HISTORY_TEXT_RU, CALC_HISTORY_TEXT_ENG
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
@@ -29,8 +29,10 @@ async def history_command(message: types.Message):
     """
 
     user_id = message.from_user.id
-    language = await redis_client.hget(f"user:{user_id}", "language")
-    language = language or 'ENG'  # Если языка нет, используем 'ENG'
+    user = await get_user_from_redis_or_db(user_id, session_local)
+
+    # Меняем язык на противоположный
+    language = user.language
 
     await message.answer(await phrase_by_user("wait_for_zip", user_id, session_local))
 
