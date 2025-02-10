@@ -1,14 +1,14 @@
 calculations_choices = {
-    'RU': (
+    "RU": (
         "Результаты расчета для {user_coin_name} в сравнении с {project_coin_name}:\n"
         "Возможный прирост токена (в %): {growth:.2f}%\n"
         "Ожидаемая цена токена: {fair_price}\n\n"
     ),
-    'ENG': (
+    "ENG": (
         "Calculation results for {user_coin_name} compared to {project_coin_name}:\n"
         "Possible token growth (in %): {growth:.2f}%\n"
         "The expected price of the token: {fair_price}\n\n"
-    )
+    ),
 }
 phrase_dict = {
     "RU": {
@@ -47,7 +47,6 @@ phrase_dict = {
         "overall_project_evaluation": "Общая оценка проекта {score} баллов ({rating_text})",
         "flags": "«Ред» флаги и «грин» флаги:",
         "analysis_block_choose": "Выберите блок аналитики:",
-
         ## Ошибки
         "error_input_token_from_user": "Ошибка. Проверьте правильность введенного тикера токена и попробуйте еще раз.",
         "beta_block": "Данный блок пока что находится в разработке. Попробуйте, пожалуйста, другой блок аналитики.",
@@ -58,14 +57,13 @@ phrase_dict = {
         "error_project_inappropriate_category": "Токен не подошел ни под одну из категорий, попробуйте другой.",
         "error_project_not_found": "Проект с таким именем не найден.",
         "no_red_flags": "Нет 'ред' флагов",
-        "no_green_flags":  "Нет 'грин' флагов",
+        "no_green_flags": "Нет 'грин' флагов",
         "no_description": "Нет описания",
         "no_project_rating": "Данных по баллам не поступило",
         "no_project_score": "Нет данных по оценке баллов проекта",
         "comparisons_error": "Ошибка в расчетах",
         "no_data": "Нет данных",
         "no_token_distribution": "Нет данных по распределению токенов",
-
         "calculation_type_choice": """
 Если вы хотите просто рассчитать цену токена, на основании похожих проектов, выберите кнопку 'Блок ребалансировки портфеля'.\n\n
 Если хотите полную сравнительную характеристику по токенам и ребалансировку портфеля, выберите кнопку 'Блок анализа и оценки проектов'.
@@ -83,7 +81,7 @@ phrase_dict = {
 Также вы можете сменить язык бота, используя команду '/language'.\n
 """,
         "investor_profit_text": (
-            "($ {capitalization} (Капитализация проекта) * {investors_percent} "  
+            "($ {capitalization} (Капитализация проекта) * {investors_percent} "
             "(Investors)) / $ {fundraising_amount} (Сумма сбора средств от инвесторов (Fundraising))"
             "= {result_ratio} == {final_score}"
         ),
@@ -100,8 +98,6 @@ Twitter Score = {twitter_engagement_score}
 Понижающий коэффициент: {tier_coefficient}
 """,
     },
-
-
     "ENG": {
         "hello_phrase": "Hello! This is the crypto project analysis block. Choose an action from the menu below:",
         "file_format": "Choose the file format: PDF or Excel?",
@@ -138,8 +134,6 @@ Twitter Score = {twitter_engagement_score}
         "overall_project_evaluation": "Overall project evaluation {score} points ({rating_text})",
         "flags": "«Red» flags and «green» flags:",
         "analysis_block_choose": "Select an analytics block:",
-
-
         ## Ошибки
         "error_input_token_from_user": "Error. Check if the coin entered is correct and try again.",
         "beta_block": "This block is still under development. Please try another analytics block.",
@@ -157,7 +151,6 @@ Twitter Score = {twitter_engagement_score}
         "comparisons_error": "Error on comparisons",
         "no_data": "No data",
         "no_token_distribution": "No token distribution data",
-
         "calculation_type_choice": """
 If you want to simply calculate the token price based on similar projects, choose the 'Block of portfolio rebalancing' button.\n\n
 If you want a full comparison of token characteristics, choose the 'Block of projects analysis and evaluation' button.
@@ -191,5 +184,5 @@ Percentage of tokens on the top 100 blockchain wallets = {top_100_percent}
 Percentage of total blocked assets (TVL) = {tvl_percent}
 Decreasing coefficient: {tier_coefficient}
 """,
-    }
+    },
 }

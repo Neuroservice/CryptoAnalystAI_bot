@@ -59,9 +59,7 @@ async def create(model: Type[Any], **fields) -> Any:
 
 @save_execute
 async def get_or_create(
-        model: Type[Any],
-        defaults: Optional[dict] = None,
-        **filters
+    model: Type[Any], defaults: Optional[dict] = None, **filters
 ) -> Tuple[Any, bool]:
     """
     Получить запись по фильтрам или создать (если не найдена).
@@ -99,16 +97,17 @@ async def get_user_from_redis_or_db(user_id: int) -> Union[dict, User, None]:
     # 2. Если нет в Redis, пытаемся получить/создать пользователя в БД
     try:
         user, created = await get_or_create(
-            User,
-            defaults={"language": "ENG"},
-            telegram_id=user_id
+            User, defaults={"language": "ENG"}, telegram_id=user_id
         )
 
         # После получения (или создания) кладём в Redis
         if user:
             await redis_client.hset(
                 f"user:{user_id}",
-                mapping={"telegram_id": user.telegram_id, "language": user.language}
+                mapping={
+                    "telegram_id": user.telegram_id,
+                    "language": user.language,
+                },
             )
         return user
     except DatabaseError as e:
@@ -141,16 +140,18 @@ async def get_user_language(user_id: int) -> str:
 
 @save_execute
 async def update_or_create(
-        model: Any,
-        project_id: Optional[int] = None,
-        id: Optional[int] = None,
-        defaults: Optional[dict] = None,
-        **kwargs: Any
+    model: Any,
+    project_id: Optional[int] = None,
+    id: Optional[int] = None,
+    defaults: Optional[dict] = None,
+    **kwargs: Any,
 ) -> Any:
     """
     Функция для обновления или создания записи.
     """
-    logging.info(f"project_id: {project_id}, id: {id}, defaults: {defaults}, kwargs: {kwargs}")
+    logging.info(
+        f"project_id: {project_id}, id: {id}, defaults: {defaults}, kwargs: {kwargs}"
+    )
     defaults = defaults or {}
     kwargs = kwargs or {}
 
@@ -160,7 +161,9 @@ async def update_or_create(
     elif project_id:
         query = query.filter_by(project_id=project_id)
     else:
-        raise ValueError("Необходимо указать id или project_id для поиска записи.")
+        raise ValueError(
+            "Необходимо указать id или project_id для поиска записи."
+        )
 
     result = await session_local.execute(query)
     instance = result.scalars().first()
@@ -180,7 +183,9 @@ async def update_or_create(
         elif project_id:
             instance = model(project_id=project_id, **params)
         else:
-            raise ValueError("Необходимо указать id или project_id для создания записи.")
+            raise ValueError(
+                "Необходимо указать id или project_id для создания записи."
+            )
         session_local.add(instance)
 
     await session_local.commit()

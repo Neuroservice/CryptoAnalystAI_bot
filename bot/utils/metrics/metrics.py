@@ -13,12 +13,17 @@ from bot.database.models import (
     NetworkMetrics,
     InvestingMetrics,
     SocialMetrics,
-    Project
+    Project,
 )
 
 
 @save_execute
-async def update_project(session: AsyncSession, user_coin_name: str, chosen_project: str, project: Project):
+async def update_project(
+    session: AsyncSession,
+    user_coin_name: str,
+    chosen_project: str,
+    project: Project,
+):
     """
     Обновляет информацию о проекте в базе данных.
     """
@@ -27,10 +32,7 @@ async def update_project(session: AsyncSession, user_coin_name: str, chosen_proj
         instance = await update_or_create(
             Project,
             id=project.id,
-            defaults={
-                "coin_name": user_coin_name,
-                "category": chosen_project
-            },
+            defaults={"coin_name": user_coin_name, "category": chosen_project},
         )
         return instance
     else:
@@ -38,7 +40,9 @@ async def update_project(session: AsyncSession, user_coin_name: str, chosen_proj
 
 
 @save_execute
-async def update_social_metrics(session: AsyncSession, project_id: int, social_metrics: dict[int]):
+async def update_social_metrics(
+    session: AsyncSession, project_id: int, social_metrics: dict[int]
+):
     """
     Обновляет информацию о социальных метриках проекта.
     """
@@ -49,14 +53,20 @@ async def update_social_metrics(session: AsyncSession, project_id: int, social_m
             SocialMetrics,
             project_id=project_id,
             defaults={
-                'twitter': twitter_subs,
-                'twitterscore': twitter_twitterscore
+                "twitter": twitter_subs,
+                "twitterscore": twitter_twitterscore,
             },
         )
 
 
 @save_execute
-async def update_investing_metrics(session: AsyncSession, project_id: int, investing_metrics: dict[int], user_coin_name: str, investors: str):
+async def update_investing_metrics(
+    session: AsyncSession,
+    project_id: int,
+    investing_metrics: dict[int],
+    user_coin_name: str,
+    investors: str,
+):
     """
     Обновляет информацию об инвестиционных метриках проекта.
     """
@@ -67,18 +77,24 @@ async def update_investing_metrics(session: AsyncSession, project_id: int, inves
             await update_or_create(
                 InvestingMetrics,
                 project_id=project_id,
-                defaults={'fundraise': fundraise, 'fund_level': investors},
+                defaults={"fundraise": fundraise, "fund_level": investors},
             )
         elif fundraise:
             await update_or_create(
                 InvestingMetrics,
                 project_id=project_id,
-                defaults={'fundraise': fundraise},
+                defaults={"fundraise": fundraise},
             )
 
 
 @save_execute
-async def update_network_metrics(session: AsyncSession, project_id: int, network_metrics: dict[int], price: int, total_supply: int):
+async def update_network_metrics(
+    session: AsyncSession,
+    project_id: int,
+    network_metrics: dict[int],
+    price: int,
+    total_supply: int,
+):
     """
     Обновляет информацию о сетевых метриках проекта.
     """
@@ -90,14 +106,23 @@ async def update_network_metrics(session: AsyncSession, project_id: int, network
                 NetworkMetrics,
                 project_id=project_id,
                 defaults={
-                    'tvl': last_tvl,
-                    'tvl_fdv': last_tvl / (price * total_supply) if price * total_supply else 0
+                    "tvl": last_tvl,
+                    "tvl_fdv": last_tvl / (price * total_supply)
+                    if price * total_supply
+                    else 0,
                 },
             )
 
 
 @save_execute
-async def update_manipulative_metrics(session: AsyncSession, project_id: int, manipulative_metrics: dict[int], price: int, total_supply: int, fundraise: int):
+async def update_manipulative_metrics(
+    session: AsyncSession,
+    project_id: int,
+    manipulative_metrics: dict[int],
+    price: int,
+    total_supply: int,
+    fundraise: int,
+):
     """
     Обновление данных по манипулятивным метрикам
     """
@@ -108,8 +133,10 @@ async def update_manipulative_metrics(session: AsyncSession, project_id: int, ma
             ManipulativeMetrics,
             project_id=project_id,
             defaults={
-                'fdv_fundraise': (price * total_supply) / fundraise if fundraise else None,
-                'top_100_wallet': top_100_wallets
+                "fdv_fundraise": (price * total_supply) / fundraise
+                if fundraise
+                else None,
+                "top_100_wallet": top_100_wallets,
             },
         )
 
@@ -120,12 +147,16 @@ async def update_funds_profit(session, project_id, funds_profit_data):
     Обновляет информацию о распределении токенов проекта.
     """
 
-    output_string = '\n'.join(funds_profit_data[0]) if funds_profit_data and funds_profit_data[0] else ''
+    output_string = (
+        "\n".join(funds_profit_data[0])
+        if funds_profit_data and funds_profit_data[0]
+        else ""
+    )
     if output_string:
         await update_or_create(
             FundsProfit,
             project_id=project_id,
-            defaults={'distribution': output_string},
+            defaults={"distribution": output_string},
         )
 
 
@@ -142,12 +173,18 @@ async def update_market_metrics(session, project_id, market_metrics):
                 await update_or_create(
                     MarketMetrics,
                     project_id=project_id,
-                    defaults={'fail_high': fail_high, 'growth_low': growth_low},
+                    defaults={
+                        "fail_high": fail_high,
+                        "growth_low": growth_low,
+                    },
                 )
                 await update_or_create(
                     TopAndBottom,
                     project_id=project_id,
-                    defaults={'lower_threshold': min_price, 'upper_threshold': max_price},
+                    defaults={
+                        "lower_threshold": min_price,
+                        "upper_threshold": max_price,
+                    },
                 )
 
     except Exception as e:
@@ -165,32 +202,58 @@ async def process_metrics(
     price: int,
     total_supply: int,
     fundraise: int,
-    investors: str
+    investors: str,
 ) -> "Project":
     """
     Обрабатывает метрики для указанного проекта и обновляет соответствующие записи в базе данных.
     """
 
     # Обновление или создание проекта
-    new_project = await update_project(session, user_coin_name, chosen_project, project)
+    new_project = await update_project(
+        session, user_coin_name, chosen_project, project
+    )
 
     # Обновление или создание базовых метрик
     await update_or_create(
         BasicMetrics,
         project_id=new_project.id,
         defaults={
-            'entry_price': price,
-            'sphere': chosen_project,
-            'market_price': price
+            "entry_price": price,
+            "sphere": chosen_project,
+            "market_price": price,
         },
     )
 
-    await update_social_metrics(session, new_project.id, results.get("social_metrics"))
-    await update_investing_metrics(session, new_project.id, results.get("investing_metrics"), user_coin_name, investors)
-    await update_network_metrics(session, new_project.id, results.get("network_metrics"), price, total_supply)
-    await update_manipulative_metrics(session, new_project.id, results.get("manipulative_metrics"), price, total_supply, fundraise)
-    await update_funds_profit(session, new_project.id, results.get("funds_profit"))
-    await update_market_metrics(session, new_project.id, results.get("market_metrics"))
+    await update_social_metrics(
+        session, new_project.id, results.get("social_metrics")
+    )
+    await update_investing_metrics(
+        session,
+        new_project.id,
+        results.get("investing_metrics"),
+        user_coin_name,
+        investors,
+    )
+    await update_network_metrics(
+        session,
+        new_project.id,
+        results.get("network_metrics"),
+        price,
+        total_supply,
+    )
+    await update_manipulative_metrics(
+        session,
+        new_project.id,
+        results.get("manipulative_metrics"),
+        price,
+        total_supply,
+        fundraise,
+    )
+    await update_funds_profit(
+        session, new_project.id, results.get("funds_profit")
+    )
+    await update_market_metrics(
+        session, new_project.id, results.get("market_metrics")
+    )
 
     return new_project
-

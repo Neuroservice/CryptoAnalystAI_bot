@@ -12,12 +12,14 @@ def save_execute(f: Any):
     Сессия берется из session_local, импортированной из bot.utils.common.sessions.
     Теперь при вызове функции не нужно явно передавать session.
     """
+
     async def wrapper(*args, **kwargs):
         try:
             return await f(*args, **kwargs)
         except Exception as e:
-            if hasattr(session_local, 'rollback'):
+            if hasattr(session_local, "rollback"):
                 await session_local.rollback()
             logging.error(e)
             raise e
+
     return wrapper

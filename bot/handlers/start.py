@@ -2,7 +2,10 @@ from aiogram import Router, types
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 
-from bot.utils.keyboards.start_keyboards import main_menu_keyboard, language_keyboard
+from bot.utils.keyboards.start_keyboards import (
+    main_menu_keyboard,
+    language_keyboard,
+)
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.database.db_operations import get_user_from_redis_or_db
 from bot.utils.common.sessions import session_local, redis_client
@@ -26,16 +29,20 @@ async def start_command(message: types.Message, state: FSMContext):
 
         if language:  # Если язык уже установлен
             await message.answer(
-                await phrase_by_user("hello_phrase", user_id, session_local, language),
-                reply_markup=await main_menu_keyboard(user_id=user_id)
+                await phrase_by_user(
+                    "hello_phrase", user_id, session_local, language
+                ),
+                reply_markup=await main_menu_keyboard(user_id=user_id),
             )
         else:  # Новый пользователь должен выбрать язык
             await message.answer(
                 "Please choose your language / Пожалуйста, выберите язык:",
-                reply_markup=language_keyboard()
+                reply_markup=language_keyboard(),
             )
     else:
-        await message.answer("Ошибка при работе с базой данных. Попробуйте позже.")
+        await message.answer(
+            "Ошибка при работе с базой данных. Попробуйте позже."
+        )
 
 
 @start_router.message(lambda message: message.text in ["Русский", "English"])
@@ -60,7 +67,9 @@ async def language_choice(message: types.Message):
 
         await message.answer(
             await phrase_by_user("hello_phrase", user_id, session_local),
-            reply_markup=await main_menu_keyboard(user_id=user_id)
+            reply_markup=await main_menu_keyboard(user_id=user_id),
         )
     else:
-        await message.answer("Ошибка при работе с базой данных. Попробуйте позже.")
+        await message.answer(
+            "Ошибка при работе с базой данных. Попробуйте позже."
+        )

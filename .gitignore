@@ -4,7 +4,8 @@ __pycache__/
 *$py.class
 
 docker-compose.yml
-
+pyproject.toml
+backup.backup
 # C extensions
 *.so
 
