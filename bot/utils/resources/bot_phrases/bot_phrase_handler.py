@@ -6,11 +6,11 @@ from bot.utils.resources.exceptions.exceptions import PlaceholderMissingError
 
 
 async def phrase_by_user(
-        phrase_id: str,
-        user_id: int,
-        session,
-        language: Optional[str] = None,
-        **kwargs
+    phrase_id: str,
+    user_id: int,
+    session,
+    language: Optional[str] = None,
+    **kwargs,
 ) -> str:
     """
     Функция возвращает строку из словаря phrase_dict по ключу phrase_id на нужном языке.
@@ -21,7 +21,7 @@ async def phrase_by_user(
 
     if language is None:
         user_data = await get_user_from_redis_or_db(user_id)
-        if user_data and hasattr(user_data, 'language'):
+        if user_data and hasattr(user_data, "language"):
             language = user_data.language
         else:
             language = "ENG"

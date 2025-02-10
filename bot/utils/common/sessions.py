@@ -1,7 +1,11 @@
 import redis.asyncio as redis
 
 from aiohttp import ClientSession
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncEngine
+from sqlalchemy.ext.asyncio import (
+    create_async_engine,
+    AsyncSession,
+    AsyncEngine,
+)
 from sqlalchemy.orm import sessionmaker
 
 from bot.utils.common.config import REDIS_HOST, DB_PASSWORD, REDIS_PORT
@@ -25,4 +29,6 @@ SessionLocal.configure(bind=async_engine)
 session_local = SessionLocal()
 client_session = ClientSession
 
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
+redis_client = redis.Redis(
+    host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True
+)

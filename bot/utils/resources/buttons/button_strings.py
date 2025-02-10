@@ -16,5 +16,5 @@ button_strings_dict = {
         "rebalancing_block": "Block of portfolio rebalancing",
         "analysis_block": "Block of projects analysis and evaluation",
         "listing_price_block": "Block of price analysis on the listing (beta)",
-    }
+    },
 }

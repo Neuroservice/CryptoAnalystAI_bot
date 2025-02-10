@@ -28,7 +28,7 @@ async def change_language(message: types.Message):
         user = await get_user_from_redis_or_db(user_id)
 
         # Меняем язык на противоположный
-        new_language = 'ENG' if user.language == 'RU' else 'RU'
+        new_language = "ENG" if user.language == "RU" else "RU"
         user.language = new_language
 
         await session_local.merge(user)
@@ -41,7 +41,15 @@ async def change_language(message: types.Message):
         new_keyboard = await main_menu_keyboard(user_id)
 
         # Отправляем сообщение с новой клавиатурой
-        await message.answer(await phrase_by_user("language_changed", user.telegram_id, session_local, language=new_language), reply_markup=new_keyboard)
+        await message.answer(
+            await phrase_by_user(
+                "language_changed",
+                user.telegram_id,
+                session_local,
+                language=new_language,
+            ),
+            reply_markup=new_keyboard,
+        )
 
     except Exception as e:
         raise ExceptionError(str(e))
