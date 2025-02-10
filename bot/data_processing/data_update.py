@@ -114,36 +114,25 @@ async def fetch_crypto_data(async_session: AsyncSession):
                     fdv = coin_data.get('coin_fdv')
                     # ШАГ 3: Обновление Tokenomics
                     print("3")
-                    tokenomics = await get_one(async_session, Tokenomics, project_id=project.id)
-
-                    if not tokenomics:
-                        tokenomics = Tokenomics(
-                            project_id=project.id,
-                            circ_supply=circulating_supply,
-                            total_supply=total_supply,
-                            capitalization=market_cap,
-                            fdv=fdv,
-                        )
-                    else:
-                        tokenomics.circ_supply = circulating_supply
-                        tokenomics.total_supply = total_supply
-                        tokenomics.capitalization = market_cap
-                        tokenomics.fdv = fdv
-                    async_session.add(tokenomics)
+                    await update_or_create(
+                        Tokenomics,
+                        project_id=project.id,
+                        defaults={
+                            'circ_supply': circulating_supply,
+                            'total_supply': total_supply,
+                            'capitalization': market_cap,
+                            'fdv': fdv,
+                        },
+                    )
                     # ШАГ 4: Обновление BasicMetrics
                     print("4")
-                    basic_metrics = await get_one(async_session, BasicMetrics, project_id=project.id)
-
-                    if not basic_metrics:
-                        basic_metrics = BasicMetrics(
-                            project_id=project.id,
-                            market_price=round(float(price), 4)
-                        )
-                    else:
-                        basic_metrics.market_price = round(float(price), 4)
-
-                    async_session.add(basic_metrics)
-
+                    await update_or_create(
+                        BasicMetrics,
+                        project_id=project.id,
+                        defaults={
+                            'market_price': round(float(price), 4),
+                        },
+                    )
                     # ШАГ 5: Обновление ManipulativeMetrics и других метрик
                     print("5")
                     investing_metrics = await get_one(async_session, InvestingMetrics, project_id=project.id)
@@ -185,14 +174,13 @@ async def fetch_crypto_data(async_session: AsyncSession):
                         tokenomics_percentage_data = await get_percentage_data(async_session, twitter_link, symbol)
                         output_string = '\n'.join(tokenomics_percentage_data) if tokenomics_percentage_data else '-'
                         await update_or_create(
-                            async_session, FundsProfit,
+                            FundsProfit,
                             project_id=project.id,
                             defaults={'distribution': output_string},
                         )
 
                     # Сохранение изменений
                     print("8")
-                    await async_session.commit()
 
                 except Exception as error:
                     logging.error(f"Error processing {symbol}: {error}")
@@ -346,8 +334,12 @@ async def update_agent_answers(async_session: AsyncSession):
         project_rating_result = calculate_project_score(
             get_metric_value(investing_metrics, 'fundraise'),
             tier_answer,
+            investors_level_score,
             get_metric_value(social_metrics, 'twitter'),
             get_metric_value(social_metrics, 'twitterscore'),
+            int((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and network_metrics.tvl and tokenomics_data and tokenomics_data.total_supply and tokenomics_data.capitalization else 0,
+            round(manipulative_metrics.top_100_wallet * 100, 2) if manipulative_metrics and manipulative_metrics.top_100_wallet else 0,
+            int(growth_and_fall_score),
             tokemonic_score,
             funds_scores,
             language

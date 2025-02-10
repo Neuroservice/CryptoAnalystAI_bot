@@ -5,7 +5,7 @@ from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, ReplyKeyboardRemove
 
-from bot.database.db_operations import get_user_language, get_one, update_or_create
+from bot.database.db_operations import get_user_language, get_one, update_or_create, get_or_create
 from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.consts import TICKERS, MODEL_MAPPING, REPLACED_PROJECT_TWITTER, PROJECT_ANALYSIS_RU, \
     PROJECT_ANALYSIS_ENG, NEW_PROJECT, LISTING_PRICE_BETA_RU, LISTING_PRICE_BETA_ENG, \
@@ -108,7 +108,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     if await validate_user_input(user_coin_name, message, state):
         return
     else:
-        # Сообщаем пользователю, что будут производиться расчеты
         await message.answer(await phrase_by_user("wait_for_calculations", message.from_user.id, session_local))
 
     twitter_name, description, lower_name = await get_twitter_link_by_symbol(user_coin_name)
@@ -120,21 +119,15 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     if description:
         coin_description += description
 
-    # Получение категории проекта
     category_answer = await agent_handler("category", topic=coin_description, language=language)
     overall_category = extract_overall_category(category_answer)
     chosen_project_name = standardize_category(overall_category)
 
-    existing_project = await get_one(session_local, Project, coin_name=user_coin_name)
-    if existing_project:
-        new_project = existing_project
-    else:
-        new_project = Project(
-            category=chosen_project_name,
-            coin_name=user_coin_name
-        )
-        session_local.add(new_project)
-        await session_local.commit()
+    new_project, created = await get_or_create(
+        Project,
+        defaults={"category": chosen_project_name},
+        coin_name=user_coin_name
+    )
 
     if chosen_project_name == 'Unknown Category':
         await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id, session_local))
@@ -181,14 +174,12 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         )
 
         if new_project:
-            calculation_record = Calculation(
+            await get_or_create(
+                Calculation,
+                defaults={"date": datetime.now()},
                 user_id=message.from_user.id,
-                project_id=new_project.id,
-                date=datetime.now()
+                project_id=new_project.id
             )
-            session_local.add(calculation_record)
-            await session_local.commit()
-            await session_local.refresh(calculation_record)
 
         project_info = await get_user_project_info(session_local, user_coin_name)
         investing_metrics = project_info.get("investing_metrics")
@@ -216,10 +207,9 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             model_mapping=MODEL_MAPPING
         )
 
-        await session_local.commit()
         if user_coin_name not in TICKERS:
             await update_or_create(
-                session_local, Project,
+                Project,
                 id=new_project.id,
                 defaults={
                     'category': chosen_project_name,
@@ -230,7 +220,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             new_project = await get_one(session_local, Project, coin_name=user_coin_name)
 
         await update_or_create(
-            session_local, BasicMetrics,
+            BasicMetrics,
             project_id=new_project.id,
             defaults={
                 'entry_price': price,
@@ -245,7 +235,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             twitterscore = twitter_twitterscore
             if twitter and twitterscore:
                 await update_or_create(
-                    session_local, SocialMetrics,
+                    SocialMetrics,
                     project_id=new_project.id,
                     defaults={
                         'twitter': twitter,
@@ -257,7 +247,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             fundraise, investors = tasks.get("investing_metrics", [])[0]
             if user_coin_name not in TICKERS and fundraise and investors:
                 await update_or_create(
-                    session_local, InvestingMetrics,
+                    InvestingMetrics,
                     project_id=new_project.id,
                     defaults={
                         'fundraise': fundraise,
@@ -266,7 +256,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                 )
             elif fundraise:
                 await update_or_create(
-                    session_local, InvestingMetrics,
+                    InvestingMetrics,
                     project_id=new_project.id,
                     defaults={
                         'fundraise': fundraise,
@@ -277,7 +267,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             last_tvl = tasks.get("network_metrics", [])[0]
             if last_tvl and price and total_supply:
                 await update_or_create(
-                    session_local, NetworkMetrics,
+                    NetworkMetrics,
                     project_id=new_project.id,
                     defaults={
                         'tvl': last_tvl if last_tvl else 0,
@@ -288,7 +278,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         if tasks.get("manipulative_metrics", []):
             top_100_wallets = tasks.get("manipulative_metrics", [])[0]
             await update_or_create(
-                session_local, ManipulativeMetrics,
+                ManipulativeMetrics,
                 project_id=new_project.id,
                 defaults={
                     'fdv_fundraise': (price * total_supply) / fundraise if fundraise else None,
@@ -301,7 +291,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
         if output_string and output_string != '':
             await update_or_create(
-                session_local, FundsProfit,
+                FundsProfit,
                 project_id=new_project.id,
                 defaults={
                     'distribution': output_string,
@@ -311,7 +301,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         if tasks.get("market_metrics", []):
             fail_high, growth_low = tasks.get("market_metrics", [])[0]
             await update_or_create(
-                session_local, MarketMetrics,
+                MarketMetrics,
                 project_id=new_project.id,
                 defaults={'fail_high': fail_high, 'growth_low': growth_low},
             )
@@ -319,7 +309,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         if tasks.get("top_and_bottom", []):
             max_price, min_price = tasks.get("top_and_bottom", [])[0]
             await update_or_create(
-                session_local, TopAndBottom,
+                TopAndBottom,
                 project_id=new_project.id,
                 defaults={'lower_threshold': min_price, 'upper_threshold': max_price},
             )
@@ -328,7 +318,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             "user_coin_name": user_coin_name,
             "chosen_project": chosen_project_name,
         }
-        await session_local.commit()
 
         await state.update_data(**data)
         report = await create_basic_report(session_local, state, message=message, user_id=message.from_user.id)
@@ -389,12 +378,11 @@ async def receive_data(message: types.Message, state: FSMContext):
     network_metrics = project_info.get("network_metrics")
 
     if not base_project:
-        base_project = Project(
-            category=chosen_project,
+        base_project, created = await get_or_create(
+            Project,
+            defaults={"category": chosen_project},
             coin_name=user_coin_name
         )
-        session_local.add(base_project)
-        await session_local.commit()
 
     header_params = get_header_params(coin_name=user_coin_name)
     twitter_name = await get_twitter_link_by_symbol(user_coin_name)
@@ -410,7 +398,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                 coin_fdv = coinmarketcap_data['coin_fdv']
 
                 await update_or_create(
-                    session_local, Tokenomics,
+                    Tokenomics,
                     project_id=base_project.id,
                     defaults={
                         'capitalization': capitalization,
@@ -421,7 +409,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                 )
 
                 await update_or_create(
-                    session_local, BasicMetrics,
+                    BasicMetrics,
                     project_id=base_project.id,
                     defaults={
                         'entry_price': price,
@@ -430,7 +418,6 @@ async def receive_data(message: types.Message, state: FSMContext):
                 )
 
             else:
-                # Сообщаем пользователю, что такой токен не найден. Предлагаем ввести новый
                 await message.answer(await phrase_by_user("error_input_token_from_user", message.from_user.id, session_local))
         else:
             total_supply = tokenomics_data.total_supply
@@ -462,7 +449,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         twitterscore = twitter_twitterscore
         if twitter and twitterscore:
             await update_or_create(
-                session_local, SocialMetrics,
+                SocialMetrics,
                 project_id=base_project.id,
                 defaults={
                     'twitter': twitter,
@@ -474,7 +461,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         fundraise, investors = tasks.get("investing_metrics", [])[0]
         if user_coin_name not in TICKERS and fundraise and investors:
             await update_or_create(
-                session_local, InvestingMetrics,
+                InvestingMetrics,
                 project_id=base_project.id,
                 defaults={
                     'fundraise': fundraise,
@@ -483,7 +470,7 @@ async def receive_data(message: types.Message, state: FSMContext):
             )
         elif fundraise:
             await update_or_create(
-                session_local, InvestingMetrics,
+                InvestingMetrics,
                 project_id=base_project.id,
                 defaults={
                     'fundraise': fundraise,
@@ -494,7 +481,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         last_tvl = tasks.get("network_metrics", [])[0]
         if last_tvl and price and total_supply:
             await update_or_create(
-                session_local, NetworkMetrics,
+                NetworkMetrics,
                 project_id=base_project.id,
                 defaults={
                     'tvl': last_tvl if last_tvl else 0,
@@ -505,7 +492,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     if tasks.get("manipulative_metrics", []):
         top_100_wallets = tasks.get("manipulative_metrics", [])[0]
         await update_or_create(
-            session_local, ManipulativeMetrics,
+            ManipulativeMetrics,
             project_id=base_project.id,
             defaults={
                 'fdv_fundraise': (price * total_supply) / fundraise if fundraise else None,
@@ -526,14 +513,12 @@ async def receive_data(message: types.Message, state: FSMContext):
     )
 
     if new_project:
-        calculation_record = Calculation(
+        calculation_record, created = await get_or_create(
+            Calculation,
             user_id=message.from_user.id,
             project_id=new_project.id,
-            date=datetime.now()
+            defaults={"date": datetime.now()}
         )
-        session_local.add(calculation_record)
-        await session_local.commit()
-        await session_local.refresh(calculation_record)
 
     data = {
         "new_project": new_project.to_dict(),
@@ -548,17 +533,14 @@ async def receive_data(message: types.Message, state: FSMContext):
         "total_supply": total_supply
     }
 
-    await session_local.commit()
 
     await state.update_data(**data)
     result = await create_pdf_report(session_local, state, message=message, user_id=message.from_user.id)
 
     if isinstance(result, tuple):
-        # Если функция вернула кортеж, обрабатываем сообщение и PDF
         result_message, pdf_output, filename = result
 
         await message.answer(result_message)
-
         await message.answer_document(
             document=BufferedInputFile(
                 pdf_output.getvalue(),
@@ -568,6 +550,5 @@ async def receive_data(message: types.Message, state: FSMContext):
         await message.answer(await phrase_by_user("input_next_token_for_analysis", message.from_user.id, session_local), reply_markup=ReplyKeyboardRemove())
 
     elif isinstance(result, str):
-        # Если функция вернула строку (например, сообщение об ошибке)
         await message.answer(result)
 

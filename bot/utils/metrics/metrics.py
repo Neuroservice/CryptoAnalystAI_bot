@@ -25,7 +25,7 @@ async def update_project(session: AsyncSession, user_coin_name: str, chosen_proj
 
     if user_coin_name not in TICKERS:
         instance = await update_or_create(
-            session, Project,
+            Project,
             id=project.id,
             defaults={
                 "coin_name": user_coin_name,
@@ -46,7 +46,7 @@ async def update_social_metrics(session: AsyncSession, project_id: int, social_m
     if social_metrics:
         twitter_subs, twitter_twitterscore = social_metrics[0]
         await update_or_create(
-            session, SocialMetrics,
+            SocialMetrics,
             project_id=project_id,
             defaults={
                 'twitter': twitter_subs,
@@ -65,13 +65,13 @@ async def update_investing_metrics(session: AsyncSession, project_id: int, inves
         fundraise, fund_tier = investing_metrics[0]
         if user_coin_name not in TICKERS and fundraise and investors:
             await update_or_create(
-                session, InvestingMetrics,
+                InvestingMetrics,
                 project_id=project_id,
                 defaults={'fundraise': fundraise, 'fund_level': investors},
             )
         elif fundraise:
             await update_or_create(
-                session, InvestingMetrics,
+                InvestingMetrics,
                 project_id=project_id,
                 defaults={'fundraise': fundraise},
             )
@@ -87,7 +87,7 @@ async def update_network_metrics(session: AsyncSession, project_id: int, network
         last_tvl = network_metrics[0]
         if last_tvl and price and total_supply:
             await update_or_create(
-                session, NetworkMetrics,
+                NetworkMetrics,
                 project_id=project_id,
                 defaults={
                     'tvl': last_tvl,
@@ -105,7 +105,7 @@ async def update_manipulative_metrics(session: AsyncSession, project_id: int, ma
     if manipulative_metrics:
         top_100_wallets = manipulative_metrics[0]
         await update_or_create(
-            session, ManipulativeMetrics,
+            ManipulativeMetrics,
             project_id=project_id,
             defaults={
                 'fdv_fundraise': (price * total_supply) / fundraise if fundraise else None,
@@ -123,7 +123,7 @@ async def update_funds_profit(session, project_id, funds_profit_data):
     output_string = '\n'.join(funds_profit_data[0]) if funds_profit_data and funds_profit_data[0] else ''
     if output_string:
         await update_or_create(
-            session, FundsProfit,
+            FundsProfit,
             project_id=project_id,
             defaults={'distribution': output_string},
         )
@@ -140,12 +140,12 @@ async def update_market_metrics(session, project_id, market_metrics):
             fail_high, growth_low, max_price, min_price = market_metrics[0]
             if all([fail_high, growth_low, max_price, min_price]):
                 await update_or_create(
-                    session, MarketMetrics,
+                    MarketMetrics,
                     project_id=project_id,
                     defaults={'fail_high': fail_high, 'growth_low': growth_low},
                 )
                 await update_or_create(
-                    session, TopAndBottom,
+                    TopAndBottom,
                     project_id=project_id,
                     defaults={'lower_threshold': min_price, 'upper_threshold': max_price},
                 )
@@ -176,7 +176,7 @@ async def process_metrics(
 
     # Обновление или создание базовых метрик
     await update_or_create(
-        session, BasicMetrics,
+        BasicMetrics,
         project_id=new_project.id,
         defaults={
             'entry_price': price,
