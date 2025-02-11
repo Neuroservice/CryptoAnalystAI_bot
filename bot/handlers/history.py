@@ -32,10 +32,8 @@ async def history_command(message: types.Message):
     """
 
     user_id = message.from_user.id
-    user = await get_user_from_redis_or_db(user_id)
-
-    # Меняем язык на противоположный
-    language = user.language
+    user_data = await get_user_from_redis_or_db(user_id)
+    language = user_data.get("language", "ENG")
 
     await message.answer(
         await phrase_by_user("wait_for_zip", user_id, session_local)

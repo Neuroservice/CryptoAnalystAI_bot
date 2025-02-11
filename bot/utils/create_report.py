@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.database.db_operations import get_user_language, get_one
+from bot.database.db_operations import get_one, get_user_from_redis_or_db
 from bot.database.models import Calculation, AgentAnswer
 from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.decorators import save_execute
@@ -72,7 +72,8 @@ async def create_basic_report(
     state_data = await state.get_data()
     user_coin_name = state_data.get("user_coin_name")
     chosen_project = state_data.get("chosen_project")
-    language = await get_user_language(message.from_user.id)
+    user_data = await get_user_from_redis_or_db(user_id)
+    language = user_data.get("language", "ENG")
     agents_info = []
 
     try:
@@ -217,7 +218,8 @@ async def create_pdf_report(
     row_data = []
     coin_twitter, about, lower_name = twitter_link
     twitter_name = REPLACED_PROJECT_TWITTER.get(coin_twitter, twitter_link)
-    language = await get_user_language(message.from_user.id)
+    user_data = await get_user_from_redis_or_db(user_id)
+    language = user_data.get("language", "ENG")
     current_date = datetime.now().strftime("%d.%m.%Y")
     existing_calculation = await get_one(
         Calculation, id=calculation_record["id"]

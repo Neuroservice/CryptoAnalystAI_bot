@@ -14,9 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.database.db_operations import (
     get_one,
     get_all,
-    get_user_language,
     get_or_create,
-    update_or_create,
+    update_or_create, get_user_from_redis_or_db,
 )
 from bot.utils.common.decorators import save_execute
 from bot.utils.common.params import (
@@ -141,7 +140,7 @@ async def get_project_and_tokenomics(
     try:
         project_name = project_name.strip()
 
-        projects = await get_all(session, Project, category=project_name)
+        projects = await get_all(Project, category=project_name)
 
         tokenomics_data_list = []
         if not projects:
@@ -1363,7 +1362,8 @@ async def generate_flags_answer(
     Функция генерации ответа анализа метрик проекта
     """
     flags_answer = None
-    user_language = await get_user_language(user_id)
+    user_data = await get_user_from_redis_or_db(user_id)
+    user_language = user_data.get("language", "ENG")
 
     if (user_id and user_language == "RU") or (language and language == "RU"):
         language = "RU"
