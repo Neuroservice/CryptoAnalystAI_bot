@@ -288,7 +288,7 @@ async def update_agent_answers(async_session: AsyncSession):
         token_description = extract_description(category_answer, language)
 
         project_info = await get_user_project_info(
-            async_session, project.coin_name
+            project.coin_name
         )
         twitter_link = await get_twitter_link_by_symbol(project.coin_name)
         tokenomics_data = project_info.get("tokenomics_data")

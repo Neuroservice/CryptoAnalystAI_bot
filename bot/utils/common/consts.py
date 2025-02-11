@@ -655,7 +655,8 @@ CATEGORY_MAP = {
 # API для вызова
 COINMARKETCUP_API = f"https://pro-api.coinmarketcap.com/v1/cryptocurrency/"
 COINCARP_API = "https://www.coincarp.com/currencies/"
-CRYPTORANK_API = "https://cryptorank.io/"
+CRYPTORANK_WEBSITE = "https://cryptorank.io/"
+CRYPTORANK_API_URL = "https://api.cryptorank.io/v2/currencies"
 TOKENOMIST_API = "https://tokenomist.ai/"
 TWITTERSCORE_API = "https://twitterscore.io/"
 COINGECKO_API = "https://api.coingecko.com/api/v3/coins/"

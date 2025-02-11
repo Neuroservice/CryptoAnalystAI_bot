@@ -77,7 +77,7 @@ async def create_basic_report(
     agents_info = []
 
     try:
-        project_info = await get_user_project_info(session, user_coin_name)
+        project_info = await get_user_project_info(user_coin_name)
         project = project_info.get("project")
         basic_metrics = project_info.get("basic_metrics")
 
@@ -280,7 +280,7 @@ async def create_pdf_report(
                     )
 
         project_info = await get_user_project_info(
-            session, new_project["coin_name"]
+            new_project["coin_name"]
         )
         project = project_info.get("project")
         basic_metrics = project_info.get("basic_metrics")
@@ -635,7 +635,7 @@ async def create_pdf_report(
                 ),
                 format_metric(
                     "twitter_followers",
-                    f"{get_metric_value(social_metrics, 'twitter')} ({twitter_name})"
+                    f"{get_metric_value(social_metrics, 'twitter')} ({twitter_name[0]})"
                     if get_metric_value(social_metrics, "twitter")
                     else None,
                     language,

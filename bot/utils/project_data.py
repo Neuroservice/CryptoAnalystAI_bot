@@ -1,11 +1,11 @@
 import asyncio
 import logging
+from typing import Any, Dict, Optional
+from urllib.parse import urljoin
+
 import aiohttp
 import httpx
 import requests
-
-from urllib.parse import urljoin
-from typing import Any, Dict, Optional
 from aiogram.types import Message
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
@@ -17,16 +17,6 @@ from bot.database.db_operations import (
     get_or_create,
     update_or_create, get_user_from_redis_or_db,
 )
-from bot.utils.common.decorators import save_execute
-from bot.utils.common.params import (
-    get_header_params,
-    get_cryptocompare_params,
-    get_cryptocompare_params_with_full_name,
-)
-from bot.utils.common.sessions import client_session, session_local
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
-from bot.utils.resources.gpt.gpt import agent_handler
-from bot.utils.validations import clean_fundraise_data, extract_tokenomics
 from bot.database.models import (
     Project,
     Tokenomics,
@@ -39,12 +29,13 @@ from bot.database.models import (
     ManipulativeMetrics,
     NetworkMetrics,
 )
+from bot.utils.common.config import CRYPTORANK_API_KEY
 from bot.utils.common.consts import (
     TICKERS,
     REPLACED_PROJECT_TWITTER,
     COINMARKETCUP_API,
     COINCARP_API,
-    CRYPTORANK_API,
+    CRYPTORANK_WEBSITE,
     TOKENOMIST_API,
     TWITTERSCORE_API,
     COINGECKO_API,
@@ -54,11 +45,16 @@ from bot.utils.common.consts import (
     LLAMA_API_PROTOCOL,
     SELECTOR_TOP_100_WALLETS,
     SELECTOR_TWITTERSCORE,
-    SELECTOR_GET_INVESTORS,
-    SELECTOR_PERCENTAGE_DATA,
-    SELECTOR_PERCENTAGE_TOKEN,
-    RATING_LABELS,
+    RATING_LABELS, CRYPTORANK_API_URL,
 )
+from bot.utils.common.decorators import save_execute
+from bot.utils.common.params import (
+    get_header_params,
+    get_cryptocompare_params,
+    get_cryptocompare_params_with_full_name,
+)
+from bot.utils.common.sessions import client_session, session_local
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.utils.resources.exceptions.exceptions import (
     DataTypeError,
     MissingKeyError,
@@ -68,6 +64,8 @@ from bot.utils.resources.exceptions.exceptions import (
     TimeOutError,
     DatabaseFetchError,
 )
+from bot.utils.resources.gpt.gpt import agent_handler
+from bot.utils.validations import clean_fundraise_data, extract_tokenomics
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -75,8 +73,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def get_crypto_key(symbol: str) -> str:
+    """
+    Получает `key` для токена по его символу (тикеру) через API CryptoRank
+    """
+    params = {"symbol": symbol}
+    headers = {"X-Api-Key": CRYPTORANK_API_KEY, "Accept": "application/json"}
+    response = requests.get(CRYPTORANK_API_URL, params=params, headers=headers)
+    print(response.status_code, response.json())
+    if response.status_code == 200:
+        data = response.json()
+        if "data" in data and len(data["data"]) > 0:
+            return data["data"][0]["key"]
+
+
 @save_execute
-async def get_user_project_info(session: AsyncSession, user_coin_name: str):
+async def get_user_project_info(user_coin_name: str):
     """
     Получает информацию о проекте и связанных метриках по имени монеты пользователя.
     """
@@ -216,6 +228,7 @@ async def get_twitter_link_by_symbol(symbol: str):
     ) as response:
         if response.status == 200:
             data = await response.json()
+            print(data)
             if symbol in data["data"]:
                 description = data["data"][symbol].get("description", None)
                 lower_name = data["data"][symbol].get("name", None)
@@ -501,7 +514,7 @@ async def get_percentage_data(
 
         # Запрос к Cryptorank
         tokenomics_data = await fetch_tokenomics_data(
-            f"{CRYPTORANK_API}price/{lower_name}/vesting"
+            f"{CRYPTORANK_WEBSITE}price/{lower_name}/vesting"
         )
 
         # Если не удалось получить данные с Cryptorank, пробуем Tokenomist.ai
@@ -510,7 +523,7 @@ async def get_percentage_data(
                 "Не удалось найти таблицу на Cryptorank. Пробуем из ico..."
             )
             tokenomics_data = await fetch_tokenomics_data(
-                f"{CRYPTORANK_API}ico/{lower_name}"
+                f"{CRYPTORANK_WEBSITE}ico/{lower_name}"
             )
 
         if not tokenomics_data:
@@ -564,7 +577,14 @@ async def get_fundraise(user_coin_name: str, message: Message = None):
     """
 
     try:
-        url = f"{CRYPTORANK_API}ico/{user_coin_name}"
+        print(f"get_fundraise {user_coin_name}")
+        user_coin_key = get_crypto_key(user_coin_name)
+        if not user_coin_key:
+            if message:
+                await message.answer(f"Токен '{user_coin_name}' не найден в CryptoRank API")
+            return None, []
+
+        url = f"{CRYPTORANK_WEBSITE}ico/{user_coin_key}"
         response = requests.get(url)
 
         if response.status_code == 200:

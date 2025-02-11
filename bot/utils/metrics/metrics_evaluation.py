@@ -326,9 +326,7 @@ def project_investors_level(investors: str):
     for investor in investors:
         if "(" in investor and ")" in investor:
             name, tier = investor.rsplit("(", 1)
-            tier = (
-                tier.strip(")").replace("+", "").strip()
-            )  # Убираем "+" и пробелы
+            tier = tier.strip(")").replace("+", "").strip()
 
             # Приводим к формату "Tier: {цифра}"
             if tier.upper().startswith("TIER"):
@@ -344,44 +342,12 @@ def project_investors_level(investors: str):
         if tier in TIER_RANK_LIST:
             investor_counts[tier] += 1
 
-    # Логика перекрытия требований по метрикам
-    remaining_counts = investor_counts.copy()
-    print(
-        "investor_counts: ",
-        investor_counts,
-        "parsed_investors: ",
-        parsed_investors,
-    )
-    for i in range(len(TIER_RANK_LIST) - 1):  # Пропускаем TIER 5
-        higher_tier = TIER_RANK_LIST[i]
-        lower_tier = TIER_RANK_LIST[i + 1]
-        if remaining_counts[higher_tier] > 0:
-            transferable = remaining_counts[
-                higher_tier
-            ]  # Все, что можно использовать
-            remaining_counts[lower_tier] = max(
-                0, remaining_counts[lower_tier] - transferable
-            )
-
-    # Определяем уровень инвесторов
-    investor_level = 5  # По умолчанию Тир 5
-    if (
-        remaining_counts["Tier: 1"] >= 1
-        and (remaining_counts["Tier: 1"] + remaining_counts["Tier: 2"]) >= 3
-    ):
-        investor_level = 1
-    elif (
-        remaining_counts["Tier: 2"] >= 1
-        and (remaining_counts["Tier: 2"] + remaining_counts["Tier: 3"]) >= 2
-    ):
-        investor_level = 2
-    elif (
-        remaining_counts["Tier: 3"] >= 1
-        and (remaining_counts["Tier: 3"] + remaining_counts["Tier: 4"]) >= 2
-    ):
-        investor_level = 3
-    elif remaining_counts["Tier: 4"] >= 1:
-        investor_level = 4
+    # Определяем общий уровень инвесторов
+    investor_level = 5  # По умолчанию Tier 5 (наименьший)
+    for tier in TIER_RANK_LIST:  # Проходим по тиру от 1 до 5
+        if investor_counts[tier] > 0:
+            investor_level = int(tier.split(": ")[1])  # Берем номер тира
+            break  # Как только нашли — останавливаемся
 
     score = LEVEL_TO_SCORE[investor_level]
 
@@ -389,7 +355,6 @@ def project_investors_level(investors: str):
         "level": investor_level,
         "score": score,
         "details": investor_counts,
-        "remaining_counts": remaining_counts,
     }
 
 
