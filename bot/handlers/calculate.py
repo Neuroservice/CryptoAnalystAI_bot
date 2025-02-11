@@ -6,10 +6,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, ReplyKeyboardRemove
 
 from bot.database.db_operations import (
-    get_user_language,
     get_one,
     update_or_create,
-    get_or_create,
+    get_or_create, get_user_from_redis_or_db,
 )
 from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.consts import (
@@ -148,7 +147,8 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
     user_coin_name = message.text.upper().replace(" ", "")
     fundraise = None
-    language = await get_user_language(message.from_user.id)
+    user_data = await get_user_from_redis_or_db(message.from_user.id)
+    language = user_data.get("language", "ENG")
 
     if await validate_user_input(user_coin_name, message, state):
         return
@@ -424,7 +424,8 @@ async def receive_data(message: types.Message, state: FSMContext):
     total_supply = None
     fundraise = None
     calculation_record = None
-    language = await get_user_language(message.from_user.id)
+    user_data = await get_user_from_redis_or_db(message.from_user.id)
+    language = user_data.get("language", "ENG")
 
     if await validate_user_input(user_coin_name, message, state):
         return

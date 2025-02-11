@@ -24,17 +24,17 @@ async def start_command(message: types.Message, state: FSMContext):
     # Получаем пользователя из Redis или базы данных
     user = await get_user_from_redis_or_db(user_id=user_id)
 
-    if user:  # Если пользователь найден или создан
-        language = user.language or "ENG"
+    if user:
+        language = user.get('language', 'ENG')
 
-        if language:  # Если язык уже установлен
+        if language:
             await message.answer(
                 await phrase_by_user(
                     "hello_phrase", user_id, session_local, language
                 ),
                 reply_markup=await main_menu_keyboard(user_id=user_id),
             )
-        else:  # Новый пользователь должен выбрать язык
+        else:
             await message.answer(
                 "Please choose your language / Пожалуйста, выберите язык:",
                 reply_markup=language_keyboard(),

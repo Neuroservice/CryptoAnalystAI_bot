@@ -1,7 +1,7 @@
 import logging
 from sqlalchemy.future import select
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Optional, Type, Any, Tuple, Union
+from typing import Optional, Type, Any, Tuple, Union, Dict
 
 from bot.database.models import User
 from bot.utils.common.decorators import save_execute
@@ -80,62 +80,36 @@ async def get_or_create(
 
 
 @save_execute
-async def get_user_from_redis_or_db(user_id: int) -> Union[dict, User, None]:
+async def get_user_from_redis_or_db(user_id: int) -> Optional[Dict[str, str]]:
     """
-    Сначала пытается получить словарь с данными из Redis.
-    Если нет — пытается найти (или создать) пользователя в БД.
+    Сначала пытается получить данные из Redis.
+    Если их нет, получает или создаёт пользователя в БД,
+    затем сохраняет данные в Redis и возвращает словарь.
 
-    Возвращает либо dict (если в Redis что-то лежит),
-    либо объект User из БД (созданный или найденный), либо None при ошибках.
+    Возвращает:
+    - dict ({"telegram_id": ..., "language": ...}) — если данные найдены
+    - None — если произошла ошибка
     """
     # 1. Проверяем Redis
     user_data = await redis_client.hgetall(f"user:{user_id}")
     if user_data:
-        # Если нашли данные в Redis — возвращаем их как словарь
         return user_data
 
-    # 2. Если нет в Redis, пытаемся получить/создать пользователя в БД
+    # 2. Если нет в Redis, пытаемся получить или создать пользователя в БД
     try:
-        user, created = await get_or_create(
-            User, defaults={"language": "ENG"}, telegram_id=user_id
-        )
+        user, _ = await get_or_create(User, defaults={"language": "ENG"}, telegram_id=user_id)
 
-        # После получения (или создания) кладём в Redis
-        if user:
-            await redis_client.hset(
-                f"user:{user_id}",
-                mapping={
-                    "telegram_id": user.telegram_id,
-                    "language": user.language,
-                },
-            )
-        return user
+        # 3. Сохраняем в Redis и возвращаем словарь
+        user_dict = {
+            "telegram_id": str(user.telegram_id),
+            "language": user.language or "ENG",
+        }
+        await redis_client.hset(f"user:{user_id}", mapping=user_dict)
+
+        return user_dict
     except DatabaseError as e:
         logging.error(f"Ошибка при работе с БД: {e.detail}")
         return None
-
-
-@save_execute
-async def get_user_language(user_id: int) -> str:
-    """
-    Получаем язык пользователя через get_user_from_redis_or_db.
-    - Если вернулся dict (данные из Redis), берём language из словаря.
-    - Если вернулся объект User, берём user.language.
-    - Если ничего нет или language пустое — "ENG".
-    """
-    user_or_dict = await get_user_from_redis_or_db(user_id)
-
-    if isinstance(user_or_dict, dict):
-        # данные из Redis
-        lng = user_or_dict.get("language")
-        return lng if lng else "ENG"
-    elif isinstance(user_or_dict, User):
-        # реальный объект User
-        lng = user_or_dict.language
-        return lng if lng else "ENG"
-    else:
-        # Ничего не вернулось или ошибка
-        return "ENG"
 
 
 @save_execute
