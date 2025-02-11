@@ -7,6 +7,7 @@ API_TOKEN = os.getenv("API_TOKEN")
 API_KEY = os.getenv("COINMARKETCAP_APIKEY")
 GPT_SECRET_KEY_FASOLKAAI = os.getenv("GPT_SECRET_KEY_FASOLKAAI")
 engine_url = os.getenv("ENGINE_URL")
+CRYPTORANK_API_KEY = os.getenv("CRYPTORANK_API_KEY")
 
 DB_HOST = os.getenv("DB_HOST")
 DB_PORT = os.getenv("DB_PORT")

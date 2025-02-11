@@ -245,7 +245,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             )
 
         project_info = await get_user_project_info(
-            session_local, user_coin_name
+            user_coin_name
         )
         investing_metrics = project_info.get("investing_metrics")
         social_metrics = project_info.get("social_metrics")
@@ -460,7 +460,7 @@ async def receive_data(message: types.Message, state: FSMContext):
             )
         )
 
-    project_info = await get_user_project_info(session_local, user_coin_name)
+    project_info = await get_user_project_info(user_coin_name)
     base_project = project_info.get("project")
     tokenomics_data = project_info.get("tokenomics_data")
     basic_metrics = project_info.get("basic_metrics")
