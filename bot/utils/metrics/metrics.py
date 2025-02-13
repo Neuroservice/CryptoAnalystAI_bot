@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.database.db_operations import get_one, update_or_create
@@ -188,7 +190,6 @@ async def update_market_metrics(session, project_id, market_metrics):
                 )
 
     except Exception as e:
-        await session.rollback()
         raise ExceptionError(str(e))
 
 
@@ -224,36 +225,48 @@ async def process_metrics(
         },
     )
 
-    await update_social_metrics(
-        session, new_project.id, results.get("social_metrics")
-    )
-    await update_investing_metrics(
-        session,
-        new_project.id,
-        results.get("investing_metrics"),
-        user_coin_name,
-        investors,
-    )
-    await update_network_metrics(
-        session,
-        new_project.id,
-        results.get("network_metrics"),
-        price,
-        total_supply,
-    )
-    await update_manipulative_metrics(
-        session,
-        new_project.id,
-        results.get("manipulative_metrics"),
-        price,
-        total_supply,
-        fundraise,
-    )
-    await update_funds_profit(
-        session, new_project.id, results.get("funds_profit")
-    )
-    await update_market_metrics(
-        session, new_project.id, results.get("market_metrics")
-    )
+    # Обновление социальных метрик, проверка на None
+    social_metrics = results.get("social_metrics")
+    if social_metrics is not None:
+        await update_social_metrics(session, new_project.id, social_metrics)
+
+    # Обновление инвестиционных метрик, проверка на None
+    investing_metrics = results.get("investing_metrics")
+    if investing_metrics is not None:
+        await update_investing_metrics(
+            session, new_project.id, investing_metrics, user_coin_name, investors
+        )
+
+    # Обновление сетевых метрик, проверка на None
+    network_metrics = results.get("network_metrics")
+    if network_metrics is not None:
+        await update_network_metrics(
+            session, new_project.id, network_metrics, price, total_supply
+        )
+
+    # Обновление манипулятивных метрик, проверка на None
+    manipulative_metrics = results.get("manipulative_metrics")
+    if manipulative_metrics is not None:
+        await update_manipulative_metrics(
+            session,
+            new_project.id,
+            manipulative_metrics,
+            price,
+            total_supply,
+            fundraise,
+        )
+
+    # Обновление прибыли фондов, проверка на None
+    funds_profit = results.get("funds_profit")
+    if funds_profit is not None:
+        await update_funds_profit(session, new_project.id, funds_profit)
+
+    # Обновление рыночных метрик, проверка на None
+    market_metrics = results.get("market_metrics")
+    # Проверка на None и наличие значений
+    if market_metrics and all(metric is not None for metric in market_metrics):
+        await update_market_metrics(session, new_project.id, market_metrics)
+    else:
+        logging.warning("Неверные данные для рыночных метрик или отсутствуют значения.")
 
     return new_project

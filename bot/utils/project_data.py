@@ -797,8 +797,13 @@ def fetch_binance_data(symbol: str):
         min_price = min(lows)
         return max_price, min_price
 
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Ошибка при запросе к Binance API: {e}")
+        return None, None
+
     except Exception as e:
-        raise ExceptionError(str(e))
+        logging.error(f"Произошла ошибка: {e}")
+        return None, None
 
 
 def get_coingecko_id_by_symbol(symbol: str):
@@ -906,14 +911,9 @@ async def fetch_cryptocompare_data(
         else:
             return fail_high, growth_low, max_price, min_price
 
-    except AttributeError as attr_error:
-        raise AttributeAccessError(str(attr_error))
-    except KeyError as key_error:
-        raise MissingKeyError(str(key_error))
-    except ValueError as value_error:
-        raise ValueProcessingError(str(value_error))
     except Exception as e:
-        raise ExceptionError(str(e))
+        logging.error(f"Ошибка при получении данных: {str(e)}")
+        return None  # Возвращаем None в случае ошибки
 
 
 def fetch_coingecko_max_min_data(fsym: str, tsym: str):
@@ -1302,7 +1302,18 @@ async def check_and_run_tasks(
     # Выполняем задачи
     if tasks:
         print("tasks: ", tasks)
-        task_results = await asyncio.gather(*(task for task, _ in tasks))
+
+        # Запускаем задачи и выводим название каждой задачи перед выполнением
+        task_results = []
+        for task, (model_name) in tasks:
+            print(f"Запуск задачи для модели: {model_name}")  # Выводим название текущей задачи
+            task_results.append(task)
+
+        # Ожидаем выполнения всех задач
+        task_results = await asyncio.gather(*task_results)
+
+        # Выводим результаты выполнения задач
+        print("task_results: ", task_results)
         logging.info(f"Результаты выполнения задач: {task_results}")
         for (result, (_, model_name)) in zip(task_results, tasks):
             if model_name not in results:
@@ -1322,9 +1333,10 @@ async def check_and_run_tasks(
             for data in data_list:
                 # Преобразуем данные в формат для модели
                 data_dict = map_data_to_model_fields(model_name, data)
-                if not data_dict or "N/A" in data_dict.values():
+                print("data_dict: ", data_dict)
+                if not data_dict or "N/A" in data_dict.values() or data_dict is None:
                     logging.warning(
-                        f"Данные содержат N/A, пропускаем сохранение: {data}"
+                        f"Данные содержат N/A или равны None, пропускаем сохранение: {data}"
                     )
                     continue
 

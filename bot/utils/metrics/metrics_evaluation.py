@@ -159,7 +159,9 @@ def analyze_project_metrics(
     growth_and_fall_result = ""
     detailed_report = ""
 
-    final_score = float(final_score[:-1])
+    final_score = None
+    if type(final_score) is float:
+        final_score = float(final_score[:-1])
 
     if final_score and type(final_score) is float:
         if final_score <= 200:
