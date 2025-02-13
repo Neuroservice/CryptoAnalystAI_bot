@@ -11,7 +11,7 @@ from bot.utils.resources.gpt.gpt_promts import (
     user_prompt_for_tier_agent,
     user_prompt_for_funds_agent,
     user_prompt_for_project_rating_agent,
-    user_prompt_for_flags_agent
+    user_prompt_for_flags_agent,
 )
 from bot.utils.resources.gpt.titles_for_promts import (
     start_title_for_category_agent,
@@ -23,7 +23,7 @@ from bot.utils.resources.gpt.titles_for_promts import (
     end_title_for_funds_agent,
     end_title_for_flags_agent,
     end_title_for_project_rating_agent,
-    start_title_for_project_rating_agent
+    start_title_for_project_rating_agent,
 )
 
 
@@ -58,7 +58,9 @@ def load_document_for_category_agent() -> str:
     Загружает текст из документа Google и извлекает текст для промта агента определения категории проекта.
     """
 
-    return load_document(start_title_for_category_agent, end_title_for_category_agent)
+    return load_document(
+        start_title_for_category_agent, end_title_for_category_agent
+    )
 
 
 def load_document_for_tier_agent() -> str:
@@ -74,7 +76,9 @@ def load_document_for_funds_agent() -> str:
     Загружает текст из документа Google и извлекает текст для промта агента определения профита инвесторов.
     """
 
-    return load_document(start_title_for_funds_agent, end_title_for_funds_agent)
+    return load_document(
+        start_title_for_funds_agent, end_title_for_funds_agent
+    )
 
 
 def load_document_for_project_rating_agent() -> str:
@@ -82,7 +86,10 @@ def load_document_for_project_rating_agent() -> str:
     Загружает текст из документа Google и извлекает текст для промта агента определения оценки проекта.
     """
 
-    return load_document(start_title_for_project_rating_agent, end_title_for_project_rating_agent)
+    return load_document(
+        start_title_for_project_rating_agent,
+        end_title_for_project_rating_agent,
+    )
 
 
 def load_document_for_flags_agent() -> str:
@@ -90,7 +97,9 @@ def load_document_for_flags_agent() -> str:
     Загружает текст из документа Google и извлекает текст для промта агента определения ред/грин флагов проекта.
     """
 
-    return load_document(start_title_for_flags_agent, end_title_for_flags_agent)
+    return load_document(
+        start_title_for_flags_agent, end_title_for_flags_agent
+    )
 
 
 async def create_agent_response(system_content: str, user_prompt: str) -> str:
@@ -98,9 +107,17 @@ async def create_agent_response(system_content: str, user_prompt: str) -> str:
     Создает ответ от агента на основе системного сообщения и пользовательского запроса.
     """
 
-    llm = ChatOpenAI(api_key=GPT_SECRET_KEY_FASOLKAAI, model=GPT_MODEL, temperature=TEMPERATURE)
-    response = llm.invoke([{"role": "system", "content": system_content},
-                                 {"role": "user", "content": user_prompt}])
+    llm = ChatOpenAI(
+        api_key=GPT_SECRET_KEY_FASOLKAAI,
+        model=GPT_MODEL,
+        temperature=TEMPERATURE,
+    )
+    response = llm.invoke(
+        [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_prompt},
+        ]
+    )
 
     return response.content
 
@@ -111,7 +128,9 @@ async def category_agent(topic: str, language: str):
     """
 
     system = load_document_for_category_agent()
-    user_prompt = user_prompt_for_category_agent.format(language=language, topic=topic)
+    user_prompt = user_prompt_for_category_agent.format(
+        language=language, topic=topic
+    )
 
     return await create_agent_response(system, user_prompt)
 
@@ -152,7 +171,9 @@ async def flags_agent(topic: str, language: str):
     """
 
     system = load_document_for_flags_agent()
-    user_prompt = user_prompt_for_flags_agent.format(language=language, topic=topic)
+    user_prompt = user_prompt_for_flags_agent.format(
+        language=language, topic=topic
+    )
     return await create_agent_response(system, user_prompt)
 
 

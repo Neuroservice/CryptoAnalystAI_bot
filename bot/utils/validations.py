@@ -5,12 +5,15 @@ from typing import Any, Optional, Callable
 from aiogram.fsm.context import FSMContext
 
 from bot.utils.common.sessions import session_local
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user, phrase_by_language
+from bot.utils.resources.bot_phrases.bot_phrase_handler import (
+    phrase_by_user,
+    phrase_by_language,
+)
 from bot.utils.resources.exceptions.exceptions import (
     ExceptionError,
     ValueProcessingError,
     MissingKeyError,
-    AttributeAccessError
+    AttributeAccessError,
 )
 from bot.utils.common.consts import (
     STABLECOINS,
@@ -29,11 +32,14 @@ from bot.utils.common.consts import (
     CALCULATIONS_PATTERN_RU,
     METRICS_MAPPING,
     NO_DATA_TEXT,
-    CATEGORY_MAP, MAX_MESSAGE_LENGTH
+    CATEGORY_MAP,
+    MAX_MESSAGE_LENGTH,
 )
 
 
-async def validate_user_input(user_coin_name: str, message: types.Message, state: FSMContext):
+async def validate_user_input(
+    user_coin_name: str, message: types.Message, state: FSMContext
+):
     """
     Проверяет введенный пользователем токен и выполняет соответствующие действия.
     """
@@ -42,18 +48,32 @@ async def validate_user_input(user_coin_name: str, message: types.Message, state
 
     # Проверка на команду выхода
     if user_coin_name.lower() == "/exit":
-        await message.answer(await phrase_by_user("calculations_end", message.from_user.id, session_local))
+        await message.answer(
+            await phrase_by_user(
+                "calculations_end", message.from_user.id, session_local
+            )
+        )
         await state.clear()
         return True
 
     # Проверка на стейблкоин
     if user_coin_name in STABLECOINS:
-        await message.answer(await phrase_by_user("stablecoins_answer", message.from_user.id, session_local))
+        await message.answer(
+            await phrase_by_user(
+                "stablecoins_answer", message.from_user.id, session_local
+            )
+        )
         return True
 
     # Проверка на фундаментальный токен
     if user_coin_name in FUNDAMENTAL_TOKENS:
-        await message.answer(await phrase_by_user("fundamental_tokens_answer", message.from_user.id, session_local))
+        await message.answer(
+            await phrase_by_user(
+                "fundamental_tokens_answer",
+                message.from_user.id,
+                session_local,
+            )
+        )
         return True
 
     return False
@@ -75,7 +95,11 @@ def extract_description(topic: str, language: str) -> str:
     """
 
     match = re.search(PROJECT_DESCRIPTION_PATTERN, topic, re.DOTALL)
-    return match.group(1) if match else phrase_by_language("no_green_flags", language)
+    return (
+        match.group(1)
+        if match
+        else phrase_by_language("no_green_flags", language)
+    )
 
 
 def extract_red_green_flags(answer: str, language: str) -> str:
@@ -92,11 +116,19 @@ def extract_red_green_flags(answer: str, language: str) -> str:
 
     # Извлекаем положительные характеристики
     positive_match = re.search(positive_pattern, answer, re.S)
-    positive_text = positive_match.group(1) if positive_match else phrase_by_language("no_green_flags", language)
+    positive_text = (
+        positive_match.group(1)
+        if positive_match
+        else phrase_by_language("no_green_flags", language)
+    )
 
     # Извлекаем отрицательные характеристики
     negative_match = re.search(negative_pattern, answer, re.S)
-    negative_text = negative_match.group(1) if negative_match else phrase_by_language("no_red_flags", language)
+    negative_text = (
+        negative_match.group(1)
+        if negative_match
+        else phrase_by_language("no_red_flags", language)
+    )
 
     # Возвращаем объединенные результаты
     return f"{positive_text}\n{negative_text}"
@@ -113,7 +145,7 @@ def extract_calculations(answer: str, language: str):
         pattern = TOKENOMICS_PATTERN_RU
 
     # Удаляем заголовок и пробел после него
-    answer = re.sub(pattern, '', answer, count=1)
+    answer = re.sub(pattern, "", answer, count=1)
 
     # Ищем расчёты с учетом языка
     if language == "ENG":
@@ -123,14 +155,19 @@ def extract_calculations(answer: str, language: str):
 
     if match:
         extracted_text = match.group(1)
-        lines = extracted_text.split('\n')
+        lines = extracted_text.split("\n")
 
         for i in range(1, len(lines)):
-            if (language == "ENG" and lines[i].startswith('Calculation results for')) or \
-               (language != "ENG" and lines[i].startswith('Результаты расчета для')):
-                lines[i] = '\n' + lines[i]
+            if (
+                language == "ENG"
+                and lines[i].startswith("Calculation results for")
+            ) or (
+                language != "ENG"
+                and lines[i].startswith("Результаты расчета для")
+            ):
+                lines[i] = "\n" + lines[i]
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     return phrase_by_language("no_data", language)
 
@@ -146,7 +183,7 @@ def extract_old_calculations(answer: str, language: str):
         comparison_pattern = COMPARISON_PATTERN_ENG
 
     # Удаляем заголовок и пробел после него
-    answer = re.sub(comparison_pattern, '', answer, count=1)
+    answer = re.sub(comparison_pattern, "", answer, count=1)
 
     # Ищем расчёты с учетом языка
     match = re.search(CALCULATIONS_PATTERN_ENG, answer, re.DOTALL)
@@ -155,14 +192,19 @@ def extract_old_calculations(answer: str, language: str):
 
     if match:
         extracted_text = match.group(1)
-        lines = extracted_text.split('\n')
+        lines = extracted_text.split("\n")
 
         for i in range(1, len(lines)):
-            if (language == "ENG" and lines[i].startswith('Calculation results for')) or \
-               (language != "ENG" and lines[i].startswith('Результаты расчета для')):
-                lines[i] = '\n' + lines[i]
+            if (
+                language == "ENG"
+                and lines[i].startswith("Calculation results for")
+            ) or (
+                language != "ENG"
+                and lines[i].startswith("Результаты расчета для")
+            ):
+                lines[i] = "\n" + lines[i]
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     return answer
 
@@ -173,7 +215,7 @@ def format_metric(metric_key: str, value: str, language: str, extra=""):
     Форматирует строку для метрики.
     """
 
-    if value and value != 'N/A':
+    if value and value != "N/A":
         return f"- {METRICS_MAPPING[metric_key][language]}{extra}: {value}"
     else:
         return f"- {METRICS_MAPPING[metric_key][language]}: {NO_DATA_TEXT[language]}"
@@ -185,22 +227,22 @@ def clean_fundraise_data(fundraise_str: str):
     """
 
     try:
-        clean_str = fundraise_str.replace('$', '').strip()
+        clean_str = fundraise_str.replace("$", "").strip()
         parts = clean_str.split()
         amount = 1
 
         for part in parts:
             clean_part = part
 
-            if clean_part[-1] in ['B', 'M', 'K']:
+            if clean_part[-1] in ["B", "M", "K"]:
                 suffix = clean_part[-1]
-                if suffix == 'B':
+                if suffix == "B":
                     amount = float(clean_part[:-1])
                     amount *= 1e9
-                elif suffix == 'M':
+                elif suffix == "M":
                     amount = float(clean_part[:-1])
                     amount *= 1e6
-                elif suffix == 'K':
+                elif suffix == "K":
                     amount = float(clean_part[:-1])
                     amount *= 1e3
 
@@ -235,13 +277,13 @@ def clean_twitter_subs(twitter_subs: str):
         for part in parts:
             clean_part = part
 
-            if clean_part[-1] in ['B', 'M', 'K']:
+            if clean_part[-1] in ["B", "M", "K"]:
                 suffix = clean_part[-1]
-                if suffix == 'B':
+                if suffix == "B":
                     amount = float(clean_part[:-1]) * 1e9
-                elif suffix == 'M':
+                elif suffix == "M":
                     amount = float(clean_part[:-1]) * 1e6
-                elif suffix == 'K':
+                elif suffix == "K":
                     amount = float(clean_part[:-1]) * 1e3
             else:
                 amount = float(clean_part)
@@ -264,8 +306,8 @@ def extract_tokenomics(data: str):
     """
 
     tokenomics_data = []
-    clean_data = data.replace('\n', '').replace('\r', '').strip()
-    entries = re.split(r'\)\s*', clean_data)
+    clean_data = data.replace("\n", "").replace("\r", "").strip()
+    entries = re.split(r"\)\s*", clean_data)
 
     for entry in entries:
         if entry:
@@ -291,12 +333,14 @@ def process_metric(value: Any, default=0.0):
     :param default: Значение по умолчанию, если проверка не пройдена.
     :return: Преобразованное значение (float) или default.
     """
-    if value == 'N/A' or not isinstance(value, (int, float)):
+    if value == "N/A" or not isinstance(value, (int, float)):
         return default
     return float(value)
 
 
-def split_long_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
+def split_long_message(
+    text: str, max_length: int = MAX_MESSAGE_LENGTH
+) -> list[str]:
     """
     Разбивает длинный текст на части, если он превышает заданный лимит длины.
     """
@@ -311,16 +355,19 @@ def split_long_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[
 def get_metric_value(
     obj: Any,
     attr_chain: Optional[str] = None,
-    fallback: Any = 'N/A',
-    transform: Optional[Callable[[Any], Any]] = None
+    fallback: Any = "N/A",
+    transform: Optional[Callable[[Any], Any]] = None,
 ):
+    """
+    Получение поля из базы данных по таблице
+    """
     try:
         if obj is None:
             return fallback
         # Проходим по цепочке атрибутов
         value = obj
         if attr_chain:
-            for attr in attr_chain.split('.'):
+            for attr in attr_chain.split("."):
                 value = getattr(value, attr, None)
                 if value is None:
                     return fallback
@@ -328,4 +375,3 @@ def get_metric_value(
         return transform(value) if transform else value
     except (TypeError, ValueError, ZeroDivisionError, AttributeError):
         return fallback
-

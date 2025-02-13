@@ -3,7 +3,13 @@ import logging
 from aiogram import Router, types
 from aiogram.filters import Command
 
-from bot.database.db_operations import get_user_from_redis_or_db
+from bot.database.db_operations import (
+    get_user_from_redis_or_db,
+    update_or_create,
+    create,
+    get_one,
+)
+from bot.database.models import User
 from bot.utils.keyboards.start_keyboards import main_menu_keyboard
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.utils.resources.exceptions.exceptions import ExceptionError
@@ -25,25 +31,32 @@ async def change_language(message: types.Message):
     user_id = message.from_user.id
 
     try:
-        user = await get_user_from_redis_or_db(user_id, session_local)
+        user_data = await get_user_from_redis_or_db(user_id)
+        new_language = "ENG" if user_data.get("language") == "RU" else "RU"
 
-        # Меняем язык на противоположный
-        print(user, user.language)
-        new_language = 'ENG' if user.language == 'RU' else 'RU'
-        user.language = new_language
+        user = await get_one(User, telegram_id=user_id)
 
-        await session_local.merge(user)
-        await session_local.commit()
+        if user:
+            await update_or_create(
+                User, id=user.id, defaults={"language": new_language}
+            )
+        else:
+            await create(User, telegram_id=user_id, language=new_language)
 
-        # Обновляем язык в Redis
         await redis_client.hset(f"user:{user_id}", "language", new_language)
 
-        # Обновляем клавиатуру с новым языком
         new_keyboard = await main_menu_keyboard(user_id)
 
-        # Отправляем сообщение с новой клавиатурой
-        await message.answer(await phrase_by_user("language_changed", user.telegram_id, session_local),
-                             reply_markup=new_keyboard)
+        await message.answer(
+            await phrase_by_user(
+                "language_changed",
+                user_id,
+                session_local,
+                language=new_language,
+            ),
+            reply_markup=new_keyboard,
+        )
 
     except Exception as e:
+        logging.error(f"Ошибка при смене языка: {e}")
         raise ExceptionError(str(e))

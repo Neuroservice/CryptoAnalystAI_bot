@@ -1,21 +1,25 @@
 import logging
 
 from typing import Any
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from bot.utils.common.sessions import session_local
 
 
 def save_execute(f: Any):
     """
-    Декоратор для обертки хендлеров и функций, которые могут вызывать исключения при работе с базой данных.
-    Если исключение произойдет, транзакция будет откатана и логировано.
+    Декоратор для оборачивания функций, работающих с базой данных.
+    Если в процессе выполнения возникает исключение, производится rollback и логирование.
+    Сессия берется из session_local, импортированной из bot.utils.common.sessions.
+    Теперь при вызове функции не нужно явно передавать session.
     """
 
-    async def wrapper(session: AsyncSession, *args, **kwargs):
+    async def wrapper(*args, **kwargs):
         try:
-            return await f(session, *args, **kwargs)
+            return await f(*args, **kwargs)
         except Exception as e:
-            if hasattr(session, 'rollback'):
-                await session.rollback()
+            if hasattr(session_local, "rollback"):
+                await session_local.rollback()
             logging.error(e)
+            raise e
 
     return wrapper

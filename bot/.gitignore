@@ -1,2 +1,3 @@
 .env
+new.env-new
 data_processing/excel_parser.py
