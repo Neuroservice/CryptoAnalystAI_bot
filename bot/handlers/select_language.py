@@ -3,7 +3,12 @@ import logging
 from aiogram import Router, types
 from aiogram.filters import Command
 
-from bot.database.db_operations import get_user_from_redis_or_db, update_or_create, create, get_one
+from bot.database.db_operations import (
+    get_user_from_redis_or_db,
+    update_or_create,
+    create,
+    get_one,
+)
 from bot.database.models import User
 from bot.utils.keyboards.start_keyboards import main_menu_keyboard
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
@@ -33,9 +38,7 @@ async def change_language(message: types.Message):
 
         if user:
             await update_or_create(
-                User,
-                id=user.id,
-                defaults={"language": new_language}
+                User, id=user.id, defaults={"language": new_language}
             )
         else:
             await create(User, telegram_id=user_id, language=new_language)

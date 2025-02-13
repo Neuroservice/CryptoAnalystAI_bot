@@ -21,7 +21,7 @@ async def phrase_by_user(
 
     if language is None:
         user_data = await get_user_from_redis_or_db(user_id)
-        language = user_data.get('language', 'ENG')
+        language = user_data.get("language", "ENG")
 
     phrase = phrase_dict.get(language, {}).get(phrase_id)
 
