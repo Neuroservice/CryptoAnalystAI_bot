@@ -23,18 +23,15 @@ DATABASE_URL = engine_url
 # DATABASE_URL = "sqlite+aiosqlite:///./crypto_analysis.db"  # Локалка
 # DATABASE_URL = "sqlite+aiosqlite:///bot/crypto_analysis.db" # Прод
 
-LOGO_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\bot\\media\\fasolka.jpg"  # Для локалки
-# LOGO_PATH = "/app/bot/media/fasolka.jpg" # Для прода
+# LOGO_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\bot\\media\\fasolka.jpg"  # Для локалки
+LOGO_PATH = "/app/bot/media/fasolka.jpg" # Для прода
 
-TIMES_NEW_ROMAN_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
-TIMES_NEW_ROMAN_BOLD_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
-TIMES_NEW_ROMAN_ITALIC_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
-# TIMES_NEW_ROMAN_PATH = '/fonts/TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
-# TIMES_NEW_ROMAN_BOLD_PATH = '/fonts/TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
-# TIMES_NEW_ROMAN_ITALIC_PATH = '/fonts/TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
-# DEJAVU_PATH = '/app/fonts/DejaVuSansCondensed.ttf'
-# DEJAVU_BOLD_PATH = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed-Bold.ttf'
-# DEJAVU_ITALIC_PATH = 'D:\\dejavu-fonts-ttf-2.37\\ttf\\DejaVuSansCondensed-Oblique.ttf'
+# TIMES_NEW_ROMAN_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
+# TIMES_NEW_ROMAN_BOLD_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
+# TIMES_NEW_ROMAN_ITALIC_PATH = 'C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
+TIMES_NEW_ROMAN_PATH = '/app/fonts/TimesNewRomanPSMT.ttf'  # Для локалки (обычный)
+TIMES_NEW_ROMAN_BOLD_PATH = '/app/fonts/TimesNewRomanPS-BoldMT.ttf'  # Для локалки (жирный)
+TIMES_NEW_ROMAN_ITALIC_PATH = '/app/fonts/TimesNewRomanPS-ItalicMT.ttf'  # Для локалки (курсив)
 
 
 # Числовые константы
