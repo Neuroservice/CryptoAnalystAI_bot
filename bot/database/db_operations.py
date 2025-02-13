@@ -97,7 +97,9 @@ async def get_user_from_redis_or_db(user_id: int) -> Optional[Dict[str, str]]:
 
     # 2. Если нет в Redis, пытаемся получить или создать пользователя в БД
     try:
-        user, _ = await get_or_create(User, defaults={"language": "ENG"}, telegram_id=user_id)
+        user, _ = await get_or_create(
+            User, defaults={"language": "ENG"}, telegram_id=user_id
+        )
 
         # 3. Сохраняем в Redis и возвращаем словарь
         user_dict = {

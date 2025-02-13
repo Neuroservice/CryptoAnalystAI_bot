@@ -287,9 +287,7 @@ async def update_agent_answers(async_session: AsyncSession):
         chosen_project = standardize_category(overall_category)
         token_description = extract_description(category_answer, language)
 
-        project_info = await get_user_project_info(
-            project.coin_name
-        )
+        project_info = await get_user_project_info(project.coin_name)
         twitter_link = await get_twitter_link_by_symbol(project.coin_name)
         tokenomics_data = project_info.get("tokenomics_data")
         basic_metrics = project_info.get("basic_metrics")
@@ -377,16 +375,38 @@ async def update_agent_answers(async_session: AsyncSession):
             "funds_agent", topic=all_data_string_for_funds_agent
         )
 
+        capitalization = (
+            float(tokenomics_data.capitalization)
+            if tokenomics_data and tokenomics_data.capitalization
+            else (phrase_by_language("no_data", language))
+        )
+        fundraising_amount = (
+            float(investing_metrics.fundraise)
+            if investing_metrics and investing_metrics.fundraise
+            else (phrase_by_language("no_data", language))
+        )
+
+        funds_agent_answer = await funds_agent_answer
+        investors_percent = float(funds_agent_answer.strip("%")) / 100
+
+        if isinstance(capitalization, float) and isinstance(
+            fundraising_amount, float
+        ):
+            result_ratio = (
+                capitalization * investors_percent
+            ) / fundraising_amount
+            final_score = f"{result_ratio:.2%}"
+        else:
+            result_ratio = phrase_by_language("no_data", language)
+            final_score = result_ratio
+
         (
             funds_answer,
             funds_scores,
             funds_score,
             growth_and_fall_score,
         ) = analyze_project_metrics(
-            funds_agent_answer,
-            get_metric_value(investing_metrics, "fundraise"),
-            get_metric_value(tokenomics_data, "total_supply"),
-            get_metric_value(basic_metrics, "market_price"),
+            final_score,
             get_metric_value(
                 market_metrics,
                 "growth_low",
@@ -517,31 +537,6 @@ async def update_agent_answers(async_session: AsyncSession):
                 min_value=round(top_and_bottom.lower_threshold, 4),
                 max_value=round(top_and_bottom.upper_threshold, 4),
             )
-
-        capitalization = (
-            float(tokenomics_data.capitalization)
-            if tokenomics_data and tokenomics_data.capitalization
-            else (phrase_by_language("no_data", language))
-        )
-        fundraising_amount = (
-            float(investing_metrics.fundraise)
-            if investing_metrics and investing_metrics.fundraise
-            else (phrase_by_language("no_data", language))
-        )
-
-        funds_agent_answer = await funds_agent_answer
-        investors_percent = float(funds_agent_answer.strip("%")) / 100
-
-        if isinstance(capitalization, float) and isinstance(
-            fundraising_amount, float
-        ):
-            result_ratio = (
-                capitalization * investors_percent
-            ) / fundraising_amount
-            final_score = f"{result_ratio:.2%}"
-        else:
-            result_ratio = phrase_by_language("no_data", language)
-            final_score = result_ratio
 
         profit_text = phrase_by_language(
             "investor_profit_text",

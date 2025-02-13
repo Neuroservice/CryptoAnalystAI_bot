@@ -45,8 +45,8 @@ class PDF(FPDF):
         draw.ellipse((0, 0, size, size), fill=255)
         circular_img = Image.new("RGBA", (size, size))
         circular_img.paste(img, (0, 0, size, size), mask)
-        # temp_path = "media/temp_footer_logo.png"
-        temp_path = "/app/bot/media/temp_footer_logo.png"
+        temp_path = "media/temp_footer_logo.png"
+        # temp_path = "/app/bot/media/temp_footer_logo.png"
         return temp_path
 
     def header(self):

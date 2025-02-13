@@ -8,7 +8,8 @@ from aiogram.types import BufferedInputFile, ReplyKeyboardRemove
 from bot.database.db_operations import (
     get_one,
     update_or_create,
-    get_or_create, get_user_from_redis_or_db,
+    get_or_create,
+    get_user_from_redis_or_db,
 )
 from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.consts import (
@@ -244,9 +245,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                 project_id=new_project.id,
             )
 
-        project_info = await get_user_project_info(
-            user_coin_name
-        )
+        project_info = await get_user_project_info(user_coin_name)
         investing_metrics = project_info.get("investing_metrics")
         social_metrics = project_info.get("social_metrics")
         funds_profit = project_info.get("funds_profit")

@@ -15,7 +15,8 @@ from bot.database.db_operations import (
     get_one,
     get_all,
     get_or_create,
-    update_or_create, get_user_from_redis_or_db,
+    update_or_create,
+    get_user_from_redis_or_db,
 )
 from bot.database.models import (
     Project,
@@ -45,7 +46,8 @@ from bot.utils.common.consts import (
     LLAMA_API_PROTOCOL,
     SELECTOR_TOP_100_WALLETS,
     SELECTOR_TWITTERSCORE,
-    RATING_LABELS, CRYPTORANK_API_URL,
+    RATING_LABELS,
+    CRYPTORANK_API_URL,
 )
 from bot.utils.common.decorators import save_execute
 from bot.utils.common.params import (
@@ -581,7 +583,9 @@ async def get_fundraise(user_coin_name: str, message: Message = None):
         user_coin_key = get_crypto_key(user_coin_name)
         if not user_coin_key:
             if message:
-                await message.answer(f"Токен '{user_coin_name}' не найден в CryptoRank API")
+                await message.answer(
+                    f"Токен '{user_coin_name}' не найден в CryptoRank API"
+                )
             return None, []
 
         url = f"{CRYPTORANK_WEBSITE}ico/{user_coin_key}"

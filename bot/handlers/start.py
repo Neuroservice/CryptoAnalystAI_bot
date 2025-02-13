@@ -25,7 +25,7 @@ async def start_command(message: types.Message, state: FSMContext):
     user = await get_user_from_redis_or_db(user_id=user_id)
 
     if user:
-        language = user.get('language', 'ENG')
+        language = user.get("language", "ENG")
 
         if language:
             await message.answer(

@@ -1,12 +1,5 @@
-import logging
-
 from typing import Any
 
-from bot.utils.project_data import get_project_rating
-from bot.utils.resources.bot_phrases.bot_phrase_handler import (
-    phrase_by_language,
-)
-from bot.utils.validations import clean_twitter_subs, process_metric
 from bot.utils.common.consts import (
     TIER_RANK,
     TIER_CRITERIA,
@@ -20,6 +13,11 @@ from bot.utils.common.consts import (
     LEVEL_TO_SCORE,
     NO_COEFFICIENT,
 )
+from bot.utils.project_data import get_project_rating
+from bot.utils.resources.bot_phrases.bot_phrase_handler import (
+    phrase_by_language,
+)
+from bot.utils.validations import clean_twitter_subs, process_metric
 
 
 def determine_project_tier(
@@ -143,10 +141,7 @@ def calculate_tokenomics_score(
 
 
 def analyze_project_metrics(
-    fund_distribution: str,
-    fundraise: float,
-    total_supply: float,
-    market_price: float,
+    final_score: float,
     growth_percentage: float,
     fall_percentage: float,
     top_100_percentage: float,
@@ -163,80 +158,40 @@ def analyze_project_metrics(
 
     growth_and_fall_result = ""
     detailed_report = ""
-    avg_price = 0
-    x_funds = "Не удалось провести расчет"
-    percente_of_funds_profit = 0
 
-    if fundraise != "N/A" and total_supply != "N/A":
-        logging.info(
-            f"total {total_supply}, fund_distribution {fund_distribution}"
-        )
-        fund_dist_value = float(fund_distribution.replace("%", "").strip())
+    final_score = float(final_score[:-1])
 
-        if fund_dist_value == 0:
-            logging.error(
-                "Fund distribution is zero, division by zero avoided."
-            )
-            avg_price = None
-        elif total_supply == 0:
-            logging.error("Total supply is zero, division by zero avoided.")
-            avg_price = None
-        else:
-            avg_price = (
-                float(fundraise) / (float(total_supply) * fund_dist_value)
-            ) * 100
-            logging.info(f"total {total_supply}, avg_price {avg_price}")
-
-        if avg_price is not None and avg_price > 0:
-            x_funds = round(float(market_price) / avg_price, 2)
-            percente_of_funds_profit = (x_funds * 100) - 100
-            logging.info(
-                f"x_funds {x_funds}, percente_of_funds_profit {percente_of_funds_profit}"
-            )
-        else:
-            logging.error(
-                "Unable to calculate x_funds or funds profit due to invalid avg_price."
-            )
-
-        detailed_report += (
-            f"\n[Funds Calculation]:\n"
-            f"  Средняя цена токена = (Фандрейз: {fundraise} / (Общее предложение: {total_supply} * Доля фондов: {fund_distribution})) * 100 = {avg_price}\n"
-            f"  X-фондов = Текущая цена: {market_price} / Средняя цена: {avg_price} = {x_funds}\n"
-            f"  Процент доходности фондов = (X-фондов * 100) - 100 = {percente_of_funds_profit}\n"
-        )
-
-        if percente_of_funds_profit <= 200:
-            funds_score = percente_of_funds_profit / 20
+    if final_score and type(final_score) is float:
+        if final_score <= 200:
+            funds_score = final_score / 20
             detailed_report += f"  Баллы доходности фондов = Процент доходности фондов / 20 = {funds_score}\n"
-        elif 201 <= percente_of_funds_profit <= 1000:
-            funds_score = (200 / 20) + (
-                (percente_of_funds_profit - 200) / 100
-            ) * (-0.5)
-            detailed_report += f"  Баллы доходности фондов = (200 / 20) + (({percente_of_funds_profit} - 200) / 100) * (-0.5) = {funds_score}\n"
-        elif 1001 <= percente_of_funds_profit <= 3000:
+        elif 201 <= final_score <= 1000:
+            funds_score = (200 / 20) + ((final_score - 200) / 100) * (-0.5)
+            detailed_report += f"  Баллы доходности фондов = (200 / 20) + (({final_score} - 200) / 100) * (-0.5) = {funds_score}\n"
+        elif 1001 <= final_score <= 3000:
             funds_score = (
                 (200 / 20)
                 + (800 / 100) * (-0.5)
-                + ((percente_of_funds_profit - 1000) / 100) * (-1)
+                + ((final_score - 1000) / 100) * (-1)
             )
-            detailed_report += f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (({percente_of_funds_profit} - 1000) / 100) * (-1) = {funds_score}\n"
-        elif 3001 <= percente_of_funds_profit <= 5000:
+            detailed_report += f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (({final_score} - 1000) / 100) * (-1) = {funds_score}\n"
+        elif 3001 <= final_score <= 5000:
             funds_score = (
                 (200 / 20)
                 + (800 / 100) * (-0.5)
                 + (2000 / 100) * (-1)
-                + ((percente_of_funds_profit - 3000) / 100) * (-1.5)
+                + ((final_score - 3000) / 100) * (-1.5)
             )
-            detailed_report += f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + (({percente_of_funds_profit} - 3000) / 100) * (-1.5) = {funds_score}\n"
-        elif percente_of_funds_profit > 5000:
+            detailed_report += f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + (({final_score} - 3000) / 100) * (-1.5) = {funds_score}\n"
+        elif final_score > 5000:
             funds_score = (
                 (200 / 20)
                 + (800 / 100) * (-0.5)
                 + (2000 / 100) * (-1)
                 + (2000 / 100) * (-1.5)
-                + ((percente_of_funds_profit - 5000) / 100) * (-2)
+                + ((final_score - 5000) / 100) * (-2)
             )
-            detailed_report += f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + (2000 / 100) * (-1.5) + (({percente_of_funds_profit} - 5000) / 100) * (-2) = {funds_score}\n"
+            detailed_report += f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + (2000 / 100) * (-1.5) + (({final_score} - 5000) / 100) * (-2) = {funds_score}\n"
 
         funds_score = max(min(funds_score, 100), -50)
         funds_result = f"По показателю доходности фондов проект получает {round(funds_score, 2)} баллов.\n"
