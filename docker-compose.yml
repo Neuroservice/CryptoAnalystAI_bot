@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   db-analyst-test:
-    image: postgres:16.6
+    image: postgres:15.10
     container_name: crypto_analyst_postgres
     environment:
       POSTGRES_USER: ${DB_USER}
