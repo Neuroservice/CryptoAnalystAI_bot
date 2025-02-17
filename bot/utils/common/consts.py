@@ -18,7 +18,8 @@ from bot.database.models import (
 FASOLKA_TG = "https://t.me/FasolkaAI_bot"
 
 
-LOCAL_BACKUP_DIR = "\\home\\CryptoAnalyst_bot\\fasolka_backups"
+# LOCAL_BACKUP_DIR = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst"
+LOCAL_BACKUP_DIR = "/home/CryptoAnalyst_bot/fasolka_backups"
 BUCKET = "c462de58-1673afa0-028c-4482-9d49-87f46960a44f"
 PREFIX = "fasolka_backups/"
 
