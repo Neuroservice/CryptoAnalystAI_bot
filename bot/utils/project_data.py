@@ -732,27 +732,34 @@ async def fetch_coinmarketcap_data(
             params=parameters,
         )
         data = data.json()
+        print("COINMARKETCUP_API: ", data)
+
         if "data" in data:
             coin_name = data["data"][user_coin_name]["name"].lower()
             logging.info(f"{coin_name, data['data'][user_coin_name]['name']}")
 
             crypto_data = data["data"][user_coin_name]["quote"]["USD"]
-            circulating_supply = data["data"][user_coin_name][
-                "circulating_supply"
-            ]
+            circulating_supply = data["data"][user_coin_name]["circulating_supply"]
             total_supply = data["data"][user_coin_name]["total_supply"]
             price = crypto_data["price"]
             market_cap = crypto_data["market_cap"]
-            coin_fdv = total_supply * price if price > 0 else None
+            coin_fdv = total_supply * price if price and price > 0 else None
 
-            return {
-                "coin_name": coin_name,
-                "circulating_supply": circulating_supply,
-                "total_supply": total_supply,
-                "price": price,
-                "capitalization": market_cap,
-                "coin_fdv": coin_fdv,
+            result = {
+                "circulating_supply": circulating_supply if circulating_supply not in (None, 0) else None,
+                "total_supply": total_supply if total_supply not in (None, 0) else None,
+                "price": price if price not in (None, 0) else None,
+                "capitalization": market_cap if market_cap not in (None, 0) else None,
+                "coin_fdv": coin_fdv if coin_fdv not in (None, 0) else None,
             }
+
+            # Удаляем ключи, у которых значение None
+            result = {key: value for key, value in result.items() if value is not None}
+
+            if result:
+                result["coin_name"] = coin_name
+
+            return result if result else None
 
         else:
             if message:
@@ -761,10 +768,8 @@ async def fetch_coinmarketcap_data(
                     message.from_user.id,
                     session_local,
                 )
-            logging.info(
-                "Ошибка: данные о монете не получены. Проверьте введённый тикер."
-            )
-            return
+            logging.info("Ошибка: данные о монете не получены. Проверьте введённый тикер.")
+            return None
 
     except AttributeError as attr_error:
         raise AttributeAccessError(str(attr_error))
