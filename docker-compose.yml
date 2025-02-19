@@ -1,48 +1,48 @@
 version: '3.8'
 
 services:
-  db-analyst-test:
+  db-analyst-prod:
     image: postgres:15.10
-    container_name: crypto_analyst_postgres
+    container_name: crypto_analyst_postgres_prod
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     volumes:
-      - analyst_postgres_data:/var/lib/postgresql/data
+      - analyst_postgres_data_prod:/var/lib/postgresql/data
     ports:
-      - "5455:5432"
+      - "5466:5432"
 
-  pgadmin-analyst-test:
+  pgadmin-analyst-prod:
     image: dpage/pgadmin4:latest
-    container_name: crypto_analyst_pgadmin
+    container_name: crypto_analyst_pgadmin_prod
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     ports:
-      - "5050:80"
+      - "5051:80"
     depends_on:
-      - db-analyst-test
+      - db-analyst-prod
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
+      - pgadmin_data_prod:/var/lib/pgadmin
 
-  redis-analyst-test:
+  redis-analyst-prod:
     image: redis:latest
-    container_name: crypto_analyst_redis
+    container_name: crypto_analyst_redis_prod
     restart: always
     ports:
-      - "6330:6379"
+      - "6331:6379"
 
-  cryptoanalyst_bot_test:
-    image: na3810/bot_cryptoanalyst:test
-    container_name: crypto_analyst_ai_bot
+  cryptoanalyst_bot_prod:
+    image: na3810/bot_cryptoanalyst:prod
+    container_name: crypto_analyst_ai_bot_prod
     restart: always
     env_file:
       - ./.env
     depends_on:
-      - db-analyst-test
-      - redis-analyst-test
+      - db-analyst-prod
+      - redis-analyst-prod
 
 volumes:
-  analyst_postgres_data:
-  pgadmin_data:
+  analyst_postgres_data_prod:
+  pgadmin_data_prod:
