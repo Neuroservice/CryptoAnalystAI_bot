@@ -48,26 +48,28 @@ CALC_HISTORY_TEXT_ENG = "Calculation History"
 # Пути к файлам
 DATABASE_URL = engine_url
 
-# LOGO_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\bot\\media\\fasolka.jpg"
-LOGO_PATH = "/app/bot/media/fasolka.jpg"
+LOGO_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\bot\\media\\fasolka.jpg"
+# LOGO_PATH = "/app/bot/media/fasolka.jpg"
 
-# TIMES_NEW_ROMAN_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPSMT.ttf"
-# TIMES_NEW_ROMAN_BOLD_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-BoldMT.ttf"
-# TIMES_NEW_ROMAN_ITALIC_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-ItalicMT.ttf"
-TIMES_NEW_ROMAN_PATH = "/app/fonts/TimesNewRomanPSMT.ttf"
-TIMES_NEW_ROMAN_BOLD_PATH = "/app/fonts/TimesNewRomanPS-BoldMT.ttf"
-TIMES_NEW_ROMAN_ITALIC_PATH = "/app/fonts/TimesNewRomanPS-ItalicMT.ttf"
+TIMES_NEW_ROMAN_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPSMT.ttf"
+TIMES_NEW_ROMAN_BOLD_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-BoldMT.ttf"
+TIMES_NEW_ROMAN_ITALIC_PATH = "C:\\Users\\dimak\\PycharmProjects\\Crypto-Analyst\\fonts\\TimesNewRomanPS-ItalicMT.ttf"
+# TIMES_NEW_ROMAN_PATH = "/app/fonts/TimesNewRomanPSMT.ttf"
+# TIMES_NEW_ROMAN_BOLD_PATH = "/app/fonts/TimesNewRomanPS-BoldMT.ttf"
+# TIMES_NEW_ROMAN_ITALIC_PATH = "/app/fonts/TimesNewRomanPS-ItalicMT.ttf"
 
 
 # Числовые константы
 MAX_MESSAGE_LENGTH = 4096
 
 
+# URL документа c мусорным списком категорий и токенов
+DOCUMENT_GARBAGE_LIST_URL = "https://docs.google.com/document/d/1B6EYH7ShOWzVZJpcA2J8bmUpffaMi9kb7LHq4h65I7c/export?format=txt"
+
+
 # Документ с промтами
 DOCUMENT_ID = "1_NHFo4b4FmWNxZn6ycQsjm_KaWGdG-mHp6SGCjtPvgI"
-DOCUMENT_URL = (
-    f"https://docs.google.com/document/d/{DOCUMENT_ID}/export?format=txt"
-)
+DOCUMENT_URL = f"https://docs.google.com/document/d/{DOCUMENT_ID}/export?format=txt"
 
 
 # Настройки модели GPT
@@ -443,6 +445,18 @@ PROJECT_ANALYSIS = (
     r"Анализ проекта .+?\(\$\w+?\)|Project analysis .+?\(\$\w+?\)"
 )
 
+
+# Заголовки, между которыми находятся категории
+START_TITLE_FOR_GARBAGE_CATEGORIES = "Мусорный список категорий:"
+END_TITLE_FOR_GARBAGE_CATEGORIES = "Список фундаментала:"
+# Заголовки, между которыми находятся стейблкоины
+START_TITLE_FOR_STABLECOINS = "Список стейблов:"
+END_TITLE_FOR_STABLECOINS = "Список скама:"
+# Заголовки, между которыми находятся фундаментальные токены
+START_TITLE_FOR_FUNDAMENTAL = "Список фундаментала:"
+END_TITLE_FOR_FUNDAMENTAL = "Список стейблов:"
+# Заголовки, между которыми находятся скам-токены
+START_TITLE_FOR_SCAM_TOKENS = "Список скама:"
 
 # Константы для оценки метрик
 TIER_RANK = {"TIER 1": 1, "TIER 2": 2, "TIER 3": 3, "TIER 4": 4}
