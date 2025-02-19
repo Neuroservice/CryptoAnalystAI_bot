@@ -2,7 +2,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.database.db_operations import get_one, update_or_create
+from bot.database.db_operations import get_one, update_or_create, get_or_create, create_association
 from bot.utils.common.consts import TICKERS
 from bot.utils.resources.exceptions.exceptions import ExceptionError
 from bot.utils.common.decorators import save_execute
@@ -15,15 +15,14 @@ from bot.database.models import (
     NetworkMetrics,
     InvestingMetrics,
     SocialMetrics,
-    Project,
+    Project, Category, project_category_association,
 )
 
 
 @save_execute
 async def update_project(
-    session: AsyncSession,
     user_coin_name: str,
-    chosen_project: str,
+    categories: list,
     project: Project,
 ):
     """
@@ -34,8 +33,19 @@ async def update_project(
         instance = await update_or_create(
             Project,
             id=project.id,
-            defaults={"coin_name": user_coin_name, "category": chosen_project},
+            defaults={"coin_name": user_coin_name},
         )
+
+        for category in categories:
+            category_instance, _ = await get_or_create(
+                Category,
+                defaults={"category_name": category},
+            )
+            await create_association(
+                project_category_association,
+                project_id=instance.id,
+                category_id=category_instance.id
+            )
         return instance
     else:
         return await get_one(Project, coin_name=user_coin_name)
@@ -43,7 +53,8 @@ async def update_project(
 
 @save_execute
 async def update_social_metrics(
-    session: AsyncSession, project_id: int, social_metrics: dict[int]
+    project_id: int,
+    social_metrics: dict[int]
 ):
     """
     Обновляет информацию о социальных метриках проекта.
@@ -63,7 +74,6 @@ async def update_social_metrics(
 
 @save_execute
 async def update_investing_metrics(
-    session: AsyncSession,
     project_id: int,
     investing_metrics: dict[int],
     user_coin_name: str,
@@ -91,7 +101,6 @@ async def update_investing_metrics(
 
 @save_execute
 async def update_network_metrics(
-    session: AsyncSession,
     project_id: int,
     network_metrics: dict[int],
     price: int,
@@ -118,7 +127,6 @@ async def update_network_metrics(
 
 @save_execute
 async def update_manipulative_metrics(
-    session: AsyncSession,
     project_id: int,
     manipulative_metrics: dict[int],
     price: int,
@@ -144,7 +152,10 @@ async def update_manipulative_metrics(
 
 
 @save_execute
-async def update_funds_profit(session, project_id, funds_profit_data):
+async def update_funds_profit(
+    project_id: int,
+    funds_profit_data: dict
+):
     """
     Обновляет информацию о распределении токенов проекта.
     """
@@ -163,7 +174,10 @@ async def update_funds_profit(session, project_id, funds_profit_data):
 
 
 @save_execute
-async def update_market_metrics(session, project_id, market_metrics):
+async def update_market_metrics(
+    project_id: int,
+    market_metrics: dict
+):
     """
     Обновляет информацию о рыночных метриках проекта
     """
@@ -195,10 +209,9 @@ async def update_market_metrics(session, project_id, market_metrics):
 
 @save_execute
 async def process_metrics(
-    session: "AsyncSession",
     user_coin_name: str,
     project: "Project",
-    chosen_project: str,
+    categories: list,
     results: dict,
     price: int,
     total_supply: int,
@@ -211,7 +224,7 @@ async def process_metrics(
 
     # Обновление или создание проекта
     new_project = await update_project(
-        session, user_coin_name, chosen_project, project
+        user_coin_name, categories, project
     )
 
     # Обновление или создание базовых метрик
@@ -220,7 +233,6 @@ async def process_metrics(
         project_id=new_project.id,
         defaults={
             "entry_price": price,
-            "sphere": chosen_project,
             "market_price": price,
         },
     )
@@ -228,27 +240,26 @@ async def process_metrics(
     # Обновление социальных метрик, проверка на None
     social_metrics = results.get("social_metrics")
     if social_metrics is not None:
-        await update_social_metrics(session, new_project.id, social_metrics)
+        await update_social_metrics(new_project.id, social_metrics)
 
     # Обновление инвестиционных метрик, проверка на None
     investing_metrics = results.get("investing_metrics")
     if investing_metrics is not None:
         await update_investing_metrics(
-            session, new_project.id, investing_metrics, user_coin_name, investors
+            new_project.id, investing_metrics, user_coin_name, investors
         )
 
     # Обновление сетевых метрик, проверка на None
     network_metrics = results.get("network_metrics")
     if network_metrics is not None:
         await update_network_metrics(
-            session, new_project.id, network_metrics, price, total_supply
+            new_project.id, network_metrics, price, total_supply
         )
 
     # Обновление манипулятивных метрик, проверка на None
     manipulative_metrics = results.get("manipulative_metrics")
     if manipulative_metrics is not None:
         await update_manipulative_metrics(
-            session,
             new_project.id,
             manipulative_metrics,
             price,
@@ -259,13 +270,13 @@ async def process_metrics(
     # Обновление прибыли фондов, проверка на None
     funds_profit = results.get("funds_profit")
     if funds_profit is not None:
-        await update_funds_profit(session, new_project.id, funds_profit)
+        await update_funds_profit(new_project.id, funds_profit)
 
     # Обновление рыночных метрик, проверка на None
     market_metrics = results.get("market_metrics")
     # Проверка на None и наличие значений
     if market_metrics and all(metric is not None for metric in market_metrics):
-        await update_market_metrics(session, new_project.id, market_metrics)
+        await update_market_metrics(new_project.id, market_metrics)
     else:
         logging.warning("Неверные данные для рыночных метрик или отсутствуют значения.")
 

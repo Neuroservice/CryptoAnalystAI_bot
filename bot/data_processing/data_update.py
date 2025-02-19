@@ -3,36 +3,9 @@ import logging
 import re
 import traceback
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.database.db_operations import get_one, update_or_create, get_all
-from bot.utils.common.decorators import save_execute
-from bot.utils.common.params import get_header_params
-from bot.utils.resources.bot_phrases.bot_phrase_handler import (
-    phrase_by_language,
-)
-from bot.utils.resources.bot_phrases.bot_phrase_strings import (
-    calculations_choices,
-)
-from bot.utils.resources.exceptions.exceptions import ExceptionError
-from bot.utils.resources.files_worker.pdf_worker import generate_pdf
-from bot.utils.resources.gpt.gpt import agent_handler
-from bot.utils.common.consts import (
-    TICKERS,
-    PROJECT_TYPES,
-    EXPECTED_KEYS,
-    DATA_FOR_ANALYSIS_TEXT,
-    ALL_DATA_STRING_FUNDS_AGENT,
-    ALL_DATA_STRING_FLAGS_AGENT,
-)
-from bot.utils.metrics.metrics_evaluation import (
-    determine_project_tier,
-    calculate_tokenomics_score,
-    analyze_project_metrics,
-    calculate_project_score,
-    project_investors_level,
-)
+from bot.database.db_operations import get_one, update_or_create, get_all, get_or_create
 from bot.database.models import (
     Project,
     Tokenomics,
@@ -42,6 +15,28 @@ from bot.database.models import (
     NetworkMetrics,
     FundsProfit,
     AgentAnswer,
+    Category,
+)
+from bot.utils.common.consts import (
+    TICKERS,
+    PROJECT_TYPES,
+    EXPECTED_KEYS,
+    DATA_FOR_ANALYSIS_TEXT,
+    ALL_DATA_STRING_FUNDS_AGENT,
+    ALL_DATA_STRING_FLAGS_AGENT,
+    START_TITLE_FOR_GARBAGE_CATEGORIES,
+    END_TITLE_FOR_GARBAGE_CATEGORIES,
+    START_TITLE_FOR_STABLECOINS,
+    END_TITLE_FOR_STABLECOINS
+)
+from bot.utils.common.decorators import save_execute
+from bot.utils.common.params import get_header_params
+from bot.utils.metrics.metrics_evaluation import (
+    determine_project_tier,
+    calculate_tokenomics_score,
+    analyze_project_metrics,
+    calculate_project_score,
+    project_investors_level,
 )
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
@@ -57,13 +52,20 @@ from bot.utils.project_data import (
     get_coin_description,
     get_percentage_data,
 )
+from bot.utils.resources.bot_phrases.bot_phrase_handler import (
+    phrase_by_language,
+)
+from bot.utils.resources.bot_phrases.bot_phrase_strings import (
+    calculations_choices,
+)
+from bot.utils.resources.exceptions.exceptions import ExceptionError
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
+from bot.utils.resources.files_worker.pdf_worker import generate_pdf
+from bot.utils.resources.gpt.gpt import agent_handler
 from bot.utils.validations import (
     extract_red_green_flags,
     extract_calculations,
-    extract_overall_category,
-    extract_description,
     format_metric,
-    standardize_category,
     get_metric_value,
 )
 
@@ -176,17 +178,19 @@ async def fetch_crypto_data(async_session: AsyncSession):
                         twitter_name,
                         description,
                         lower_name,
+                        categories
                     ) = await get_twitter_link_by_symbol(symbol)
-                    tvl = await fetch_tvl_data(lower_name)
-                    if tvl and fdv:
-                        await update_or_create(
-                            NetworkMetrics,
-                            project_id=project.id,
-                            defaults={
-                                "tvl": tvl,
-                                "tvl_fdv": tvl / fdv,
-                            },
-                        )
+                    if lower_name:
+                        tvl = await fetch_tvl_data(lower_name)
+                        if tvl and fdv:
+                            await update_or_create(
+                                NetworkMetrics,
+                                project_id=project.id,
+                                defaults={
+                                    "tvl": tvl,
+                                    "tvl_fdv": tvl / fdv,
+                                },
+                            )
 
                     # ШАГ 7: Обновление FundsProfit
                     print("7")
@@ -204,9 +208,10 @@ async def fetch_crypto_data(async_session: AsyncSession):
                             twitter_link,
                             description,
                             lower_name,
+                            categories
                         ) = await get_twitter_link_by_symbol(symbol)
                         tokenomics_percentage_data = await get_percentage_data(
-                            async_session, twitter_link, symbol
+                            twitter_link, symbol
                         )
                         output_string = (
                             "\n".join(tokenomics_percentage_data)
@@ -239,7 +244,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
 
 
 @save_execute
-async def update_agent_answers(async_session: AsyncSession):
+async def update_agent_answers():
     """
     Функция обновления ответов агентов по каждому токену:
     1. Собирает данные по проекту
@@ -254,6 +259,7 @@ async def update_agent_answers(async_session: AsyncSession):
     language = "ENG"
     agents_info = []
     data_for_tokenomics = []
+    garbage_categories = load_document_for_garbage_list(START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES)
 
     outdated_answers = await get_all(
         AgentAnswer, updated_at=f"<={three_days_ago}"
@@ -274,18 +280,28 @@ async def update_agent_answers(async_session: AsyncSession):
             twitter_name,
             description,
             lower_name,
+            categories
         ) = await get_twitter_link_by_symbol(project.coin_name)
         coin_description = await get_coin_description(lower_name)
         if description:
             coin_description += description
 
-        category_answer = await agent_handler(
-            "category", topic=coin_description, language=language
+        token_description = await agent_handler(
+            "description", topic=coin_description, language=language
         )
-        category_answer = await category_answer
-        overall_category = extract_overall_category(category_answer)
-        chosen_project = standardize_category(overall_category)
-        token_description = extract_description(category_answer, language)
+
+        if not categories or len(categories) == 0:
+            continue
+
+        # Получаем или создаём категории в БД
+        category_instances = []
+        for category_name in categories:
+            if category_name not in garbage_categories:
+                category_instance, _ = await get_or_create(Category, category_name=category_name)
+                category_instances.append(category_instance)
+
+        if len(category_instances) == 0:
+            continue
 
         project_info = await get_user_project_info(project.coin_name)
         twitter_link = await get_twitter_link_by_symbol(project.coin_name)
@@ -299,7 +315,7 @@ async def update_agent_answers(async_session: AsyncSession):
         manipulative_metrics = project_info.get("manipulative_metrics")
         network_metrics = project_info.get("network_metrics")
         _, tokenomics_data_list = await get_project_and_tokenomics(
-            async_session, project.category, project.coin_name
+            categories, project.coin_name
         )
 
         top_projects = sorted(
@@ -500,7 +516,7 @@ async def update_agent_answers(async_session: AsyncSession):
             tier=tier_answer,
             funds_answer=funds_answer,
             tokenomic_answer=tokemonic_answer,
-            category_answer=project.category,
+            categories=categories,
             twitter_link=twitter_link,
             top_and_bottom=top_and_bottom,
             language=agent_answer.language,
@@ -669,13 +685,12 @@ async def update_agent_answers(async_session: AsyncSession):
             project_rating_text=project_rating_text,
             current_date=current_date,
             token_description=token_description,
-            chosen_project=chosen_project,
+            categories=categories,
             lower_name=lower_name.capitalize(),
             coin_name=project.coin_name.upper(),
         )
 
         await update_or_create(
-            session=async_session,
             model=AgentAnswer,
             id=agent_answer.id,
             defaults={

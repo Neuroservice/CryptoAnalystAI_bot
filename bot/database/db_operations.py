@@ -1,4 +1,6 @@
 import logging
+
+from sqlalchemy import Table, insert
 from sqlalchemy.future import select
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional, Type, Any, Tuple, Union, Dict
@@ -27,14 +29,51 @@ async def get_one(model: Type[Any], **filters) -> Optional[Any]:
 
 
 @save_execute
-async def get_all(model: Type[Any], **filters) -> list[Any]:
+async def get_all(
+    model: Type[Any],
+    join_model: Optional[Type[Any]] = None,
+    order_by=None,
+    limit=None,
+    **filters
+) -> list[Any]:
     """
-    Получить все записи из базы данных.
+    Получить все записи из базы данных с возможностью сортировки, ограничения количества и объединения таблиц.
+
+    Аргументы:
+    - `model`: основная модель SQLAlchemy.
+    - `join_model`: таблица для `JOIN`, если требуется сортировка по связанной таблице.
+    - `order_by`: объект сортировки (например, Model.field.desc()).
+    - `limit`: ограничение количества записей.
+    - `filters`: фильтрация (поддерживает простые значения и функции, такие как `col.in_([...])`).
+
+    Возвращает:
+    - Список найденных объектов.
     """
     try:
-        query = select(model).filter_by(**filters)
+        query = select(model)
+
+        # Если указан join_model, добавляем JOIN
+        if join_model:
+            query = query.join(join_model)
+
+        # Добавляем фильтры
+        for key, value in filters.items():
+            if callable(value):
+                query = query.filter(value(getattr(model, key)))  # Если передана функция (например, col.in_([...]))
+            else:
+                query = query.filter(getattr(model, key) == value)  # Обычное сравнение
+
+        # Добавляем сортировку, если передана
+        if order_by is not None:
+            query = query.order_by(order_by)
+
+        # Ограничиваем количество записей, если передан лимит
+        if limit is not None:
+            query = query.limit(limit)
+
         result = await session_local.execute(query)
         return result.scalars().all()
+
     except SQLAlchemyError as e:
         raise DatabaseFetchError(str(e))
 
@@ -166,3 +205,22 @@ async def update_or_create(
 
     await session_local.commit()
     return instance
+
+
+@save_execute
+async def create_association(table: Table, **fields):
+    """
+    Создать запись в таблице связей (например, project_category_association).
+    """
+    try:
+        query = select(table).filter_by(**fields)
+        result = await session_local.execute(query)
+        existing_association = result.scalars().first()
+
+        if not existing_association:
+            insert_query = insert(table).values(**fields)
+            await session_local.execute(insert_query)
+            await session_local.commit()
+    except SQLAlchemyError as e:
+        await session_local.rollback()
+        raise DatabaseCreationError(str(e))

@@ -106,16 +106,12 @@ async def get_user_project_info(user_coin_name: str):
 
         tokenomics_data = await get_one(Tokenomics, project_id=project.id)
         basic_metrics = await get_one(BasicMetrics, project_id=project.id)
-        investing_metrics = await get_one(
-            InvestingMetrics, project_id=project.id
-        )
+        investing_metrics = await get_one(InvestingMetrics, project_id=project.id)
         social_metrics = await get_one(SocialMetrics, project_id=project.id)
         funds_profit = await get_one(FundsProfit, project_id=project.id)
         top_and_bottom = await get_one(TopAndBottom, project_id=project.id)
         market_metrics = await get_one(MarketMetrics, project_id=project.id)
-        manipulative_metrics = await get_one(
-            ManipulativeMetrics, project_id=project.id
-        )
+        manipulative_metrics = await get_one(ManipulativeMetrics, project_id=project.id)
         network_metrics = await get_one(NetworkMetrics, project_id=project.id)
 
         return {
@@ -143,7 +139,7 @@ async def get_user_project_info(user_coin_name: str):
 
 @save_execute
 async def get_project_and_tokenomics(
-    session: AsyncSession, project_name: str, user_coin_name: str
+    project_names: list, user_coin_name: str
 ):
     """
     Получает информацию о проекте и связанных метриках по категории и токену пользователя.
@@ -152,52 +148,55 @@ async def get_project_and_tokenomics(
     user_coin_added = False  # Флаг для отслеживания добавленного токена
 
     try:
-        project_name = project_name.strip()
-
-        projects = await get_all(Project, category=project_name)
-
         tokenomics_data_list = []
-        if not projects:
-            logger.warning(f"Проект с именем {project_name} не найден.")
-            raise ValueProcessingError(f"Project '{project_name}' not found.")
+        projects = []
 
-        if user_coin_name and user_coin_name not in TICKERS:
-            logger.info(
-                f"Добавление монеты {user_coin_name} в список тикеров."
-            )
-            TICKERS.insert(0, user_coin_name)
-            user_coin_added = True  # Запоминаем, что токен был добавлен
+        for project_name in project_names:
+            project_name = project_name.strip()
+            projects_data = await get_all(Project, category=project_name)
+            projects.append(projects_data)
 
-        for project in projects:
-            tokenomics_data = None
-            if project.coin_name in TICKERS:
+            if not projects_data:
+                logger.warning(f"Проект с именем {project_name} не найден.")
+                continue
+
+            if user_coin_name and user_coin_name not in TICKERS:
                 logger.info(
-                    f"Получение данных токеномики для проекта: {project.coin_name}"
+                    f"Добавление монеты {user_coin_name} в список тикеров."
                 )
+                TICKERS.insert(0, user_coin_name)
+                user_coin_added = True  # Запоминаем, что токен был добавлен
 
-                tokenomics_data, _ = await get_or_create(
-                    Tokenomics,
-                    defaults={"project_id": project.id},
-                    project_id=project.id,
-                )
-                tokenomics_data = [tokenomics_data]
+            for project in projects_data:
+                tokenomics_data = None
+                if project.coin_name in TICKERS:
+                    logger.info(
+                        f"Получение данных токеномики для проекта: {project.coin_name}"
+                    )
 
-            tokenomics_data_list.append((project, tokenomics_data))
+                    tokenomics_data, _ = await get_or_create(
+                        Tokenomics,
+                        defaults={"project_id": project.id},
+                        project_id=project.id,
+                    )
+                    tokenomics_data = [tokenomics_data]
 
-            if not tokenomics_data_list and tokenomics_data:
-                logger.warning("Нет доступных проектов для сравнения.")
+                tokenomics_data_list.append((project, tokenomics_data))
 
-                # Создание новой записи токеномики, если она отсутствует
-                tokenomics_data, _ = await get_or_create(
-                    Tokenomics,
-                    defaults={"project_id": project.id},
-                    project_id=project.id,
-                )
-                logger.warning("Нет доступных проектов для сравнения.")
+                if not tokenomics_data_list and tokenomics_data:
+                    logger.warning("Нет доступных проектов для сравнения.")
 
-        logger.info(
-            f"Проекты и токеномика успешно получены для категории {project_name}."
-        )
+                    # Создание новой записи токеномики, если она отсутствует
+                    tokenomics_data, _ = await get_or_create(
+                        Tokenomics,
+                        defaults={"project_id": project.id},
+                        project_id=project.id,
+                    )
+                    logger.warning("Нет доступных проектов для сравнения.")
+
+            logger.info(
+                f"Проекты и токеномика успешно получены для категории {project_name}."
+            )
         return projects, tokenomics_data_list
 
     except AttributeError as attr_error:
@@ -232,24 +231,42 @@ async def get_twitter_link_by_symbol(symbol: str):
             data = await response.json()
             print(data)
             if symbol in data["data"]:
-                description = data["data"][symbol].get("description", None)
-                lower_name = data["data"][symbol].get("name", None)
-                urls = data["data"][symbol].get("urls", {})
+                project_data = data["data"][symbol]
+
+                # Извлекаем основную информацию
+                description = project_data.get("description", None)
+                lower_name = project_data.get("name", None)
+                urls = project_data.get("urls", {})
                 twitter_links = urls.get("twitter", [])
-                if twitter_links and description:
+
+                # Извлекаем категории проекта
+                tag_names = project_data.get("tag-names", [])
+                tag_groups = project_data.get("tag-groups", [])
+
+                # Фильтруем только категории (CATEGORY)
+                # Проверяем, что tag_names и tag_groups не равны None
+                if tag_names is None or tag_groups is None:
+                    categories = []
+                else:
+                    # Фильтруем только категории (CATEGORY)
+                    categories = [
+                        tag for tag, group in zip(tag_names, tag_groups) if group == "CATEGORY"
+                    ]
+
+                if twitter_links and description and categories:
                     twitter_link = twitter_links[0].lower()
-                    return twitter_link, description, lower_name.lower()
+                    return twitter_link, description, lower_name.lower(), categories
                 else:
                     print(f"Twitter link for '{symbol}' not found.")
-                    return None, None, None
+                    return None, None, None, []
             else:
                 print(f"Cryptocurrency with symbol '{symbol}' not found.")
-                return None, None, None
+                return None, None, None, []
         else:
             print(
                 f"Error retrieving data: {response.status}, {await response.text()}"
             )
-            return None, None, None
+            return None, None, None, []
 
 
 async def get_twitter(name: str):
@@ -497,7 +514,7 @@ async def fetch_tokenomics_data(url: str) -> list:
 
 
 async def get_percentage_data(
-    async_session: AsyncSession, lower_name: str, user_coin_name: str
+    lower_name: str, user_coin_name: str
 ):
     """
     Получает данные о распределении токенов в проекте.
@@ -726,54 +743,66 @@ async def fetch_coinmarketcap_data(
     """
 
     try:
-        data = requests.get(
+        response = requests.get(
             f"{COINMARKETCUP_API}quotes/latest",
             headers=headers,
             params=parameters,
         )
-        data = data.json()
-        if "data" in data:
-            coin_name = data["data"][user_coin_name]["name"].lower()
-            logging.info(f"{coin_name, data['data'][user_coin_name]['name']}")
+        data = response.json()
 
-            crypto_data = data["data"][user_coin_name]["quote"]["USD"]
-            circulating_supply = data["data"][user_coin_name][
-                "circulating_supply"
-            ]
-            total_supply = data["data"][user_coin_name]["total_supply"]
-            price = crypto_data["price"]
-            market_cap = crypto_data["market_cap"]
-            coin_fdv = total_supply * price if price > 0 else None
+        # Проверяем, есть ли "data" в ответе
+        if "data" not in data:
+            logging.error("Ошибка: ключ 'data' отсутствует в ответе API CoinMarketCap.")
+            return None
 
-            return {
-                "coin_name": coin_name,
-                "circulating_supply": circulating_supply,
-                "total_supply": total_supply,
-                "price": price,
-                "capitalization": market_cap,
-                "coin_fdv": coin_fdv,
-            }
+        # Проверяем, есть ли запрошенный токен в данных
+        if user_coin_name not in data["data"]:
+            logging.error(f"Ошибка: токен '{user_coin_name}' не найден в API CoinMarketCap.")
+            raise MissingKeyError(f"Токен '{user_coin_name}' не найден в данных CoinMarketCap.")
 
-        else:
-            if message:
-                await phrase_by_user(
-                    "error_input_token_from_user",
-                    message.from_user.id,
-                    session_local,
-                )
-            logging.info(
-                "Ошибка: данные о монете не получены. Проверьте введённый тикер."
-            )
-            return
+        coin_info = data["data"][user_coin_name]
+
+        # Проверяем наличие ключей перед доступом
+        required_keys = ["name", "quote", "circulating_supply", "total_supply"]
+        for key in required_keys:
+            if key not in coin_info:
+                logging.error(f"Ошибка: Отсутствует ключ '{key}' для '{user_coin_name}'.")
+                raise MissingKeyError(f"Ошибка: отсутствует ключ '{key}' для '{user_coin_name}'.")
+
+        coin_name = coin_info["name"].lower()
+        logging.info(f"{coin_name}, {coin_info['name']}")
+
+        crypto_data = coin_info["quote"].get("USD", {})
+        price = crypto_data.get("price", 0)
+        market_cap = crypto_data.get("market_cap", 0)
+        circulating_supply = coin_info.get("circulating_supply", 0)
+        total_supply = coin_info.get("total_supply", 0)
+
+        # Вычисление FDV
+        coin_fdv = total_supply * price if price > 0 else None
+
+        return {
+            "coin_name": coin_name,
+            "circulating_supply": circulating_supply,
+            "total_supply": total_supply,
+            "price": price,
+            "capitalization": market_cap,
+            "coin_fdv": coin_fdv,
+        }
 
     except AttributeError as attr_error:
+        logging.error(f"Ошибка атрибута: {attr_error}")
         raise AttributeAccessError(str(attr_error))
     except KeyError as key_error:
+        logging.error(f"Ошибка ключа: {key_error}")
         raise MissingKeyError(str(key_error))
     except ValueError as value_error:
+        logging.error(f"Ошибка обработки значения: {value_error}")
         raise ValueProcessingError(str(value_error))
     except Exception as e:
+        logging.error(f"Общая ошибка: {e}")
         raise ExceptionError(str(e))
+
 
 
 def fetch_binance_data(symbol: str):
@@ -1143,6 +1172,7 @@ async def get_top_projects_by_capitalization(
         # Получение топ-тикеров по капитализации
         top_ticker_projects = await get_all(
             Project,
+            join_model=Tokenomics,
             category=project_type,
             coin_name=lambda col: col.in_(tickers),
             order_by=Tokenomics.capitalization.desc(),
@@ -1152,6 +1182,7 @@ async def get_top_projects_by_capitalization(
         # Получение других проектов по капитализации
         top_other_projects = await get_all(
             Project,
+            join_model=Tokenomics,
             category=project_type,
             coin_name=lambda col: col.in_(tickers),
             order_by=Tokenomics.capitalization.desc(),
@@ -1192,7 +1223,6 @@ async def check_and_run_tasks(
     network_metrics: NetworkMetrics,
     twitter_name: Any,
     user_coin_name: str,
-    session: AsyncSession,
     model_mapping: dict,
 ):
     """
@@ -1245,7 +1275,7 @@ async def check_and_run_tasks(
     ) or not funds_profit:
         tasks.append(
             (
-                get_percentage_data(session, lower_name, user_coin_name),
+                get_percentage_data(lower_name, user_coin_name),
                 "funds_profit",
             )
         )
@@ -1389,7 +1419,7 @@ async def generate_flags_answer(
     tier: Optional[str] = None,
     funds_answer: Optional[str] = None,
     tokenomic_answer: Optional[str] = None,
-    category_answer: Optional[str] = None,
+    categories: Optional[str] = None,
     twitter_link: Optional[list[str]] = None,
     top_and_bottom: Optional[TopAndBottom] = None,
     language: Optional[str] = None,
@@ -1408,7 +1438,7 @@ async def generate_flags_answer(
         )
         flags_answer += (
             f"\n\nДанные для анализа\n"
-            f"- Анализ категории: {category_answer}\n\n"
+            f"- Категории: {categories}\n\n"
             f"- Тир проекта: {tier}\n"
             f"- Тикер монеты: {project.coin_name if project and project.coin_name else 'N/A'}\n"
             f"- Категория: {project.category if project and project.category else 'N/A'}\n"
@@ -1436,7 +1466,7 @@ async def generate_flags_answer(
         )
         flags_answer += (
             f"\n\nData to analyze\n"
-            f"- Category analysis: {category_answer}\n\n"
+            f"- Categories: {categories}\n\n"
             f"- Coin Ticker: {project.coin_name if project and project.coin_name else 'N/A'}\n"
             f"- Category: {project.category if project and project.category else 'N/A'}\n"
             f"- Capitalization: ${round(tokenomics_data.capitalization, 2) if tokenomics_data and tokenomics_data.capitalization else 'N/A'}\n"

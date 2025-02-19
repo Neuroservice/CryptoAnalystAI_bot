@@ -1,9 +1,9 @@
 import logging
 import re
 import traceback
-
-from typing import Optional, Union
 from datetime import datetime
+from typing import Optional, Union
+
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,8 +11,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.database.db_operations import get_one, get_user_from_redis_or_db
 from bot.database.models import Calculation, AgentAnswer
 from bot.utils.common.bot_states import CalculateProject
+from bot.utils.common.consts import (
+    PROJECT_POINTS_ENG,
+    PROJECT_POINTS_RU,
+    TICKERS,
+    DATA_FOR_ANALYSIS_TEXT,
+    ALL_DATA_STRING_FLAGS_AGENT,
+    ALL_DATA_STRING_FUNDS_AGENT,
+    REPLACED_PROJECT_TWITTER,
+)
 from bot.utils.common.decorators import save_execute
 from bot.utils.common.sessions import session_local
+from bot.utils.metrics.metrics_evaluation import (
+    calculate_tokenomics_score,
+    calculate_project_score,
+    determine_project_tier,
+    project_investors_level,
+    analyze_project_metrics,
+)
+from bot.utils.project_data import (
+    generate_flags_answer,
+    get_user_project_info,
+    calculate_expected_x,
+    get_project_and_tokenomics,
+    get_top_projects_by_capitalization_and_category,
+)
 from bot.utils.resources.bot_phrases.bot_phrase_handler import (
     phrase_by_user,
     phrase_by_language,
@@ -32,29 +55,6 @@ from bot.utils.validations import (
     extract_red_green_flags,
     get_metric_value,
 )
-from bot.utils.common.consts import (
-    PROJECT_POINTS_ENG,
-    PROJECT_POINTS_RU,
-    TICKERS,
-    DATA_FOR_ANALYSIS_TEXT,
-    ALL_DATA_STRING_FLAGS_AGENT,
-    ALL_DATA_STRING_FUNDS_AGENT,
-    REPLACED_PROJECT_TWITTER,
-)
-from bot.utils.metrics.metrics_evaluation import (
-    calculate_tokenomics_score,
-    calculate_project_score,
-    determine_project_tier,
-    project_investors_level,
-    analyze_project_metrics,
-)
-from bot.utils.project_data import (
-    generate_flags_answer,
-    get_user_project_info,
-    calculate_expected_x,
-    get_project_and_tokenomics,
-    get_top_projects_by_capitalization_and_category,
-)
 
 
 @save_execute
@@ -71,7 +71,7 @@ async def create_basic_report(
 
     state_data = await state.get_data()
     user_coin_name = state_data.get("user_coin_name")
-    chosen_project = state_data.get("chosen_project")
+    categories = state_data.get("categories")
     user_data = await get_user_from_redis_or_db(user_id)
     language = user_data.get("language", "ENG")
     agents_info = []
@@ -82,7 +82,7 @@ async def create_basic_report(
         basic_metrics = project_info.get("basic_metrics")
 
         projects, tokenomics_data_list = await get_project_and_tokenomics(
-            session_local, chosen_project, user_coin_name
+            categories, user_coin_name
         )
         top_projects = get_top_projects_by_capitalization_and_category(
             tokenomics_data_list
@@ -205,8 +205,6 @@ async def create_pdf_report(
     """
 
     state_data = await state.get_data()
-    chosen_project = state_data.get("chosen_project")
-    category_answer = state_data.get("category_answer")
     new_project = state_data.get("new_project")
     coin_name = state_data.get("coin_name")
     twitter_link = state_data.get("twitter_name")
@@ -216,18 +214,16 @@ async def create_pdf_report(
     calculation_record = state_data.get("calculation_record")
 
     row_data = []
-    coin_twitter, about, lower_name = twitter_link
+    coin_twitter, about, lower_name, categories = twitter_link
     twitter_name = REPLACED_PROJECT_TWITTER.get(coin_twitter, twitter_link)
     user_data = await get_user_from_redis_or_db(user_id)
     language = user_data.get("language", "ENG")
     current_date = datetime.now().strftime("%d.%m.%Y")
-    existing_calculation = await get_one(
-        Calculation, id=calculation_record["id"]
-    )
+    existing_calculation = await get_one(Calculation, id=calculation_record["id"])
 
     try:
         result = await get_project_and_tokenomics(
-            session, chosen_project, coin_name
+            categories, coin_name
         )
 
         if not isinstance(result, tuple) or len(result) != 2:
@@ -237,13 +233,17 @@ async def create_pdf_report(
 
         projects, tokenomics_data_list = result
 
+        top_projects = get_top_projects_by_capitalization_and_category(
+            tokenomics_data_list
+        )
+
         if "error" in projects:
             raise ValueProcessingError(
                 f"Error from project data: {projects['error']}"
             )
 
         for index, (project, tokenomics_data) in enumerate(
-            tokenomics_data_list, start=1
+            top_projects, start=1
         ):
             if tokenomics_data:
                 for tokenomics in tokenomics_data:
@@ -531,7 +531,7 @@ async def create_pdf_report(
                 tier_answer,
                 funds_answer,
                 tokemonic_answer,
-                category_answer,
+                categories,
                 twitter_link,
                 top_and_bottom,
                 language,
@@ -710,7 +710,7 @@ async def create_pdf_report(
                 project_rating_text=project_rating_text,
                 current_date=current_date,
                 token_description=token_description,
-                chosen_project=chosen_project,
+                categories=categories,
                 lower_name=lower_name.capitalize(),
                 coin_name=coin_name.upper(),
             )

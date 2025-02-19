@@ -21,6 +21,7 @@ phrase_dict = {
         "calculations_end": "Завершение расчетов. Чтобы начать снова пользоваться ботом, введите команду /start.",
         "stablecoins_answer": "Вы выбрали стейблкоин. Он плохо подходит для инвестирования, так как его стоимость фиксирована. Попробуйте другой токен.",
         "fundamental_tokens_answer": "Вы выбрали фундаментальный токен. Он подходит для долгосрочных инвестиций на 5 лет и более.",
+        "scam_tokens_answer": "Данный проект определен командой к категории 'Повышенные риски, возможный скам'",
         "input_next_token_for_analysis": "Введите тикер следующего токена (например STRK, SUI) или введите /exit для завершения:",
         "input_next_token_for_basic_report": "Введите тикер следующего токена (например APT, ZK) или введите /exit для завершения:",
         "overal_project_rating": "Общая оценка проекта:",
@@ -64,6 +65,8 @@ phrase_dict = {
         "comparisons_error": "Ошибка в расчетах",
         "no_data": "Нет данных",
         "no_token_distribution": "Нет данных по распределению токенов",
+        "category_in_garbage_list": "Категория проекта относиться к списку категорий, которые нуждаются в дополнительной проверке... Попробуйте другой токен.",
+
         "calculation_type_choice": """
 Если вы хотите просто рассчитать цену токена, на основании похожих проектов, выберите кнопку 'Блок ребалансировки портфеля'.\n\n
 Если хотите полную сравнительную характеристику по токенам и ребалансировку портфеля, выберите кнопку 'Блок анализа и оценки проектов'.
@@ -108,6 +111,7 @@ Twitter Score = {twitter_engagement_score}
         "calculations_end": "Completing the calculations. To start using the bot again, enter the /start command.",
         "stablecoins_answer": "You have chosen a stablecoin. It is not good for investing because its value is fixed. Try another token.",
         "fundamental_tokens_answer": "You have chosen a fundamental token. It is suitable for long-term investments for 5 years or more.",
+        "scam_tokens_answer": "This project was categorized by the team as 'Increased risks, possible scam'",
         "input_next_token_for_analysis": "Enter the ticker of the next token (e.g. STRK, SUI) or enter /exit to complete:",
         "input_next_token_for_basic_report": "Enter the ticker of the next token (e.g. APT, ZK) or type /exit to complete:",
         "overal_project_rating": "Overall project evaluation:",
@@ -151,6 +155,9 @@ Twitter Score = {twitter_engagement_score}
         "comparisons_error": "Error on comparisons",
         "no_data": "No data",
         "no_token_distribution": "No token distribution data",
+        "category_in_garbage_list": "Project category refers to the list of categories that need additional verification... Try a different token.",
+
+
         "calculation_type_choice": """
 If you want to simply calculate the token price based on similar projects, choose the 'Block of portfolio rebalancing' button.\n\n
 If you want a full comparison of token characteristics, choose the 'Block of projects analysis and evaluation' button.

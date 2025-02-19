@@ -1,4 +1,6 @@
 import re
+from typing import List, Dict
+
 import fitz
 
 from io import BytesIO
@@ -45,8 +47,8 @@ class PDF(FPDF):
         draw.ellipse((0, 0, size, size), fill=255)
         circular_img = Image.new("RGBA", (size, size))
         circular_img.paste(img, (0, 0, size, size), mask)
-        # temp_path = "media/temp_footer_logo.png"
-        temp_path = "/app/bot/media/temp_footer_logo.png"
+        temp_path = "media/temp_footer_logo.png"
+        # temp_path = "/app/bot/media/temp_footer_logo.png"
         return temp_path
 
     def header(self):
@@ -59,22 +61,22 @@ class PDF(FPDF):
 
 
 async def generate_pdf(
-    funds_profit,
-    tier_answer,
-    language,
-    formatted_metrics_text,
-    profit_text,
-    red_green_flags,
-    top_and_bottom_answer,
-    calculations,
-    project_evaluation,
-    overal_final_score,
-    project_rating_text,
-    current_date,
-    token_description,
-    chosen_project,
-    lower_name,
-    coin_name,
+    funds_profit: str,
+    tier_answer: str,
+    language: str,
+    formatted_metrics_text: str,
+    profit_text: str,
+    red_green_flags: str,
+    top_and_bottom_answer: str,
+    calculations: List[Dict[str, str]],
+    project_evaluation: str,
+    overal_final_score: float,
+    project_rating_text: str,
+    current_date: str,
+    token_description: str,
+    categories: List[str],
+    lower_name: str,
+    coin_name: str,
 ):
     """
     Генерация PDF файла с проектными данными и метриками.
@@ -117,7 +119,8 @@ async def generate_pdf(
     pdf.cell(0, 6, phrase_by_language("project_category", language), 0, 1, "L")
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
-    pdf.multi_cell(0, 6, chosen_project, 0)
+    categories_str = ", ".join(categories)
+    pdf.multi_cell(0, 6, categories_str, 0)
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)

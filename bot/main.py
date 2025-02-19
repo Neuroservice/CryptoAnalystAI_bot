@@ -29,76 +29,67 @@ logger = logging.getLogger(__name__)
 
 async def check_redis_connection():
     """
-    Проверяет подключение к Redis и выводит сообщение об успешном подключении.
-    Если подключение не удалось, вызывает исключение.
+    Проверяет подключение к Redis.
     """
-
     try:
         await redis_client.ping()
         logging.info("Подключение к Redis успешно!")
     except ConnectionError:
-        logging.info("Не удалось подключиться к Redis!")
+        logging.error("Не удалось подключиться к Redis!")
         raise Exception("Не удалось подключиться к Redis!")
 
 
-async def parse_periodically():
+async def parse_periodically(session):
     """
-    Процедура, которая запускается каждые 6 часов и вызывает необходимые функции для обновления ответов агентов,
-    обновления данных по токенам, создания бэкапов БД.
+    Запускает обновление данных каждые 6 часов и обновление ответов агентов в 3:00 ночи.
     """
+    logging.info("Запущен процесс периодического обновления данных.")
+
+    # Немедленное обновление данных при старте
+    try:
+        logging.info("Первый запуск: немедленное обновление данных о криптовалютах.")
+        await fetch_crypto_data(session)
+        logging.info("Первичное обновление данных выполнено успешно.")
+    except Exception as e:
+        logging.error(f"Ошибка первичного обновления данных: {e}")
 
     while True:
         current_time = datetime.datetime.now(datetime.timezone.utc)
-        # Расчет времени до следующего запуска fetch_task (каждые 6 часов)
-        next_fetch_run = current_time + datetime.timedelta(
-            hours=6 - (current_time.hour % 6)
-        )
-        next_fetch_run = next_fetch_run.replace(
-            minute=0, second=0, microsecond=0
-        )
+
+        # Вычисляем время следующего запуска обновления данных
+        next_fetch_run = current_time + datetime.timedelta(hours=6 - (current_time.hour % 6))
+        next_fetch_run = next_fetch_run.replace(minute=0, second=0, microsecond=0)
         time_until_fetch = (next_fetch_run - current_time).total_seconds()
 
-        # Расчет времени до 3:00 ночи
-        next_agent_run = current_time.replace(
-            hour=3, minute=0, second=0, microsecond=0
-        )
+        # Вычисляем время следующего обновления ответов агентов (в 3:00 ночи)
+        next_agent_run = current_time.replace(hour=3, minute=0, second=0, microsecond=0)
         if current_time >= next_agent_run:
             next_agent_run += datetime.timedelta(days=1)
         time_until_agent = (next_agent_run - current_time).total_seconds()
 
-        # Определяем, что нужно запускать первым
+        # Определяем, что выполнять первым
         if time_until_fetch <= time_until_agent:
-            await asyncio.sleep(time_until_fetch)
+            logging.info(f"Следующее обновление данных через {time_until_fetch // 3600:.2f} часов.")
+            await asyncio.sleep(max(time_until_fetch, 1))  # Избегаем sleep(0)
             try:
-
-                async def fetch_task():
-                    await fetch_crypto_data(session_local)
-
-                # Выполняем fetch_task каждые 6 часов
-                await fetch_task()
-
+                logging.info("Запуск обновления данных о криптовалютах...")
+                await fetch_crypto_data(session)
+                logging.info("Обновление данных завершено.")
             except Exception as e:
-                raise ExceptionError(str(e))
-
+                logging.error(f"Ошибка обновления данных: {e}")
         else:
-            await asyncio.sleep(time_until_agent)
+            logging.info(f"Следующее обновление ответов агентов через {time_until_agent // 3600:.2f} часов.")
+            await asyncio.sleep(max(time_until_agent, 1))  # Избегаем sleep(0)
             try:
-
-                async def fetch_task():
-                    await fetch_crypto_data(session_local)
-
-                async def agent_update_task():
-                    await update_agent_answers(session_local)
-
-                async def backup_task():
-                    await create_backup()
-
-                # Выполняем все задачи в 3:00 ночи
-                tasks = [fetch_task(), agent_update_task(), backup_task()]
-                await asyncio.gather(*tasks)
-
+                logging.info("Запуск обновления данных и ответов агентов...")
+                await asyncio.gather(
+                    fetch_crypto_data(session),
+                    update_agent_answers(),
+                    create_backup()
+                )
+                logging.info("Все задачи выполнены успешно.")
             except Exception as e:
-                raise ExceptionError(str(e))
+                logging.error(f"Ошибка при выполнении обновления: {e}")
 
 
 async def main():
@@ -112,35 +103,13 @@ async def main():
         async with AiohttpSession() as aiohttp_session:
             storage = RedisStorage(redis_client)
             dp = Dispatcher(storage=storage)
-
             bot = Bot(token=API_TOKEN, session=aiohttp_session)
 
-            logger.info(
-                "Устанавливаются команды: %s",
-                [
-                    BotCommand(
-                        command="/start",
-                        description="Запустить бота / Bot start",
-                    ),
-                    BotCommand(
-                        command="/analysis",
-                        description="Выбрать блок аналитики / Select an analytics block",
-                    ),
-                ],
-            )
-
-            await bot.set_my_commands(
-                [
-                    BotCommand(
-                        command="/start",
-                        description="Запустить бота / Bot start",
-                    ),
-                    BotCommand(
-                        command="/analysis",
-                        description="Выбрать блок аналитики / Select an analytics block",
-                    ),
-                ]
-            )
+            logger.info("Настраиваются команды бота.")
+            await bot.set_my_commands([
+                BotCommand(command="/start", description="Запустить бота / Bot start"),
+                BotCommand(command="/analysis", description="Выбрать блок аналитики / Select an analytics block"),
+            ])
 
             from bot.handlers import start, help, calculate, analysis
 
@@ -154,7 +123,9 @@ async def main():
 
             dp.update.middleware(RestoreStateMiddleware(SessionLocal))
 
-            asyncio.create_task(parse_periodically())
+            # Логируем старт таски перед ее запуском
+            logging.info("Запуск периодического обновления данных.")
+            asyncio.create_task(parse_periodically(session_local))
 
             await dp.start_polling(bot)
 

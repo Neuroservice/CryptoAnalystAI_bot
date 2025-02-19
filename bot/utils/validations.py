@@ -33,8 +33,10 @@ from bot.utils.common.consts import (
     METRICS_MAPPING,
     NO_DATA_TEXT,
     CATEGORY_MAP,
-    MAX_MESSAGE_LENGTH,
+    MAX_MESSAGE_LENGTH, START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS, START_TITLE_FOR_SCAM_TOKENS,
+    START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL,
 )
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
 
 
 async def validate_user_input(
@@ -45,36 +47,42 @@ async def validate_user_input(
     """
 
     user_coin_name = user_coin_name.upper().replace(" ", "")
+    stablecoins = load_document_for_garbage_list(START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS)
+    scam_tokens = load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS)
+    fundamental_tokens = load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL)
 
     # Проверка на команду выхода
     if user_coin_name.lower() == "/exit":
-        await message.answer(
-            await phrase_by_user(
-                "calculations_end", message.from_user.id, session_local
-            )
-        )
         await state.clear()
-        return True
+        return await phrase_by_user(
+            "calculations_end",
+            message.from_user.id,
+            session_local
+        )
 
     # Проверка на стейблкоин
-    if user_coin_name in STABLECOINS:
-        await message.answer(
-            await phrase_by_user(
-                "stablecoins_answer", message.from_user.id, session_local
-            )
+    if user_coin_name in stablecoins:
+        return await phrase_by_user(
+            "stablecoins_answer",
+            message.from_user.id,
+            session_local
         )
-        return True
 
     # Проверка на фундаментальный токен
-    if user_coin_name in FUNDAMENTAL_TOKENS:
-        await message.answer(
-            await phrase_by_user(
-                "fundamental_tokens_answer",
-                message.from_user.id,
-                session_local,
-            )
+    if user_coin_name in fundamental_tokens:
+        return await phrase_by_user(
+            "fundamental_tokens_answer",
+            message.from_user.id,
+            session_local,
         )
-        return True
+
+    # Проверка на скам-токен
+    if user_coin_name in scam_tokens:
+        return await phrase_by_user(
+            "scam_tokens_answer",
+            message.from_user.id,
+            session_local,
+        )
 
     return False
 

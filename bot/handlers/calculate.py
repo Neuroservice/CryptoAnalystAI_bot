@@ -1,6 +1,6 @@
 import logging
-
 from datetime import datetime
+
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, ReplyKeyboardRemove
@@ -10,39 +10,7 @@ from bot.database.db_operations import (
     update_or_create,
     get_or_create,
     get_user_from_redis_or_db,
-)
-from bot.utils.common.bot_states import CalculateProject
-from bot.utils.common.consts import (
-    TICKERS,
-    MODEL_MAPPING,
-    REPLACED_PROJECT_TWITTER,
-    PROJECT_ANALYSIS_RU,
-    PROJECT_ANALYSIS_ENG,
-    NEW_PROJECT,
-    LISTING_PRICE_BETA_RU,
-    LISTING_PRICE_BETA_ENG,
-    LIST_OF_TEXT_FOR_REBALANCING_BLOCK,
-    LIST_OF_TEXT_FOR_ANALYSIS_BLOCK,
-)
-from bot.utils.common.params import get_header_params
-from bot.utils.common.sessions import session_local
-from bot.utils.create_report import create_pdf_report, create_basic_report
-from bot.utils.keyboards.calculate_keyboards import analysis_type_keyboard
-from bot.utils.metrics.metrics import process_metrics
-from bot.utils.resources.bot_phrases.bot_phrase_handler import (
-    phrase_by_user,
-    phrase_by_language,
-)
-from bot.utils.resources.exceptions.exceptions import (
-    ValueProcessingError,
-    ExceptionError,
-)
-from bot.utils.resources.gpt.gpt import agent_handler
-from bot.utils.validations import (
-    validate_user_input,
-    extract_overall_category,
-    extract_description,
-    standardize_category,
+    create_association,
 )
 from bot.database.models import (
     Project,
@@ -56,7 +24,27 @@ from bot.database.models import (
     FundsProfit,
     MarketMetrics,
     TopAndBottom,
+    project_category_association,
+    Category,
 )
+from bot.utils.common.bot_states import CalculateProject
+from bot.utils.common.consts import (
+    TICKERS,
+    MODEL_MAPPING,
+    REPLACED_PROJECT_TWITTER,
+    PROJECT_ANALYSIS_RU,
+    PROJECT_ANALYSIS_ENG,
+    NEW_PROJECT,
+    LISTING_PRICE_BETA_RU,
+    LISTING_PRICE_BETA_ENG,
+    LIST_OF_TEXT_FOR_REBALANCING_BLOCK,
+    LIST_OF_TEXT_FOR_ANALYSIS_BLOCK, START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES,
+)
+from bot.utils.common.params import get_header_params
+from bot.utils.common.sessions import session_local
+from bot.utils.create_report import create_pdf_report, create_basic_report
+from bot.utils.keyboards.calculate_keyboards import analysis_type_keyboard
+from bot.utils.metrics.metrics import process_metrics
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
     fetch_coinmarketcap_data,
@@ -66,6 +54,17 @@ from bot.utils.project_data import (
     check_and_run_tasks,
     fetch_coingecko_data,
 )
+from bot.utils.resources.bot_phrases.bot_phrase_handler import (
+    phrase_by_user,
+    phrase_by_language,
+)
+from bot.utils.resources.exceptions.exceptions import (
+    ValueProcessingError,
+    ExceptionError,
+)
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
+from bot.utils.resources.gpt.gpt import agent_handler
+from bot.utils.validations import validate_user_input
 
 calculate_router = Router()
 logging.basicConfig(level=logging.INFO)
@@ -149,6 +148,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     user_coin_name = message.text.upper().replace(" ", "")
     fundraise = None
     user_data = await get_user_from_redis_or_db(message.from_user.id)
+    garbage_categories = load_document_for_garbage_list(START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES)
     language = user_data.get("language", "ENG")
 
     if await validate_user_input(user_coin_name, message, state):
@@ -160,9 +160,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             )
         )
 
-    twitter_name, description, lower_name = await get_twitter_link_by_symbol(
-        user_coin_name
-    )
+    twitter_name, description, lower_name, categories = await get_twitter_link_by_symbol(user_coin_name)
     twitter_name = REPLACED_PROJECT_TWITTER.get(twitter_name, twitter_name)
     if not lower_name:
         lower_name = await get_lower_name(user_coin_name)
@@ -171,19 +169,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     if description:
         coin_description += description
 
-    category_answer = await agent_handler(
-        "category", topic=coin_description, language=language
-    )
-    overall_category = extract_overall_category(category_answer)
-    chosen_project_name = standardize_category(overall_category)
-
-    new_project, created = await get_or_create(
-        Project,
-        defaults={"category": chosen_project_name},
-        coin_name=user_coin_name,
-    )
-
-    if chosen_project_name == "Unknown Category":
+    if not categories or len(categories) == 0:
         await message.answer(
             await phrase_by_user(
                 "error_project_inappropriate_category",
@@ -191,6 +177,37 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                 session_local,
             )
         )
+
+    # Получаем или создаём категории в БД
+    category_instances = []
+    for category_name in categories:
+        if category_name not in garbage_categories:
+            category_instance, _ = await get_or_create(Category, category_name=category_name)
+            category_instances.append(category_instance)
+
+    if len(category_instances) == 0:
+        return await message.answer(
+            await phrase_by_user(
+                "category_in_garbage_list",
+                message.from_user.id,
+                session_local,
+            )
+        )
+
+    new_project, _ = await get_or_create(Project, coin_name=lower_name)
+
+    # Добавляем связи между проектом и категориями
+    for category in category_instances:
+        existing_association = await get_one(
+            project_category_association, project_id=new_project.id, category_id=category.id
+        )
+
+        if not existing_association:
+            await create_association(
+                project_category_association,
+                project_id=new_project.id,
+                category_id=category.id
+            )
 
     try:
         header_params = get_header_params(user_coin_name)
@@ -214,19 +231,16 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
         # Обновление или создание BasicMetrics
         await update_or_create(
-            session=session_local,
             model=BasicMetrics,
             project_id=new_project.id,
             defaults={
                 "entry_price": price,
-                "sphere": chosen_project_name,
                 "market_price": price,
             },
         )
 
         # Обновление или создание Tokenomics
         await update_or_create(
-            session=session_local,
             model=Tokenomics,
             project_id=new_project.id,
             defaults={
@@ -267,7 +281,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             twitter_name=twitter_name,
             user_coin_name=user_coin_name,
             lower_name=lower_name,
-            session=session_local,
             model_mapping=MODEL_MAPPING,
         )
 
@@ -276,7 +289,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                 Project,
                 id=new_project.id,
                 defaults={
-                    "category": chosen_project_name,
                     "coin_name": user_coin_name,
                 },
             )
@@ -288,7 +300,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             project_id=new_project.id,
             defaults={
                 "entry_price": price,
-                "sphere": chosen_project_name,
                 "market_price": price,
             },
         )
@@ -390,7 +401,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
         data = {
             "user_coin_name": user_coin_name,
-            "chosen_project": chosen_project_name,
+            "categories": categories,
         }
 
         await state.update_data(**data)
@@ -424,10 +435,12 @@ async def receive_data(message: types.Message, state: FSMContext):
     fundraise = None
     calculation_record = None
     user_data = await get_user_from_redis_or_db(message.from_user.id)
+    garbage_categories = load_document_for_garbage_list(START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES)
     language = user_data.get("language", "ENG")
 
-    if await validate_user_input(user_coin_name, message, state):
-        return
+    user_input = await validate_user_input(user_coin_name, message, state)
+    if user_input:
+        return await message.answer(user_input)
     else:
         # Сообщаем пользователю, что будут производиться расчеты
         await message.answer(
@@ -436,28 +449,55 @@ async def receive_data(message: types.Message, state: FSMContext):
             )
         )
 
-    twitter_name, description, lower_name = await get_twitter_link_by_symbol(
-        user_coin_name
-    )
+    twitter_name, description, lower_name, categories = await get_twitter_link_by_symbol(user_coin_name)
     coin_description = await get_coin_description(lower_name)
     if description:
         coin_description += description
 
-    category_answer = await agent_handler(
-        "category", topic=coin_description, language=language
+    token_description = await agent_handler(
+        "description", topic=coin_description, language=language
     )
-    overall_category = extract_overall_category(category_answer)
-    token_description = extract_description(category_answer, language)
-    chosen_project = standardize_category(overall_category)
 
-    if chosen_project == "Unknown Category":
-        await message.answer(
+    if not categories or len(categories) == 0:
+        return await message.answer(
             await phrase_by_user(
                 "error_project_inappropriate_category",
                 message.from_user.id,
                 session_local,
             )
         )
+
+    # Получаем или создаём категории в БД
+    category_instances = []
+    for category_name in categories:
+        if category_name not in garbage_categories:
+            category_instance, _ = await get_or_create(Category, category_name=category_name)
+            category_instances.append(category_instance)
+
+    if len(category_instances) == 0:
+        return await message.answer(
+            await phrase_by_user(
+                "category_in_garbage_list",
+                message.from_user.id,
+                session_local,
+            )
+        )
+
+    # Получаем проект (если его ещё нет)
+    project_instance, _ = await get_or_create(Project, coin_name=lower_name)
+
+    # Добавляем связи между проектом и категориями
+    for category in category_instances:
+        existing_association = await get_one(
+            project_category_association, project_id=project_instance.id, category_id=category.id
+        )
+
+        if not existing_association:
+            await create_association(
+                project_category_association,
+                project_id=project_instance.id,
+                category_id=category.id
+            )
 
     project_info = await get_user_project_info(user_coin_name)
     base_project = project_info.get("project")
@@ -470,13 +510,6 @@ async def receive_data(message: types.Message, state: FSMContext):
     market_metrics = project_info.get("market_metrics")
     manipulative_metrics = project_info.get("manipulative_metrics")
     network_metrics = project_info.get("network_metrics")
-
-    if not base_project:
-        base_project, created = await get_or_create(
-            Project,
-            defaults={"category": chosen_project},
-            coin_name=user_coin_name,
-        )
 
     header_params = get_header_params(coin_name=user_coin_name)
     twitter_name = await get_twitter_link_by_symbol(user_coin_name)
@@ -545,7 +578,6 @@ async def receive_data(message: types.Message, state: FSMContext):
         twitter_name=twitter_name,
         user_coin_name=user_coin_name,
         lower_name=lower_name,
-        session=session_local,
         model_mapping=MODEL_MAPPING,
     )
 
@@ -607,10 +639,9 @@ async def receive_data(message: types.Message, state: FSMContext):
         )
 
     new_project = await process_metrics(
-        session_local,
         user_coin_name,
         base_project,
-        chosen_project,
+        categories,
         tasks,
         price,
         total_supply,
@@ -629,10 +660,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     data = {
         "new_project": new_project.to_dict(),
         "calculation_record": calculation_record.to_dict(),
-        "category_answer": category_answer,
-        "project_category": overall_category,
         "token_description": token_description,
-        "chosen_project": chosen_project,
         "twitter_name": twitter_name,
         "coin_name": user_coin_name,
         "price": price,
