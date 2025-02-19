@@ -52,7 +52,7 @@ jobs:
             sudo docker volume prune --force
 
   push_docker_hub_prod:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+    if: github.ref == 'refs/heads/main'
     name: Push Docker image for main dir
     runs-on: ubuntu-latest
     steps:
@@ -72,7 +72,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/bot_cryptoanalyst:prod
 
   deploy_to_prod_dir:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: push_docker_hub_prod
     steps:
