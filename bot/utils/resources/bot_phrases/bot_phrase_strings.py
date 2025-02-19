@@ -48,7 +48,7 @@ phrase_dict = {
         "flags": "«Ред» флаги и «грин» флаги:",
         "analysis_block_choose": "Выберите блок аналитики:",
         ## Ошибки
-        "error_input_token_from_user": "Ошибка. Проверьте правильность введенного тикера токена и попробуйте еще раз.",
+        "error_input_token_from_user": "Проверьте правильность введенного тикера токена и попробуйте еще раз.",
         "beta_block": "Данный блок пока что находится в разработке. Попробуйте, пожалуйста, другой блок аналитики.",
         "error_not_valid_input_data": "Пожалуйста, убедитесь, что все данные введены корректно.\nПодробности ошибки:",
         "error_common": "Произошла ошибка.\nПодробности ошибки:",
@@ -135,7 +135,7 @@ Twitter Score = {twitter_engagement_score}
         "flags": "«Red» flags and «green» flags:",
         "analysis_block_choose": "Select an analytics block:",
         ## Ошибки
-        "error_input_token_from_user": "Error. Check if the coin entered is correct and try again.",
+        "error_input_token_from_user": "Check if the coin entered is correct and try again.",
         "beta_block": "This block is still under development. Please try another analytics block.",
         "error_not_valid_input_data": "Please make sure all data is entered correctly.\nError details:",
         "error_common": "An error has occurred.\nDetails of the error:",
