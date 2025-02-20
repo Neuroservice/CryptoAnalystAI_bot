@@ -45,9 +45,9 @@ jobs:
           script: |
             cd /home/CryptoAnalyst_bot/test
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
-            sudo docker-compose -f docker-compose.yml down cryptoanalyst_bot_test
-            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_bot_test pull
-            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate cryptoanalyst_bot_test
+            sudo docker-compose -f docker-compose.yml down
+            sudo docker-compose -f docker-compose.yml pull
+            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate --remove-orphans
             sudo docker image prune --force
             sudo docker volume prune --force
 
@@ -72,7 +72,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/bot_cryptoanalyst:prod
 
   deploy_to_prod_dir:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
     needs: push_docker_hub_prod
     steps:
@@ -85,8 +85,8 @@ jobs:
           script: |
             cd /home/CryptoAnalyst_bot/prod
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
-            sudo docker-compose -f docker-compose.yml down cryptoanalyst_bot_prod
+            sudo docker-compose -f docker-compose.yml down
             sudo docker-compose -f docker-compose.yml pull
-            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate cryptoanalyst_bot_prod
+            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate
             sudo docker image prune --force
             sudo docker volume prune --force
