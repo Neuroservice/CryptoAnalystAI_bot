@@ -85,8 +85,8 @@ jobs:
           script: |
             cd /home/CryptoAnalyst_bot/prod
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
-            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_bot_prod down
-            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_bot_prod pull
-            sudo docker-compose -f docker-compose.yml -p cryptoanalyst_bot_prod up --build -d --no-recreate
+            sudo docker-compose -f docker-compose.yml down cryptoanalyst_bot_prod
+            sudo docker-compose -f docker-compose.yml pull
+            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate cryptoanalyst_bot_prod
             sudo docker image prune --force
             sudo docker volume prune --force
