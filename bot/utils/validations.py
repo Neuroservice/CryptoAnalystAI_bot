@@ -1,10 +1,11 @@
+import logging
 import re
 
 from aiogram import types
 from typing import Any, Optional, Callable
 from aiogram.fsm.context import FSMContext
 
-from bot.utils.common.sessions import session_local
+from bot.utils.common.sessions import session_local, redis_client
 from bot.utils.resources.bot_phrases.bot_phrase_handler import (
     phrase_by_user,
     phrase_by_language,
@@ -383,3 +384,15 @@ def get_metric_value(
         return transform(value) if transform else value
     except (TypeError, ValueError, ZeroDivisionError, AttributeError):
         return fallback
+
+
+async def check_redis_connection():
+    """
+    Проверяет подключение к Redis.
+    """
+    try:
+        await redis_client.ping()
+        logging.info("Подключение к Redis успешно!")
+    except ConnectionError:
+        logging.error("Не удалось подключиться к Redis!")
+        raise Exception("Не удалось подключиться к Redis!")

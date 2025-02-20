@@ -218,10 +218,13 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         if not coin_data:
             coin_data = await fetch_coingecko_data(user_coin_name)
             if not coin_data:
-                await message.answer(
-                    "Ошибка: данные о токене не получены. Проверьте введённый тикер."
+                return await message.answer(
+                    await phrase_by_user(
+                        "error_input_token_from_user",
+                        message.from_user.id,
+                        session_local,
+                    )
                 )
-                return
 
         circulating_supply = coin_data["circulating_supply"]
         total_supply = coin_data["total_supply"]
@@ -533,31 +536,40 @@ async def receive_data(message: types.Message, state: FSMContext):
                 capitalization = coinmarketcap_data["capitalization"]
                 coin_fdv = coinmarketcap_data["coin_fdv"]
 
-                await update_or_create(
-                    Tokenomics,
-                    project_id=base_project.id,
-                    defaults={
-                        "capitalization": capitalization,
-                        "total_supply": total_supply,
-                        "circ_supply": circulating_supply,
-                        "fdv": coin_fdv,
-                    },
-                )
-
-                await update_or_create(
-                    BasicMetrics,
-                    project_id=base_project.id,
-                    defaults={"entry_price": price, "market_price": price},
-                )
-
             else:
-                await message.answer(
-                    await phrase_by_user(
-                        "error_input_token_from_user",
-                        message.from_user.id,
-                        session_local,
+                coin_data = await fetch_coingecko_data(user_coin_name)
+                print("coingecko_data: ", coin_data)
+                if not coin_data:
+                    return await message.answer(
+                        await phrase_by_user(
+                            "error_input_token_from_user",
+                            message.from_user.id,
+                            session_local,
+                        )
                     )
-                )
+
+                circulating_supply = coin_data["circulating_supply"]
+                total_supply = coin_data["total_supply"]
+                price = coin_data["price"]
+                capitalization = coin_data["capitalization"]
+                coin_fdv = coin_data["coin_fdv"]
+
+            await update_or_create(
+                Tokenomics,
+                project_id=base_project.id,
+                defaults={
+                    "capitalization": capitalization,
+                    "total_supply": total_supply,
+                    "circ_supply": circulating_supply,
+                    "fdv": coin_fdv,
+                },
+            )
+
+            await update_or_create(
+                BasicMetrics,
+                project_id=base_project.id,
+                defaults={"entry_price": price, "market_price": price},
+            )
         else:
             total_supply = tokenomics_data.total_supply
             price = basic_metrics.market_price

@@ -30,7 +30,7 @@ from bot.database.models import (
     ManipulativeMetrics,
     NetworkMetrics,
 )
-from bot.utils.common.config import CRYPTORANK_API_KEY
+from bot.utils.common.config import CRYPTORANK_API_KEY, API_KEY
 from bot.utils.common.consts import (
     TICKERS,
     REPLACED_PROJECT_TWITTER,
@@ -224,9 +224,7 @@ async def get_twitter_link_by_symbol(symbol: str):
 
     header_params = get_header_params(coin_name=symbol)
 
-    async with client_session().get(
-        url, headers=header_params["headers"]
-    ) as response:
+    async with client_session().get(url, headers=header_params["headers"]) as response:
         if response.status == 200:
             data = await response.json()
             print(data)
@@ -749,6 +747,7 @@ async def fetch_coinmarketcap_data(
             params=parameters,
         )
         data = response.json()
+        print("COINMARKETCUP_API: ", data)
 
         # Проверяем, есть ли "data" в ответе
         if "data" not in data:
@@ -1547,3 +1546,19 @@ def get_project_rating(final_score: int, language: str = "RU") -> str:
         return labels["good"]
     else:
         return labels["excellent"]
+
+
+async def fetch_categories():
+    """
+    Получает список категорий криптовалют с CoinMarketCap API.
+    """
+    url = f"{COINMARKETCUP_API}categories"
+    headers = {"X-CMC_PRO_API_KEY": API_KEY}
+
+    async with client_session().get(url, headers=headers) as response:
+        if response.status == 200:
+            data = await response.json()
+            return [item["name"] for item in data.get("data", [])]
+        else:
+            logging.error(f"Ошибка API CoinMarketCap: {response.status}")
+            return []

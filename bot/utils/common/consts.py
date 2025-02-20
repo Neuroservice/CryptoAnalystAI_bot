@@ -108,6 +108,8 @@ CALCULATIONS_PATTERN_RU = r"(Результаты расчета для.*?)$"
 CALCULATIONS_PATTERN_ENG = r"(Calculation results for.*?)$"
 COMPARISON_PATTERN_RU = r"Сравнение\s*проекта\s*с\s*другими,\s*схожими\s*по\s*уровню\s*и\s*категории:"
 COMPARISON_PATTERN_ENG = r"Comparing\s*the\s*project\s*with\s*others\s*similar\s*in\s*level\s*and\s*category:"
+PATTERN_FOR_GARBAGE_LIST_WITH_END_TITLE = r"{start_title}(.*?)(?=\n{end_title})"
+PATTERN_FOR_GARBAGE_LIST_WITHOUT_END_TITLE = r"{start_title}(.*)"
 
 
 # Токены и их категории
