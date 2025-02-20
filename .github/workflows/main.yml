@@ -1,4 +1,4 @@
-name: Auto (push OR PR)
+name: Auto (push)
 
 on:
   push:
