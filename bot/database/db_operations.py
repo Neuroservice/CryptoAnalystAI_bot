@@ -93,6 +93,7 @@ async def get_user_from_redis_or_db(user_id: int) -> Optional[Dict[str, str]]:
     # 1. Проверяем Redis
     user_data = await redis_client.hgetall(f"user:{user_id}")
     if user_data:
+        print("user_data (from redis)", user_data)
         return user_data
 
     # 2. Если нет в Redis, пытаемся получить или создать пользователя в БД
@@ -106,6 +107,9 @@ async def get_user_from_redis_or_db(user_id: int) -> Optional[Dict[str, str]]:
             "telegram_id": str(user.telegram_id),
             "language": user.language or "ENG",
         }
+
+        print("user_dict (from db):", user_dict)
+
         await redis_client.hset(f"user:{user_id}", mapping=user_dict)
 
         return user_dict
