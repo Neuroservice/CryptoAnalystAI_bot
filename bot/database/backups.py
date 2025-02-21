@@ -39,18 +39,12 @@ async def create_backup():
     """
     logger.info("Начинаем процесс создания резервной копии базы данных")
 
-    # Путь к временной папке для хранения бэкапов.
-    # Если работаете в Linux/MacOS, можно использовать '/tmp/fasolka_backups'.
-    # Если на Windows — укажите соответствующий путь.
     local_backup_dir = LOCAL_BACKUP_DIR
     os.makedirs(local_backup_dir, exist_ok=True)
 
-    # Имя файла бэкапа и файла для логирования ошибок
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_file = os.path.join(local_backup_dir, f"backup_{timestamp}.sql")
-    error_log_file = os.path.join(local_backup_dir, "pg_dump_error.log")
+    backup_file = os.path.join(local_backup_dir, f"backup_{timestamp}.backup")
 
-    # Формируем команду для pg_dump в виде списка аргументов
     command = [
         "pg_dump",
         "-U",
@@ -59,10 +53,15 @@ async def create_backup():
         DB_HOST,
         "-p",
         str(DB_PORT),
+        "-F",
+        "c",
+        "-f",
+        backup_file,
         DB_NAME,
     ]
 
     logger.info(f'Выполняется команда: {" ".join(command)}')
+
     # Выполняем команду pg_dump в отдельном потоке, чтобы не блокировать event loop.
     result = await asyncio.to_thread(
         subprocess.run,
@@ -72,34 +71,23 @@ async def create_backup():
         text=True,
     )
 
-    # Сохраняем стандартный вывод (stdout) в файл бэкапа
-    with open(backup_file, "w", encoding="utf-8") as f:
-        f.write(result.stdout)
-
-    # Сохраняем ошибки (stderr) в файл логов
-    with open(error_log_file, "w", encoding="utf-8") as f:
-        f.write(result.stderr)
-
     logger.info(f"pg_dump завершился с кодом: {result.returncode}")
 
-    if os.path.exists(backup_file):
-        if os.path.getsize(backup_file) > 0:
-            upload_backup_to_s3(
-                backup_file, f"fasolka_backups/{os.path.basename(backup_file)}"
-            )
-            os.remove(backup_file)
-        else:
-            logger.error(f"Файл бэкапа не создан или пуст: {backup_file}")
+    if os.path.exists(backup_file) and os.path.getsize(backup_file) > 0:
+        upload_backup_to_s3(
+            backup_file, f"fasolka_backups/{os.path.basename(backup_file)}"
+        )
+        os.remove(backup_file)
         logger.info("Временный файл бэкапа успешно удален")
         delete_old_backups_from_s3()
     else:
-        logger.error(f"Не удалось создать файл бэкапа: {backup_file}")
+        logger.error(f"Файл бэкапа не создан или пуст: {backup_file}")
 
 
 def upload_backup_to_s3(local_file: str, s3_file: str):
     """
     Функция загрузки бэкапа в хранилище.
-    Происходит подключение к хранилищу, загрузка файла бэкапа по пути '/tmp/fasolka_backups'
+    Происходит подключение к хранилищу, загрузка файла бэкапа в s3-хранилище
     """
 
     logger.info(f"Загрузка файла {local_file} в S3: {s3_file}")
