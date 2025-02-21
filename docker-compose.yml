@@ -32,6 +32,8 @@ services:
     restart: always
     ports:
       - "6330:6379"
+    volumes:
+      - redis_test_data:/test-data
 
   cryptoanalyst_bot_test:
     image: na3810/bot_cryptoanalyst:test
@@ -46,3 +48,4 @@ services:
 volumes:
   analyst_postgres_data:
   pgadmin_data:
+  redis_test_data:
