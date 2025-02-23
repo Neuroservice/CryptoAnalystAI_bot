@@ -30,7 +30,7 @@ async def start_command(message: types.Message, state: FSMContext):
         if language:
             await message.answer(
                 await phrase_by_user(
-                    "hello_phrase", user_id, session_local, language
+                    "hello_phrase", user_id, language
                 ),
                 reply_markup=await main_menu_keyboard(user_id=user_id),
             )
@@ -66,7 +66,7 @@ async def language_choice(message: types.Message):
             await session.commit()
 
         await message.answer(
-            await phrase_by_user("hello_phrase", user_id, session_local),
+            await phrase_by_user("hello_phrase", user_id),
             reply_markup=await main_menu_keyboard(user_id=user_id),
         )
     else:

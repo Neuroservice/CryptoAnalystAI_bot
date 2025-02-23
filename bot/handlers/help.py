@@ -19,6 +19,6 @@ async def help_command(message: types.Message):
 
     await message.answer(
         await phrase_by_user(
-            "help_phrase", message.from_user.id, session_local
+            "help_phrase", message.from_user.id
         )
     )

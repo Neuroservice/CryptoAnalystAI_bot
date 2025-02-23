@@ -57,32 +57,28 @@ async def validate_user_input(
         await state.clear()
         return await phrase_by_user(
             "calculations_end",
-            message.from_user.id,
-            session_local
+            message.from_user.id
         )
 
     # Проверка на стейблкоин
     if user_coin_name in stablecoins:
         return await phrase_by_user(
             "stablecoins_answer",
-            message.from_user.id,
-            session_local
+            message.from_user.id
         )
 
     # Проверка на фундаментальный токен
     if user_coin_name in fundamental_tokens:
         return await phrase_by_user(
             "fundamental_tokens_answer",
-            message.from_user.id,
-            session_local,
+            message.from_user.id
         )
 
     # Проверка на скам-токен
     if user_coin_name in scam_tokens:
         return await phrase_by_user(
             "scam_tokens_answer",
-            message.from_user.id,
-            session_local,
+            message.from_user.id
         )
 
     return False

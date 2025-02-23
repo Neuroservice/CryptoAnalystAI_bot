@@ -84,7 +84,7 @@ async def project_chosen(message: types.Message, state: FSMContext):
 
     await message.answer(
         await phrase_by_user(
-            "calculation_type_choice", message.from_user.id, session_local
+            "calculation_type_choice", message.from_user.id
         ),
         reply_markup=await analysis_type_keyboard(message.from_user.id),
     )
@@ -103,7 +103,7 @@ async def project_chosen(message: types.Message, state: FSMContext):
 
     await message.answer(
         await phrase_by_user(
-            "beta_block", message.from_user.id, session_local
+            "beta_block", message.from_user.id
         ),
         reply_markup=await analysis_type_keyboard(message.from_user.id),
     )
@@ -122,7 +122,7 @@ async def analysis_type_chosen(message: types.Message, state: FSMContext):
     if analysis_type in LIST_OF_TEXT_FOR_REBALANCING_BLOCK:
         await message.answer(
             await phrase_by_user(
-                "rebalancing_input_token", message.from_user.id, session_local
+                "rebalancing_input_token", message.from_user.id
             )
         )
         await state.set_state(CalculateProject.waiting_for_basic_data)
@@ -130,7 +130,7 @@ async def analysis_type_chosen(message: types.Message, state: FSMContext):
     elif analysis_type in LIST_OF_TEXT_FOR_ANALYSIS_BLOCK:
         await message.answer(
             await phrase_by_user(
-                "analysis_input_token", message.from_user.id, session_local
+                "analysis_input_token", message.from_user.id
             )
         )
         await state.set_state(CalculateProject.waiting_for_data)
@@ -156,7 +156,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     else:
         await message.answer(
             await phrase_by_user(
-                "wait_for_calculations", message.from_user.id, session_local
+                "wait_for_calculations", message.from_user.id
             )
         )
 
@@ -173,8 +173,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         await message.answer(
             await phrase_by_user(
                 "error_project_inappropriate_category",
-                message.from_user.id,
-                session_local,
+                message.from_user.id
             )
         )
 
@@ -189,8 +188,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         return await message.answer(
             await phrase_by_user(
                 "category_in_garbage_list",
-                message.from_user.id,
-                session_local,
+                message.from_user.id
             )
         )
 
@@ -221,8 +219,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                 return await message.answer(
                     await phrase_by_user(
                         "error_input_token_from_user",
-                        message.from_user.id,
-                        session_local,
+                        message.from_user.id
                     )
                 )
 
@@ -448,7 +445,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         # Сообщаем пользователю, что будут производиться расчеты
         await message.answer(
             await phrase_by_user(
-                "wait_for_calculations", message.from_user.id, session_local
+                "wait_for_calculations", message.from_user.id
             )
         )
 
@@ -465,8 +462,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         return await message.answer(
             await phrase_by_user(
                 "error_project_inappropriate_category",
-                message.from_user.id,
-                session_local,
+                message.from_user.id
             )
         )
 
@@ -481,8 +477,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         return await message.answer(
             await phrase_by_user(
                 "category_in_garbage_list",
-                message.from_user.id,
-                session_local,
+                message.from_user.id
             )
         )
 
@@ -543,8 +538,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                     return await message.answer(
                         await phrase_by_user(
                             "error_input_token_from_user",
-                            message.from_user.id,
-                            session_local,
+                            message.from_user.id
                         )
                     )
 
@@ -679,7 +673,7 @@ async def receive_data(message: types.Message, state: FSMContext):
 
     await state.update_data(**data)
     result = await create_pdf_report(
-        session_local, state, message=message, user_id=message.from_user.id
+        state, message=message, user_id=message.from_user.id
     )
 
     if isinstance(result, tuple):
@@ -694,8 +688,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         await message.answer(
             await phrase_by_user(
                 "input_next_token_for_analysis",
-                message.from_user.id,
-                session_local,
+                message.from_user.id
             ),
             reply_markup=ReplyKeyboardRemove(),
         )

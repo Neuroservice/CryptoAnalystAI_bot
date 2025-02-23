@@ -82,7 +82,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
         for project_type in PROJECT_TYPES:
             # Получение топовых проектов
             symbols = await get_top_projects_by_capitalization(
-                async_session, project_type, TICKERS
+                project_type=project_type, tickers=TICKERS
             )
 
             if not symbols:
@@ -243,7 +243,6 @@ async def fetch_crypto_data(async_session: AsyncSession):
         return {"status": "Error", "message": str(e)}
 
 
-@save_execute
 async def update_agent_answers():
     """
     Функция обновления ответов агентов по каждому токену:

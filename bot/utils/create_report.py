@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.database.db_operations import get_one, get_user_from_redis_or_db
+from bot.database.db_operations import get_one, get_user_from_redis_or_db, update_or_create
 from bot.database.models import Calculation, AgentAnswer
 from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.consts import (
@@ -57,9 +57,7 @@ from bot.utils.validations import (
 )
 
 
-@save_execute
 async def create_basic_report(
-    session: AsyncSession,
     state: FSMContext,
     message: Message = None,
     user_id: Optional[int] = None,
@@ -190,7 +188,7 @@ async def create_basic_report(
 
     except ValueProcessingError as e:
         error_message = f"{e}\n{traceback.format_exc()}"
-        return f"{await phrase_by_user('error_not_valid_input_data', user_id, session)}\n{error_message}"
+        return f"{await phrase_by_user('error_not_valid_input_data', user_id)}\n{error_message}"
 
 
 @save_execute
@@ -354,9 +352,9 @@ async def create_pdf_report(
             "funds_agent", topic=all_data_string_for_funds_agent
         )
 
-        capitalization = (
-            float(tokenomics_data.capitalization)
-            if tokenomics_data and tokenomics_data.capitalization
+        fdv = (
+            float(tokenomics_data.fdv)
+            if tokenomics_data and tokenomics_data.fdv
             else (phrase_by_language("no_data", language))
         )
         fundraising_amount = (
@@ -366,11 +364,11 @@ async def create_pdf_report(
         )
         investors_percent = float(funds_agent_answer.strip("%")) / 100
 
-        if isinstance(capitalization, float) and isinstance(
+        if isinstance(fdv, float) and isinstance(
             fundraising_amount, float
         ):
             result_ratio = (
-                capitalization * investors_percent
+                fdv * investors_percent
             ) / fundraising_amount
             final_score = f"{result_ratio:.2%}"
         else:
@@ -543,7 +541,6 @@ async def create_pdf_report(
             top_and_bottom_answer = await phrase_by_user(
                 "top_bottom_values",
                 message.from_user.id,
-                session_local,
                 current_value=round(basic_metrics.market_price, 4),
                 min_value=phrase_by_language("no_data", language),
                 max_value=phrase_by_language("no_data", language),
@@ -557,7 +554,6 @@ async def create_pdf_report(
                 top_and_bottom_answer = await phrase_by_user(
                     "top_bottom_values",
                     message.from_user.id,
-                    session_local,
                     current_value=round(basic_metrics.market_price, 4),
                     min_value=round(top_and_bottom.lower_threshold, 4),
                     max_value=round(top_and_bottom.upper_threshold, 4),
@@ -566,7 +562,6 @@ async def create_pdf_report(
             profit_text = await phrase_by_user(
                 "investor_profit_text",
                 message.from_user.id,
-                session_local,
                 fdv=f"{fdv:,.2f}"
                 if isinstance(fdv, float)
                 else fdv,
@@ -664,7 +659,6 @@ async def create_pdf_report(
             project_evaluation = await phrase_by_user(
                 "project_rating_details",
                 user_id,
-                session_local,
                 fundraising_score=round(fundraising_score, 2),
                 tier=investors_level,
                 tier_score=investors_level_score,
@@ -734,18 +728,17 @@ async def create_pdf_report(
                 existing_calculation, language, flags_answer
             )
 
-        if not existing_answer or (
-            existing_answer and not existing_answer.answer
-        ):
-            new_answer = AgentAnswer(
-                project_id=project.id, answer=extracted_text, language=language
-            )
-            session.add(new_answer)
+        await update_or_create(
+            model=AgentAnswer,
+            project_id=project.id,
+            defaults={"answer": extracted_text, "language": language},
+        )
 
-        existing_calculation.agent_answer = extracted_text
-        session.add(existing_calculation)
-
-        await session.commit()
+        await update_or_create(
+            model=Calculation,
+            id=existing_calculation.id,
+            defaults={"agent_answer": extracted_text},
+        )
         await state.set_state(CalculateProject.waiting_for_data)
 
         return (
@@ -762,4 +755,4 @@ async def create_pdf_report(
         error_message = str(processing_error)
         logging.error(f"ValueProcessingError: {error_message}")
 
-        return f"{await phrase_by_user('error_not_valid_input_data', message.from_user.id, session_local)}\n{error_message}"
+        return f"{await phrase_by_user('error_not_valid_input_data', message.from_user.id)}\n{error_message}"

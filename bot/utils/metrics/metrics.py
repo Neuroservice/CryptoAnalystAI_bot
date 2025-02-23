@@ -19,7 +19,6 @@ from bot.database.models import (
 )
 
 
-@save_execute
 async def update_project(
     user_coin_name: str,
     categories: list,
@@ -51,7 +50,6 @@ async def update_project(
         return await get_one(Project, coin_name=user_coin_name)
 
 
-@save_execute
 async def update_social_metrics(
     project_id: int,
     social_metrics: dict[int]
@@ -72,7 +70,6 @@ async def update_social_metrics(
         )
 
 
-@save_execute
 async def update_investing_metrics(
     project_id: int,
     investing_metrics: dict[int],
@@ -99,7 +96,6 @@ async def update_investing_metrics(
             )
 
 
-@save_execute
 async def update_network_metrics(
     project_id: int,
     network_metrics: dict[int],
@@ -125,7 +121,6 @@ async def update_network_metrics(
             )
 
 
-@save_execute
 async def update_manipulative_metrics(
     project_id: int,
     manipulative_metrics: dict[int],
@@ -151,7 +146,6 @@ async def update_manipulative_metrics(
         )
 
 
-@save_execute
 async def update_funds_profit(
     project_id: int,
     funds_profit_data: dict
@@ -173,7 +167,6 @@ async def update_funds_profit(
         )
 
 
-@save_execute
 async def update_market_metrics(
     project_id: int,
     market_metrics: dict
@@ -207,7 +200,6 @@ async def update_market_metrics(
         raise ExceptionError(str(e))
 
 
-@save_execute
 async def process_metrics(
     user_coin_name: str,
     project: "Project",

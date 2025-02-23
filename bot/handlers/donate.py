@@ -22,7 +22,7 @@ async def donate_command(message: types.Message):
     """
 
     await message.answer(
-        await phrase_by_user("donate", message.from_user.id, session_local)
+        await phrase_by_user("donate", message.from_user.id)
         + f"<code>{WALLET_ADDRESS}</code>",
         parse_mode="HTML",
     )

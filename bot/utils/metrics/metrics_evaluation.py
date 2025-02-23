@@ -159,8 +159,9 @@ def analyze_project_metrics(
     growth_and_fall_result = ""
     detailed_report = ""
 
-    final_score = None
-    if type(final_score) is float:
+    print("final_score: ", final_score)
+
+    if type(final_score) is not float:
         final_score = float(final_score[:-1])
 
     if final_score and type(final_score) is float:
@@ -345,7 +346,7 @@ def calculate_project_score(
         twitter_score * TWITTER_SCORE_MULTIPLIER, 2
     )
 
-    preliminary_score = (
+    preliminary_score = (round(
         fundraising_score
         + investors_level_score
         + followers_score
@@ -354,8 +355,8 @@ def calculate_project_score(
         + tvl
         + top_100_wallet
         + growth_and_fall_score
-        + profitability_score
-    )
+        + profitability_score, 2
+    ))
 
     calculations_summary = CALCULATIONS_SUMMARY_STR.format(
         fundraising_score=fundraising_score,

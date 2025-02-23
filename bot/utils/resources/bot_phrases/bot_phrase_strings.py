@@ -87,7 +87,7 @@ phrase_dict = {
 Также вы можете сменить язык бота, используя команду '/language'.\n
 """,
         "investor_profit_text": (
-            "($ {fdv} (Полная капитализация проекта) * {investors_percent} "
+            "($ {fdv} (FDV) * {investors_percent} "
             "(Investors)) / $ {fundraising_amount} (Сумма сбора средств от инвесторов (Fundraising))"
             "= {result_ratio} == {final_score}"
         ),
@@ -179,7 +179,7 @@ Project evaluation system: (in development)\n\n\n
 You can also change the bot's language by using the '/language' command.\n
 """,
         "investor_profit_text": (
-            "($ {fdv} (Fully diluted valuation) * {investors_percent} "
+            "($ {fdv} (FDV) * {investors_percent} "
             "(Investors)) / $ {fundraising_amount} (Total fundraising amount)"
             "= {result_ratio} == {final_score}"
         ),

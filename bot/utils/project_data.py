@@ -89,7 +89,6 @@ def get_crypto_key(symbol: str) -> str:
             return data["data"][0]["key"]
 
 
-@save_execute
 async def get_user_project_info(user_coin_name: str):
     """
     Получает информацию о проекте и связанных метриках по имени монеты пользователя.
@@ -137,10 +136,7 @@ async def get_user_project_info(user_coin_name: str):
         raise ExceptionError(str(e))
 
 
-@save_execute
-async def get_project_and_tokenomics(
-    project_names: list, user_coin_name: str
-):
+async def get_project_and_tokenomics(project_names: list, user_coin_name: str):
     """
     Получает информацию о проекте и связанных метриках по категории и токену пользователя.
     """
@@ -1012,7 +1008,6 @@ async def fetch_top_100_wallets(coin_name: str):
         raise ExceptionError(str(e))
 
 
-@save_execute
 async def fetch_fundraise_data(user_coin_name: str):
     """
     Получение данных о фандрейзе токена.
@@ -1145,9 +1140,7 @@ def get_top_projects_by_capitalization_and_category(
     return top_projects
 
 
-@save_execute
 async def get_top_projects_by_capitalization(
-    session: AsyncSession,
     project_type: str,
     tickers: list,
     top_n_tickers: int = 5,

@@ -20,7 +20,7 @@ async def handle_analysis_command(message: types.Message, state: FSMContext):
 
     await message.answer(
         await phrase_by_user(
-            "analysis_block_choose", message.from_user.id, session_local
+            "analysis_block_choose", message.from_user.id
         ),
         reply_markup=await analysis_type_keyboard(message.from_user.id),
     )
