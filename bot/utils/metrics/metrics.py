@@ -169,7 +169,8 @@ async def update_funds_profit(
 
 async def update_market_metrics(
     project_id: int,
-    market_metrics: dict
+    market_metrics: dict,
+    top_and_bottom: dict
 ):
     """
     Обновляет информацию о рыночных метриках проекта
@@ -177,8 +178,9 @@ async def update_market_metrics(
 
     try:
         if market_metrics:
-            fail_high, growth_low, max_price, min_price = market_metrics[0]
-            if all([fail_high, growth_low, max_price, min_price]):
+            fail_high, growth_low = market_metrics[0]
+            max_price, min_price = top_and_bottom[0]
+            if fail_high and growth_low:
                 await update_or_create(
                     MarketMetrics,
                     project_id=project_id,
@@ -187,6 +189,7 @@ async def update_market_metrics(
                         "growth_low": growth_low,
                     },
                 )
+            if max_price and min_price:
                 await update_or_create(
                     TopAndBottom,
                     project_id=project_id,
@@ -266,9 +269,10 @@ async def process_metrics(
 
     # Обновление рыночных метрик, проверка на None
     market_metrics = results.get("market_metrics")
+    top_and_bottom = results.get("top_and_bottom")
     # Проверка на None и наличие значений
     if market_metrics and all(metric is not None for metric in market_metrics):
-        await update_market_metrics(new_project.id, market_metrics)
+        await update_market_metrics(new_project.id, market_metrics, top_and_bottom)
     else:
         logging.warning("Неверные данные для рыночных метрик или отсутствуют значения.")
 

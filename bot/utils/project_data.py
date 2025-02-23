@@ -275,7 +275,7 @@ async def get_twitter(name: str):
         if type(name) is str:
             coin_name = name
         else:
-            coin_name, about, lower_name = name
+            coin_name, about, lower_name, categories = name
 
         await page.route(
             "**/*",
@@ -295,10 +295,11 @@ async def get_twitter(name: str):
             return None
 
         try:
-            await page.wait_for_selector(SELECTOR_TWITTERSCORE, timeout=15000)
+            await page.wait_for_selector(SELECTOR_TWITTERSCORE, timeout=25000)
             twitter = await page.locator(
                 SELECTOR_TWITTERSCORE
             ).first.inner_text()
+            print("twitter: ", twitter)
         except:
             twitter = None
 
@@ -797,7 +798,6 @@ async def fetch_coinmarketcap_data(
     except Exception as e:
         logging.error(f"Общая ошибка: {e}")
         raise ExceptionError(str(e))
-
 
 
 def fetch_binance_data(symbol: str):

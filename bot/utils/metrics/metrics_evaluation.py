@@ -161,7 +161,7 @@ def analyze_project_metrics(
 
     print("final_score: ", final_score)
 
-    if type(final_score) is not float:
+    if type(final_score) is not float and final_score != "Нет данных":
         final_score = float(final_score[:-1])
 
     if final_score and type(final_score) is float:
