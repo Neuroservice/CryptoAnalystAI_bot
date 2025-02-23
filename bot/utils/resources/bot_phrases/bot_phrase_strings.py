@@ -87,7 +87,7 @@ phrase_dict = {
 Также вы можете сменить язык бота, используя команду '/language'.\n
 """,
         "investor_profit_text": (
-            "($ {capitalization} (Капитализация проекта) * {investors_percent} "
+            "($ {fdv} (Полная капитализация проекта) * {investors_percent} "
             "(Investors)) / $ {fundraising_amount} (Сумма сбора средств от инвесторов (Fundraising))"
             "= {result_ratio} == {final_score}"
         ),
@@ -101,7 +101,6 @@ Twitter Score = {twitter_engagement_score}
 Рост с минимальных значений и падение с максимальных значений = {preliminary_score}
 Процент нахождения токенов на топ 100 кошельков блокчейна = {top_100_percent}
 Процент общих заблокированных активов (TVL) = {tvl_percent}
-Понижающий коэффициент: {tier_coefficient}
 """,
     },
     "ENG": {
@@ -180,7 +179,7 @@ Project evaluation system: (in development)\n\n\n
 You can also change the bot's language by using the '/language' command.\n
 """,
         "investor_profit_text": (
-            "($ {capitalization} (Project capitalization) * {investors_percent} "
+            "($ {fdv} (Fully diluted valuation) * {investors_percent} "
             "(Investors)) / $ {fundraising_amount} (Total fundraising amount)"
             "= {result_ratio} == {final_score}"
         ),
@@ -194,7 +193,6 @@ Investor profitability = {profitability_score}
 Growth from minimum values and decline from maximum values = {preliminary_score}
 Percentage of tokens on the top 100 blockchain wallets = {top_100_percent}
 Percentage of total blocked assets (TVL) = {tvl_percent}
-Decreasing coefficient: {tier_coefficient}
 """,
     },
 }

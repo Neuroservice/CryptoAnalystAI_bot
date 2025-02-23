@@ -594,9 +594,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     )
 
     if tasks.get("social_metrics", []):
-        (twitter_subs, twitter_twitterscore) = tasks.get("social_metrics", [])[
-            0
-        ]
+        (twitter_subs, twitter_twitterscore) = tasks.get("social_metrics", [])[0]
         twitter = twitter_subs
         twitterscore = twitter_twitterscore
         if twitter and twitterscore:

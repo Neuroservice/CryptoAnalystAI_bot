@@ -356,7 +356,7 @@ async def update_agent_answers():
                 )
 
         tier_answer = determine_project_tier(
-            capitalization=get_metric_value(tokenomics_data, "capitalization"),
+            capitalization=get_metric_value(tokenomics_data, "fdv"),
             fundraising=get_metric_value(investing_metrics, "fundraise"),
             twitter_followers=get_metric_value(social_metrics, "twitter"),
             twitter_score=get_metric_value(social_metrics, "twitterscore"),
@@ -391,9 +391,9 @@ async def update_agent_answers():
             "funds_agent", topic=all_data_string_for_funds_agent
         )
 
-        capitalization = (
-            float(tokenomics_data.capitalization)
-            if tokenomics_data and tokenomics_data.capitalization
+        fdv = (
+            float(tokenomics_data.fdv)
+            if tokenomics_data and tokenomics_data.fdv
             else (phrase_by_language("no_data", language))
         )
         fundraising_amount = (
@@ -405,11 +405,11 @@ async def update_agent_answers():
         funds_agent_answer = await funds_agent_answer
         investors_percent = float(funds_agent_answer.strip("%")) / 100
 
-        if isinstance(capitalization, float) and isinstance(
+        if isinstance(fdv, float) and isinstance(
             fundraising_amount, float
         ):
             result_ratio = (
-                capitalization * investors_percent
+                fdv * investors_percent
             ) / fundraising_amount
             final_score = f"{result_ratio:.2%}"
         else:
@@ -483,12 +483,9 @@ async def update_agent_answers():
         project_rating_answer = project_rating_result["calculations_summary"]
         fundraising_score = project_rating_result["fundraising_score"]
         followers_score = project_rating_result["followers_score"]
-        twitter_engagement_score = project_rating_result[
-            "twitter_engagement_score"
-        ]
+        twitter_engagement_score = project_rating_result["twitter_engagement_score"]
+        overal_final_score = project_rating_result["preliminary_score"]
         tokenomics_score = project_rating_result["tokenomics_score"]
-        tier_coefficient = project_rating_result["tier_coefficient"]
-        overal_final_score = project_rating_result["final_score"]
         project_rating_text = project_rating_result["project_rating"]
 
         all_data_string_for_flags_agent = ALL_DATA_STRING_FLAGS_AGENT.format(
@@ -557,9 +554,9 @@ async def update_agent_answers():
         profit_text = phrase_by_language(
             "investor_profit_text",
             language=language,
-            capitalization=f"{capitalization:,.2f}"
-            if isinstance(capitalization, float)
-            else capitalization,
+            fdv=f"{fdv:,.2f}"
+            if isinstance(fdv, float)
+            else fdv,
             investors_percent=f"{investors_percent:.0%}"
             if isinstance(investors_percent, float)
             else investors_percent,
@@ -668,7 +665,6 @@ async def update_agent_answers():
             )
             if network_metrics.tvl and tokenomics_data.total_supply
             else 0,
-            tier_coefficient=tier_coefficient,
         )
 
         pdf_output, extracted_text = await generate_pdf(

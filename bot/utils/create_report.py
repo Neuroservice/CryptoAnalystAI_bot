@@ -420,8 +420,8 @@ async def create_pdf_report(
             investors_level_score = 0
 
         tier_answer = determine_project_tier(
-            capitalization=tokenomics_data.capitalization
-            if tokenomics_data and tokenomics_data.capitalization
+            capitalization=tokenomics_data.fdv
+            if tokenomics_data and tokenomics_data.fdv
             else "N/A",
             fundraising=investing_metrics.fundraise
             if investing_metrics and investing_metrics.fundraise
@@ -490,17 +490,12 @@ async def create_pdf_report(
                 language,
             )
 
-            project_rating_answer = project_rating_result[
-                "calculations_summary"
-            ]
+            project_rating_answer = project_rating_result["calculations_summary"]
             fundraising_score = project_rating_result["fundraising_score"]
             followers_score = project_rating_result["followers_score"]
-            twitter_engagement_score = project_rating_result[
-                "twitter_engagement_score"
-            ]
+            twitter_engagement_score = project_rating_result["twitter_engagement_score"]
             tokenomics_score = project_rating_result["tokenomics_score"]
-            tier_coefficient = project_rating_result["tier_coefficient"]
-            overal_final_score = project_rating_result["final_score"]
+            overal_final_score = project_rating_result["preliminary_score"]
             project_rating_text = project_rating_result["project_rating"]
 
             all_data_string_for_flags_agent = (
@@ -572,9 +567,9 @@ async def create_pdf_report(
                 "investor_profit_text",
                 message.from_user.id,
                 session_local,
-                capitalization=f"{capitalization:,.2f}"
-                if isinstance(capitalization, float)
-                else capitalization,
+                fdv=f"{fdv:,.2f}"
+                if isinstance(fdv, float)
+                else fdv,
                 investors_percent=f"{investors_percent:.0%}"
                 if isinstance(investors_percent, float)
                 else investors_percent,
@@ -693,7 +688,6 @@ async def create_pdf_report(
                 and tokenomics_data.total_supply
                 and tokenomics_data.capitalization
                 else 0,
-                tier_coefficient=tier_coefficient,
             )
 
             pdf_output, extracted_text = await generate_pdf(
