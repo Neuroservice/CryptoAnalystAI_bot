@@ -493,14 +493,9 @@ async def receive_data(message: types.Message, state: FSMContext):
             coinmarketcap_data = await fetch_coinmarketcap_data(
                 message, user_coin_name, **header_params
             )
-            print("coinmarketcap_data: ", coinmarketcap_data)
             if coinmarketcap_data:
-                circulating_supply = coinmarketcap_data["circulating_supply"]
-                total_supply = coinmarketcap_data["total_supply"]
-                price = coinmarketcap_data["price"]
-                capitalization = coinmarketcap_data["capitalization"]
-                coin_fdv = coinmarketcap_data["coin_fdv"]
-
+                print("coinmarketcap_data: ", coinmarketcap_data)
+                data_source = coinmarketcap_data
             else:
                 coin_data = await fetch_coingecko_data(user_coin_name)
                 print("coingecko_data: ", coin_data)
@@ -513,27 +508,38 @@ async def receive_data(message: types.Message, state: FSMContext):
                         )
                     )
 
-                circulating_supply = coin_data["circulating_supply"]
-                total_supply = coin_data["total_supply"]
-                price = coin_data["price"]
-                capitalization = coin_data["capitalization"]
-                coin_fdv = coin_data["coin_fdv"]
+                data_source = coin_data
+
+            total_supply = data_source.get("total_supply")
+            circulating_supply = data_source.get("circulating_supply")
+            capitalization = data_source.get("capitalization")
+            fdv = data_source.get("coin_fdv")
+            price = data_source.get("price")
+
+            tokenomics_data = {
+                "capitalization": capitalization,
+                "total_supply": total_supply,
+                "circ_supply": circulating_supply,
+                "fdv": fdv,
+            }
+            tokenomics_data = {key: value for key, value in tokenomics_data.items() if value is not None}
 
             await update_or_create(
                 Tokenomics,
                 project_id=base_project.id,
-                defaults={
-                    "capitalization": capitalization,
-                    "total_supply": total_supply,
-                    "circ_supply": circulating_supply,
-                    "fdv": coin_fdv,
-                },
+                defaults=tokenomics_data,
             )
+
+            basic_metrics_data = {
+                "entry_price": price,
+                "market_price": price,
+            }
+            basic_metrics_data = {key: value for key, value in basic_metrics_data.items() if value is not None}
 
             await update_or_create(
                 BasicMetrics,
                 project_id=base_project.id,
-                defaults={"entry_price": price, "market_price": price},
+                defaults=basic_metrics_data,
             )
 
         else:

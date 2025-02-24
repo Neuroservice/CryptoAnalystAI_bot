@@ -746,11 +746,11 @@ async def fetch_coinmarketcap_data(
             coin_fdv = total_supply * price if price and price > 0 else None
 
             result = {
-                "circulating_supply": circulating_supply if circulating_supply not in (None, 0) else None,
-                "total_supply": total_supply if total_supply not in (None, 0) else None,
-                "price": price if price not in (None, 0) else None,
-                "capitalization": market_cap if market_cap not in (None, 0) else None,
-                "coin_fdv": coin_fdv if coin_fdv not in (None, 0) else None,
+                "circulating_supply": circulating_supply if circulating_supply else None,
+                "total_supply": total_supply if total_supply else None,
+                "price": price if price else None,
+                "capitalization": market_cap if market_cap else None,
+                "coin_fdv": coin_fdv if coin_fdv else None,
             }
 
             # Удаляем ключи, у которых значение None
