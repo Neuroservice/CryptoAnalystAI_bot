@@ -80,7 +80,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
         for project_type in PROJECT_TYPES:
             # Получение топовых проектов
             symbols = await get_top_projects_by_capitalization(
-                async_session, project_type, TICKERS
+                project_type, TICKERS
             )
 
             if not symbols:
@@ -206,7 +206,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
                             lower_name,
                         ) = await get_twitter_link_by_symbol(symbol)
                         tokenomics_percentage_data = await get_percentage_data(
-                            async_session, twitter_link, symbol
+                            twitter_link, symbol
                         )
                         output_string = (
                             "\n".join(tokenomics_percentage_data)
@@ -224,10 +224,8 @@ async def fetch_crypto_data(async_session: AsyncSession):
 
                 except Exception as error:
                     logging.error(f"Error processing {symbol}: {error}")
-                    await async_session.rollback()  # Откат транзакции при ошибке
-                    raise ExceptionError(
-                        f"Error processing symbol {symbol}: {str(error)}"
-                    ) from error
+                    logging.exception(error)
+                    continue
 
         return {"status": "Data fetching completed"}
     except Exception as e:
@@ -289,6 +287,7 @@ async def update_agent_answers(async_session: AsyncSession):
 
         project_info = await get_user_project_info(project.coin_name)
         twitter_link = await get_twitter_link_by_symbol(project.coin_name)
+
         tokenomics_data = project_info.get("tokenomics_data")
         basic_metrics = project_info.get("basic_metrics")
         investing_metrics = project_info.get("investing_metrics")
@@ -299,7 +298,7 @@ async def update_agent_answers(async_session: AsyncSession):
         manipulative_metrics = project_info.get("manipulative_metrics")
         network_metrics = project_info.get("network_metrics")
         _, tokenomics_data_list = await get_project_and_tokenomics(
-            async_session, project.category, project.coin_name
+            project.category, project.coin_name
         )
 
         top_projects = sorted(
@@ -597,7 +596,7 @@ async def update_agent_answers(async_session: AsyncSession):
             ),
             format_metric(
                 "twitter_followers",
-                f"{get_metric_value(social_metrics, 'twitter')} ({twitter_link[0]})"
+                f"{get_metric_value(social_metrics, 'twitter')} ({twitter_name if type(twitter_name) != list else twitter_name[0]})"
                 if get_metric_value(social_metrics, "twitter")
                 else None,
                 language,
