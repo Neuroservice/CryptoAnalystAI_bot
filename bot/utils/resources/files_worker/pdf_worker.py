@@ -105,7 +105,9 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.cell(0, 6, phrase_by_language("project_description", language), 0, 1, "L")
+    pdf.cell(
+        0, 6, phrase_by_language("project_description", language), 0, 1, "L"
+    )
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
     pdf.multi_cell(0, 6, token_description, 0)
@@ -138,7 +140,9 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.multi_cell(0, 6, phrase_by_language("funds_profit_scores", language), 0)
+    pdf.multi_cell(
+        0, 6, phrase_by_language("funds_profit_scores", language), 0
+    )
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
     pdf.multi_cell(0, 6, profit_text, 0)

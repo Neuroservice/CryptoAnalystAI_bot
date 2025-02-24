@@ -226,9 +226,7 @@ async def create_pdf_report(
     )
 
     try:
-        result = await get_project_and_tokenomics(
-            chosen_project, coin_name
-        )
+        result = await get_project_and_tokenomics(chosen_project, coin_name)
 
         if not isinstance(result, tuple) or len(result) != 2:
             raise ValueProcessingError(

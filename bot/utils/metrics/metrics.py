@@ -43,9 +43,7 @@ async def update_project(
 
 @save_execute
 async def update_social_metrics(
-    session: AsyncSession,
-    project_id: int,
-    social_metrics: dict[int]
+    session: AsyncSession, project_id: int, social_metrics: dict[int]
 ):
     """
     Обновляет информацию о социальных метриках проекта.
@@ -146,7 +144,9 @@ async def update_manipulative_metrics(
 
 
 @save_execute
-async def update_funds_profit(session: AsyncSession, project_id: int, funds_profit_data: dict):
+async def update_funds_profit(
+    session: AsyncSession, project_id: int, funds_profit_data: dict
+):
     """
     Обновляет информацию о распределении токенов проекта.
     """
@@ -165,7 +165,12 @@ async def update_funds_profit(session: AsyncSession, project_id: int, funds_prof
 
 
 @save_execute
-async def update_market_metrics(session: AsyncSession, project_id: int, market_metrics: dict, top_and_bottom: dict):
+async def update_market_metrics(
+    session: AsyncSession,
+    project_id: int,
+    market_metrics: dict,
+    top_and_bottom: dict,
+):
     """
     Обновляет информацию о рыночных метриках проекта
     """
@@ -214,9 +219,7 @@ async def process_metrics(
     """
 
     # Обновление или создание проекта
-    new_project = await update_project(
-        user_coin_name, chosen_project, project
-    )
+    new_project = await update_project(user_coin_name, chosen_project, project)
 
     # Обновление или создание базовых метрик
     await update_or_create(
@@ -268,9 +271,18 @@ async def process_metrics(
     market_metrics = results.get("market_metrics")
     top_and_bottom = results.get("top_and_bottom")
     # Проверка на None и наличие значений
-    if market_metrics and top_and_bottom and all(metric is not None for metric in market_metrics) and all(metric is not None for metric in top_and_bottom):
-        await update_market_metrics(new_project.id, market_metrics, top_and_bottom)
+    if (
+        market_metrics
+        and top_and_bottom
+        and all(metric is not None for metric in market_metrics)
+        and all(metric is not None for metric in top_and_bottom)
+    ):
+        await update_market_metrics(
+            new_project.id, market_metrics, top_and_bottom
+        )
     else:
-        logging.warning("Неверные данные для рыночных метрик или отсутствуют значения.")
+        logging.warning(
+            "Неверные данные для рыночных метрик или отсутствуют значения."
+        )
 
     return new_project

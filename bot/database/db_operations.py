@@ -16,7 +16,9 @@ from bot.utils.resources.exceptions.exceptions import (
 
 
 @save_execute
-async def get_one(session: AsyncSession, model: Type[Any], **filters) -> Optional[Any]:
+async def get_one(
+    session: AsyncSession, model: Type[Any], **filters
+) -> Optional[Any]:
     """
     Получить одну запись из базы данных.
     """
@@ -35,7 +37,7 @@ async def get_all(
     join_model: Optional[Type[Any]] = None,
     order_by=None,
     limit=None,
-    **filters
+    **filters,
 ) -> list[Any]:
     """
     Получить все записи из базы данных с возможностью сортировки, ограничения количества и объединения таблиц.
@@ -60,9 +62,13 @@ async def get_all(
         # Добавляем фильтры
         for key, value in filters.items():
             if callable(value):
-                query = query.filter(value(getattr(model, key)))  # Если передана функция (например, col.in_([...]))
+                query = query.filter(
+                    value(getattr(model, key))
+                )  # Если передана функция (например, col.in_([...]))
             else:
-                query = query.filter(getattr(model, key) == value)  # Обычное сравнение
+                query = query.filter(
+                    getattr(model, key) == value
+                )  # Обычное сравнение
 
         # Добавляем сортировку, если передана
         if order_by is not None:
@@ -102,7 +108,7 @@ async def get_or_create(
     session: AsyncSession,
     model: Type[Any],
     defaults: Optional[dict] = None,
-    **filters
+    **filters,
 ) -> Tuple[Any, bool]:
     """
     Получить запись по фильтрам или создать (если не найдена).
@@ -123,7 +129,9 @@ async def get_or_create(
 
 
 @save_execute
-async def get_user_from_redis_or_db(session: AsyncSession, user_id: int) -> Optional[Dict[str, str]]:
+async def get_user_from_redis_or_db(
+    session: AsyncSession, user_id: int
+) -> Optional[Dict[str, str]]:
     """
     Сначала пытается получить данные из Redis.
     Если их нет, получает или создаёт пользователя в БД,
