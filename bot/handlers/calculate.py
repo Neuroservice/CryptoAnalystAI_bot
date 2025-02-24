@@ -10,7 +10,7 @@ from bot.database.db_operations import (
     update_or_create,
     get_or_create,
     get_user_from_redis_or_db,
-    create
+    create,
 )
 from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.consts import (
@@ -522,7 +522,11 @@ async def receive_data(message: types.Message, state: FSMContext):
                 "circ_supply": circulating_supply,
                 "fdv": fdv,
             }
-            tokenomics_data = {key: value for key, value in tokenomics_data.items() if value is not None}
+            tokenomics_data = {
+                key: value
+                for key, value in tokenomics_data.items()
+                if value is not None
+            }
 
             await update_or_create(
                 Tokenomics,
@@ -534,7 +538,11 @@ async def receive_data(message: types.Message, state: FSMContext):
                 "entry_price": price,
                 "market_price": price,
             }
-            basic_metrics_data = {key: value for key, value in basic_metrics_data.items() if value is not None}
+            basic_metrics_data = {
+                key: value
+                for key, value in basic_metrics_data.items()
+                if value is not None
+            }
 
             await update_or_create(
                 BasicMetrics,

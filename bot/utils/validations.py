@@ -94,7 +94,9 @@ def extract_description(topic: str, language: str) -> str:
     Функция для извлечения описания проекта.
     """
 
-    match = re.search(PROJECT_DESCRIPTION_PATTERN, topic, re.DOTALL | re.IGNORECASE)
+    match = re.search(
+        PROJECT_DESCRIPTION_PATTERN, topic, re.DOTALL | re.IGNORECASE
+    )
     return (
         match.group(1)
         if match

@@ -16,4 +16,5 @@ def save_execute(f: Any):
             async with session.begin():
                 result = await f(session, *args, **kwargs)
                 return result
+
     return wrapper

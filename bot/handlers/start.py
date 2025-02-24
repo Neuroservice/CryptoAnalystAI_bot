@@ -25,7 +25,7 @@ async def start_command(message: types.Message, state: FSMContext):
     user, created = await get_or_create(
         User,
         defaults={"telegram_id": user_id, "language": "ENG"},
-        telegram_id=user_id
+        telegram_id=user_id,
     )
 
     if user:
