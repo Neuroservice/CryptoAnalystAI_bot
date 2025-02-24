@@ -444,7 +444,7 @@ PROJECT_ANALYSIS = (
 
 
 # Константы для оценки метрик
-TIER_RANK = {"TIER 1": 1, "TIER 2": 2, "TIER 3": 3, "TIER 4": 4}
+TIER_RANK = {"Tier: 1": 1, "Tier: 2": 2, "Tier: 3": 3, "Tier: 4": 4}
 TIER_RANK_LIST = ["Tier: 1", "Tier: 2", "Tier: 3", "Tier: 4", "Tier: 5"]
 TIER_CRITERIA = {
     "Tier 1": {
