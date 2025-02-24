@@ -10,6 +10,7 @@ from bot.database.db_operations import (
     update_or_create,
     get_or_create,
     get_user_from_redis_or_db,
+    create
 )
 from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.consts import (
@@ -267,7 +268,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
             twitter_name=twitter_name,
             user_coin_name=user_coin_name,
             lower_name=lower_name,
-            session=session_local,
             model_mapping=MODEL_MAPPING,
         )
 
@@ -562,7 +562,6 @@ async def receive_data(message: types.Message, state: FSMContext):
         twitter_name=twitter_name,
         user_coin_name=user_coin_name,
         lower_name=lower_name,
-        session=session_local,
         model_mapping=MODEL_MAPPING,
     )
 
@@ -624,7 +623,6 @@ async def receive_data(message: types.Message, state: FSMContext):
         )
 
     new_project = await process_metrics(
-        session_local,
         user_coin_name,
         base_project,
         chosen_project,
@@ -636,11 +634,11 @@ async def receive_data(message: types.Message, state: FSMContext):
     )
 
     if new_project:
-        calculation_record, created = await get_or_create(
+        calculation_record = await create(
             Calculation,
             user_id=message.from_user.id,
             project_id=new_project.id,
-            defaults={"date": datetime.now()},
+            date=datetime.now(),
         )
 
     data = {
@@ -658,7 +656,7 @@ async def receive_data(message: types.Message, state: FSMContext):
 
     await state.update_data(**data)
     result = await create_pdf_report(
-        session_local, state, message=message, user_id=message.from_user.id
+        state, message=message, user_id=message.from_user.id
     )
 
     if isinstance(result, tuple):

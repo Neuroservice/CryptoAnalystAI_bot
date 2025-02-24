@@ -45,8 +45,8 @@ class PDF(FPDF):
         draw.ellipse((0, 0, size, size), fill=255)
         circular_img = Image.new("RGBA", (size, size))
         circular_img.paste(img, (0, 0, size, size), mask)
-        # temp_path = "media/temp_footer_logo.png"
-        temp_path = "/app/bot/media/temp_footer_logo.png"
+        temp_path = "media/temp_footer_logo.png"
+        # temp_path = "/app/bot/media/temp_footer_logo.png"
         return temp_path
 
     def header(self):
@@ -105,9 +105,7 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.cell(
-        0, 6, phrase_by_language("project_description", language), 0, 1, "L"
-    )
+    pdf.cell(0, 6, phrase_by_language("project_description", language), 0, 1, "L")
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
     pdf.multi_cell(0, 6, token_description, 0)
@@ -140,9 +138,7 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.multi_cell(
-        0, 6, phrase_by_language("funds_profit_scores", language), 0
-    )
+    pdf.multi_cell(0, 6, phrase_by_language("funds_profit_scores", language), 0)
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
     pdf.multi_cell(0, 6, profit_text, 0)

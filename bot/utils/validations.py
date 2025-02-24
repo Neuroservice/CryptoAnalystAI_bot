@@ -94,11 +94,11 @@ def extract_description(topic: str, language: str) -> str:
     Функция для извлечения описания проекта.
     """
 
-    match = re.search(PROJECT_DESCRIPTION_PATTERN, topic, re.DOTALL)
+    match = re.search(PROJECT_DESCRIPTION_PATTERN, topic, re.DOTALL | re.IGNORECASE)
     return (
         match.group(1)
         if match
-        else phrase_by_language("no_green_flags", language)
+        else phrase_by_language("no_description", language)
     )
 
 

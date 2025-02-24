@@ -82,7 +82,7 @@ async def create_basic_report(
         basic_metrics = project_info.get("basic_metrics")
 
         projects, tokenomics_data_list = await get_project_and_tokenomics(
-            session_local, chosen_project, user_coin_name
+            chosen_project, user_coin_name
         )
         top_projects = get_top_projects_by_capitalization_and_category(
             tokenomics_data_list
@@ -227,7 +227,7 @@ async def create_pdf_report(
 
     try:
         result = await get_project_and_tokenomics(
-            session, chosen_project, coin_name
+            chosen_project, coin_name
         )
 
         if not isinstance(result, tuple) or len(result) != 2:
@@ -630,7 +630,7 @@ async def create_pdf_report(
                 ),
                 format_metric(
                     "twitter_followers",
-                    f"{get_metric_value(social_metrics, 'twitter')} ({twitter_name[0]})"
+                    f"{get_metric_value(social_metrics, 'twitter')} ({twitter_name if type(twitter_name) != list else twitter_name[0]})"
                     if get_metric_value(social_metrics, "twitter")
                     else None,
                     language,

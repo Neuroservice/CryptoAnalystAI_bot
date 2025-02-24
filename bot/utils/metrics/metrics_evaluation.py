@@ -93,13 +93,14 @@ def determine_project_tier(
             print(f"Metrics do not fit for {tier}, moving to the next tier.")
             continue
 
-        if "Tier: 1" in parsed_investors:
+        print("investor_counts:", investor_counts)
+        if investor_counts.get("Tier: 1", 0) > 0:
             return "Tier 1"
-        elif "Tier: 2" in investor_counts:
+        elif investor_counts.get("Tier: 2", 0) > 0:
             return "Tier 2"
-        elif "Tier: 3" in investor_counts:
+        elif investor_counts.get("Tier: 3", 0) > 0:
             return "Tier 3"
-        elif "Tier: 4" in investor_counts:
+        elif investor_counts.get("Tier: 4", 0) > 0:
             return "Tier 4"
 
     print("Project does not fit into any tier, assigning TIER 5.")
@@ -159,8 +160,7 @@ def analyze_project_metrics(
     growth_and_fall_result = ""
     detailed_report = ""
 
-    final_score = None
-    if type(final_score) is float:
+    if type(final_score) is not float and final_score != "Нет данных":
         final_score = float(final_score[:-1])
 
     if final_score and type(final_score) is float:
