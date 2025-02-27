@@ -10,6 +10,7 @@ def save_execute(f: Any):
     Декоратор для оборачивания функций, работающих с базой данных.
     Автоматически управляет сессией и передаёт её в функцию.
     """
+
     async def wrapper(*args, **kwargs):
         async with SessionLocal() as session:
             try:

@@ -10,7 +10,8 @@ from bot.utils.resources.gpt.gpt_promts import (
     user_prompt_for_tier_agent,
     user_prompt_for_funds_agent,
     user_prompt_for_project_rating_agent,
-    user_prompt_for_flags_agent, user_prompt_for_description_agent,
+    user_prompt_for_flags_agent,
+    user_prompt_for_description_agent,
 )
 from bot.utils.resources.gpt.titles_for_promts import (
     start_title_for_tier_agent,
@@ -20,7 +21,9 @@ from bot.utils.resources.gpt.titles_for_promts import (
     end_title_for_funds_agent,
     end_title_for_flags_agent,
     end_title_for_project_rating_agent,
-    start_title_for_project_rating_agent, end_title_for_description_agent, start_title_for_description_agent,
+    start_title_for_project_rating_agent,
+    end_title_for_description_agent,
+    start_title_for_description_agent,
 )
 
 

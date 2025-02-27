@@ -5,7 +5,12 @@ import traceback
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.database.db_operations import get_one, update_or_create, get_all, get_or_create
+from bot.database.db_operations import (
+    get_one,
+    update_or_create,
+    get_all,
+    get_or_create,
+)
 from bot.database.models import (
     Project,
     Tokenomics,
@@ -27,7 +32,7 @@ from bot.utils.common.consts import (
     START_TITLE_FOR_GARBAGE_CATEGORIES,
     END_TITLE_FOR_GARBAGE_CATEGORIES,
     START_TITLE_FOR_STABLECOINS,
-    END_TITLE_FOR_STABLECOINS
+    END_TITLE_FOR_STABLECOINS,
 )
 from bot.utils.common.decorators import save_execute
 from bot.utils.common.params import get_header_params
@@ -59,7 +64,9 @@ from bot.utils.resources.bot_phrases.bot_phrase_strings import (
     calculations_choices,
 )
 from bot.utils.resources.exceptions.exceptions import ExceptionError
-from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
+from bot.utils.resources.files_worker.google_doc import (
+    load_document_for_garbage_list,
+)
 from bot.utils.resources.files_worker.pdf_worker import generate_pdf
 from bot.utils.resources.gpt.gpt import agent_handler
 from bot.utils.validations import (
@@ -178,7 +185,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
                         twitter_name,
                         description,
                         lower_name,
-                        categories
+                        categories,
                     ) = await get_twitter_link_by_symbol(symbol)
                     if lower_name:
                         tvl = await fetch_tvl_data(lower_name)
@@ -208,7 +215,7 @@ async def fetch_crypto_data(async_session: AsyncSession):
                             twitter_link,
                             description,
                             lower_name,
-                            categories
+                            categories,
                         ) = await get_twitter_link_by_symbol(symbol)
                         tokenomics_percentage_data = await get_percentage_data(
                             twitter_link, symbol
@@ -258,7 +265,9 @@ async def update_agent_answers():
     language = "ENG"
     agents_info = []
     data_for_tokenomics = []
-    garbage_categories = load_document_for_garbage_list(START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES)
+    garbage_categories = load_document_for_garbage_list(
+        START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES
+    )
 
     outdated_answers = await get_all(
         AgentAnswer, updated_at=f"<={three_days_ago}"
@@ -279,7 +288,7 @@ async def update_agent_answers():
             twitter_name,
             description,
             lower_name,
-            categories
+            categories,
         ) = await get_twitter_link_by_symbol(project.coin_name)
         coin_description = await get_coin_description(lower_name)
         if description:
@@ -296,7 +305,9 @@ async def update_agent_answers():
         category_instances = []
         for category_name in categories:
             if category_name not in garbage_categories:
-                category_instance, _ = await get_or_create(Category, category_name=category_name)
+                category_instance, _ = await get_or_create(
+                    Category, category_name=category_name
+                )
                 category_instances.append(category_instance)
 
         if len(category_instances) == 0:
@@ -359,7 +370,6 @@ async def update_agent_answers():
             fundraising=get_metric_value(investing_metrics, "fundraise"),
             twitter_followers=get_metric_value(social_metrics, "twitter"),
             twitter_score=get_metric_value(social_metrics, "twitterscore"),
-            category=get_metric_value(project, "category"),
             investors=get_metric_value(investing_metrics, "fund_level"),
             language=language if language else "ENG",
         )
@@ -404,12 +414,8 @@ async def update_agent_answers():
         funds_agent_answer = await funds_agent_answer
         investors_percent = float(funds_agent_answer.strip("%")) / 100
 
-        if isinstance(fdv, float) and isinstance(
-            fundraising_amount, float
-        ):
-            result_ratio = (
-                fdv * investors_percent
-            ) / fundraising_amount
+        if isinstance(fdv, float) and isinstance(fundraising_amount, float):
+            result_ratio = (fdv * investors_percent) / fundraising_amount
             final_score = f"{result_ratio:.2%}"
         else:
             result_ratio = phrase_by_language("no_data", language)
@@ -482,14 +488,16 @@ async def update_agent_answers():
         project_rating_answer = project_rating_result["calculations_summary"]
         fundraising_score = project_rating_result["fundraising_score"]
         followers_score = project_rating_result["followers_score"]
-        twitter_engagement_score = project_rating_result["twitter_engagement_score"]
+        twitter_engagement_score = project_rating_result[
+            "twitter_engagement_score"
+        ]
         overal_final_score = project_rating_result["preliminary_score"]
         tokenomics_score = project_rating_result["tokenomics_score"]
         project_rating_text = project_rating_result["project_rating"]
 
         all_data_string_for_flags_agent = ALL_DATA_STRING_FLAGS_AGENT.format(
             project_coin_name=project.coin_name,
-            project_category=project.category,
+            project_categories=categories,
             tier_answer=tier_answer,
             tokemonic_answer=tokemonic_answer,
             funds_answer=funds_answer,
@@ -553,9 +561,7 @@ async def update_agent_answers():
         profit_text = phrase_by_language(
             "investor_profit_text",
             language=language,
-            fdv=f"{fdv:,.2f}"
-            if isinstance(fdv, float)
-            else fdv,
+            fdv=f"{fdv:,.2f}" if isinstance(fdv, float) else fdv,
             investors_percent=f"{investors_percent:.0%}"
             if isinstance(investors_percent, float)
             else investors_percent,

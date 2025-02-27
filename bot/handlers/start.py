@@ -2,12 +2,13 @@ from aiogram import Router, types
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 
+from bot.database.models import User
 from bot.utils.keyboards.start_keyboards import (
     main_menu_keyboard,
     language_keyboard,
 )
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
-from bot.database.db_operations import get_user_from_redis_or_db
+from bot.database.db_operations import get_user_from_redis_or_db, get_or_create
 from bot.utils.common.sessions import session_local, redis_client
 
 start_router = Router()
@@ -22,16 +23,18 @@ async def start_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
 
     # Получаем пользователя из Redis или базы данных
-    user = await get_user_from_redis_or_db(user_id=user_id)
+    user, created = await get_or_create(
+        User,
+        defaults={"telegram_id": user_id, "language": "ENG"},
+        telegram_id=user_id,
+    )
 
     if user:
-        language = user.get("language", "ENG")
+        language = user.language
 
         if language:
             await message.answer(
-                await phrase_by_user(
-                    "hello_phrase", user_id, language
-                ),
+                await phrase_by_user("hello_phrase", user_id, language),
                 reply_markup=await main_menu_keyboard(user_id=user_id),
             )
         else:

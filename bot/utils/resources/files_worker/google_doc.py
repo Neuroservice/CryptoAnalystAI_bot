@@ -4,13 +4,12 @@ import requests
 from bot.utils.common.consts import (
     DOCUMENT_GARBAGE_LIST_URL,
     PATTERN_FOR_GARBAGE_LIST_WITHOUT_END_TITLE,
-    PATTERN_FOR_GARBAGE_LIST_WITH_END_TITLE
+    PATTERN_FOR_GARBAGE_LIST_WITH_END_TITLE,
 )
 
 
 def load_document_for_garbage_list(
-    start_title: str = None,
-    end_title: str = None
+    start_title: str = None, end_title: str = None
 ):
     """
     Загружает список мусорных категорий, стейблкоинов и т.д., в зависимости от передающихся заголовков.
@@ -33,7 +32,7 @@ def load_document_for_garbage_list(
         if end_title:
             pattern = PATTERN_FOR_GARBAGE_LIST_WITH_END_TITLE.format(
                 start_title=re.escape(start_title),
-                end_title=re.escape(end_title)
+                end_title=re.escape(end_title),
             )
 
         match = re.search(pattern, full_text, re.DOTALL)
@@ -47,7 +46,9 @@ def load_document_for_garbage_list(
         extracted_text = match.group(1).strip()
 
         # Формирование списка категорий (по строкам)
-        categories = [line.strip() for line in extracted_text.split("\n") if line.strip()]
+        categories = [
+            line.strip() for line in extracted_text.split("\n") if line.strip()
+        ]
         return categories
 
     except requests.RequestException as e:

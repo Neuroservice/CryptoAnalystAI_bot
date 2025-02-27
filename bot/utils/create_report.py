@@ -8,8 +8,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.database.db_operations import get_one, get_user_from_redis_or_db, update_or_create
-from bot.database.models import Calculation, AgentAnswer
+from bot.database.db_operations import (
+    get_one,
+    get_user_from_redis_or_db,
+    update_or_create,
+)
+from bot.database.models import Calculation, AgentAnswer, Project
 from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.consts import (
     PROJECT_POINTS_ENG,
@@ -21,7 +25,6 @@ from bot.utils.common.consts import (
     REPLACED_PROJECT_TWITTER,
 )
 from bot.utils.common.decorators import save_execute
-from bot.utils.common.sessions import session_local
 from bot.utils.metrics.metrics_evaluation import (
     calculate_tokenomics_score,
     calculate_project_score,
@@ -217,11 +220,15 @@ async def create_pdf_report(
     user_data = await get_user_from_redis_or_db(user_id)
     language = user_data.get("language", "ENG")
     current_date = datetime.now().strftime("%d.%m.%Y")
-    existing_calculation = await get_one(Calculation, id=calculation_record["id"])
+    existing_calculation = await get_one(
+        Calculation, id=calculation_record["id"]
+    )
 
     try:
         result = await get_project_and_tokenomics(
-            categories, coin_name
+            project_names=categories,
+            user_coin_name=coin_name,
+            project_tier=new_project["tier"],
         )
 
         if not isinstance(result, tuple) or len(result) != 2:
@@ -230,7 +237,6 @@ async def create_pdf_report(
             )
 
         projects, tokenomics_data_list = result
-
         top_projects = get_top_projects_by_capitalization_and_category(
             tokenomics_data_list
         )
@@ -364,12 +370,8 @@ async def create_pdf_report(
         )
         investors_percent = float(funds_agent_answer.strip("%")) / 100
 
-        if isinstance(fdv, float) and isinstance(
-            fundraising_amount, float
-        ):
-            result_ratio = (
-                fdv * investors_percent
-            ) / fundraising_amount
+        if isinstance(fdv, float) and isinstance(fundraising_amount, float):
+            result_ratio = (fdv * investors_percent) / fundraising_amount
             final_score = f"{result_ratio:.2%}"
         else:
             result_ratio = phrase_by_language("no_data", language)
@@ -430,13 +432,14 @@ async def create_pdf_report(
             twitter_score=social_metrics.twitterscore
             if social_metrics and social_metrics.twitterscore
             else "N/A",
-            category=project.category
-            if project and project.category
-            else "N/A",
             investors=investing_metrics.fund_level
             if investing_metrics and investing_metrics.fund_level
             else "N/A",
             language=language,
+        )
+
+        await update_or_create(
+            Project, id=project.id, defaults={"tier": tier_answer}
         )
 
         if existing_answer is None:
@@ -488,10 +491,14 @@ async def create_pdf_report(
                 language,
             )
 
-            project_rating_answer = project_rating_result["calculations_summary"]
+            project_rating_answer = project_rating_result[
+                "calculations_summary"
+            ]
             fundraising_score = project_rating_result["fundraising_score"]
             followers_score = project_rating_result["followers_score"]
-            twitter_engagement_score = project_rating_result["twitter_engagement_score"]
+            twitter_engagement_score = project_rating_result[
+                "twitter_engagement_score"
+            ]
             tokenomics_score = project_rating_result["tokenomics_score"]
             overal_final_score = project_rating_result["preliminary_score"]
             project_rating_text = project_rating_result["project_rating"]
@@ -499,7 +506,7 @@ async def create_pdf_report(
             all_data_string_for_flags_agent = (
                 ALL_DATA_STRING_FLAGS_AGENT.format(
                     project_coin_name=project.coin_name,
-                    project_category=project.category,
+                    project_categories=categories,
                     tier_answer=tier_answer,
                     tokemonic_answer=tokemonic_answer,
                     funds_answer=funds_answer,
@@ -562,9 +569,7 @@ async def create_pdf_report(
             profit_text = await phrase_by_user(
                 "investor_profit_text",
                 message.from_user.id,
-                fdv=f"{fdv:,.2f}"
-                if isinstance(fdv, float)
-                else fdv,
+                fdv=f"{fdv:,.2f}" if isinstance(fdv, float) else fdv,
                 investors_percent=f"{investors_percent:.0%}"
                 if isinstance(investors_percent, float)
                 else investors_percent,

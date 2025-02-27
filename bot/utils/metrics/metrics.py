@@ -2,7 +2,12 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.database.db_operations import get_one, update_or_create, get_or_create, create_association
+from bot.database.db_operations import (
+    get_one,
+    update_or_create,
+    get_or_create,
+    create_association,
+)
 from bot.utils.common.consts import TICKERS
 from bot.utils.resources.exceptions.exceptions import ExceptionError
 from bot.utils.common.decorators import save_execute
@@ -15,7 +20,9 @@ from bot.database.models import (
     NetworkMetrics,
     InvestingMetrics,
     SocialMetrics,
-    Project, Category, project_category_association,
+    Project,
+    Category,
+    project_category_association,
 )
 
 
@@ -43,17 +50,14 @@ async def update_project(
             await create_association(
                 project_category_association,
                 project_id=instance.id,
-                category_id=category_instance.id
+                category_id=category_instance.id,
             )
         return instance
     else:
         return await get_one(Project, coin_name=user_coin_name)
 
 
-async def update_social_metrics(
-    project_id: int,
-    social_metrics: dict[int]
-):
+async def update_social_metrics(project_id: int, social_metrics: dict[int]):
     """
     Обновляет информацию о социальных метриках проекта.
     """
@@ -146,10 +150,7 @@ async def update_manipulative_metrics(
         )
 
 
-async def update_funds_profit(
-    project_id: int,
-    funds_profit_data: dict
-):
+async def update_funds_profit(project_id: int, funds_profit_data: dict):
     """
     Обновляет информацию о распределении токенов проекта.
     """
@@ -168,9 +169,7 @@ async def update_funds_profit(
 
 
 async def update_market_metrics(
-    project_id: int,
-    market_metrics: dict,
-    top_and_bottom: dict
+    project_id: int, market_metrics: dict, top_and_bottom: dict
 ):
     """
     Обновляет информацию о рыночных метриках проекта
@@ -218,9 +217,7 @@ async def process_metrics(
     """
 
     # Обновление или создание проекта
-    new_project = await update_project(
-        user_coin_name, categories, project
-    )
+    new_project = await update_project(user_coin_name, categories, project)
 
     # Обновление или создание базовых метрик
     await update_or_create(
@@ -272,8 +269,12 @@ async def process_metrics(
     top_and_bottom = results.get("top_and_bottom")
     # Проверка на None и наличие значений
     if market_metrics and all(metric is not None for metric in market_metrics):
-        await update_market_metrics(new_project.id, market_metrics, top_and_bottom)
+        await update_market_metrics(
+            new_project.id, market_metrics, top_and_bottom
+        )
     else:
-        logging.warning("Неверные данные для рыночных метрик или отсутствуют значения.")
+        logging.warning(
+            "Неверные данные для рыночных метрик или отсутствуют значения."
+        )
 
     return new_project

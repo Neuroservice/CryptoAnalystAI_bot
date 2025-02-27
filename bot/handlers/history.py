@@ -35,9 +35,7 @@ async def history_command(message: types.Message):
     user_data = await get_user_from_redis_or_db(user_id)
     language = user_data.get("language", "ENG")
 
-    await message.answer(
-        await phrase_by_user("wait_for_zip", user_id)
-    )
+    await message.answer(await phrase_by_user("wait_for_zip", user_id))
 
     try:
         last_calculations = await get_all(model=Calculation, user_id=user_id)
@@ -48,9 +46,7 @@ async def history_command(message: types.Message):
         )[:5]
 
         if not last_calculations:
-            await phrase_by_user(
-                "no_calculations", message.from_user.id
-            )
+            await phrase_by_user("no_calculations", message.from_user.id)
             return
 
         zip_buffer = BytesIO()

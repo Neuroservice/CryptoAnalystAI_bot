@@ -6,7 +6,11 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand
 
-from bot.data_processing.tasks import parse_periodically, parse_categories_weekly
+from bot.data_processing.tasks import (
+    parse_periodically,
+    parse_categories_weekly,
+    parse_tokens_weekly,
+)
 from bot.handlers import history, select_language, donate
 from bot.utils.common.config import API_TOKEN
 from bot.utils.common.sessions import session_local, SessionLocal, redis_client
@@ -37,10 +41,18 @@ async def main():
             bot = Bot(token=API_TOKEN, session=aiohttp_session)
 
             logger.info("Настраиваются команды бота.")
-            await bot.set_my_commands([
-                BotCommand(command="/start", description="Запустить бота / Bot start"),
-                BotCommand(command="/analysis", description="Выбрать блок аналитики / Select an analytics block"),
-            ])
+            await bot.set_my_commands(
+                [
+                    BotCommand(
+                        command="/start",
+                        description="Запустить бота / Bot start",
+                    ),
+                    BotCommand(
+                        command="/analysis",
+                        description="Выбрать блок аналитики / Select an analytics block",
+                    ),
+                ]
+            )
 
             from bot.handlers import start, help, calculate, analysis
 
@@ -56,7 +68,8 @@ async def main():
 
             logging.info("Запуск периодического обновления данных.")
             asyncio.create_task(parse_periodically(session_local))
-            asyncio.create_task(parse_categories_weekly(session_local))
+            asyncio.create_task(parse_categories_weekly())
+            asyncio.create_task(parse_tokens_weekly())
 
             await dp.start_polling(bot)
 

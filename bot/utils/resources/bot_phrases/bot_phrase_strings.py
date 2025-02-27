@@ -48,8 +48,6 @@ phrase_dict = {
         "overall_project_evaluation": "Общая оценка проекта {score} баллов ({rating_text})",
         "flags": "«Ред» флаги и «грин» флаги:",
         "analysis_block_choose": "Выберите блок аналитики:",
-
-
         ## Ошибки
         "error_input_token_from_user": "Проверьте правильность введенного тикера токена и попробуйте еще раз.",
         "beta_block": "Данный блок пока что находится в разработке. Попробуйте, пожалуйста, другой блок аналитики.",
@@ -68,8 +66,7 @@ phrase_dict = {
         "no_data": "Нет данных",
         "no_token_distribution": "Нет данных по распределению токенов",
         "category_in_garbage_list": "Категория проекта относиться к списку категорий, которые нуждаются в дополнительной проверке... Попробуйте другой токен.",
-
-
+        "not_in_top_cmc": "Вы ввели неправильный тикер токена, либо токен не находится в списке топ 1000 платформы Coin Market Cap и представляет высокие риски для инвестирования",
         "calculation_type_choice": """
 Если вы хотите просто рассчитать цену токена, на основании похожих проектов, выберите кнопку 'Блок ребалансировки портфеля'.\n\n
 Если хотите полную сравнительную характеристику по токенам и ребалансировку портфеля, выберите кнопку 'Блок анализа и оценки проектов'.
@@ -140,8 +137,6 @@ Twitter Score = {twitter_engagement_score}
         "overall_project_evaluation": "Overall project evaluation {score} points ({rating_text})",
         "flags": "«Red» flags and «green» flags:",
         "analysis_block_choose": "Select an analytics block:",
-
-
         ## Ошибки
         "error_input_token_from_user": "Check if the coin entered is correct and try again.",
         "beta_block": "This block is still under development. Please try another analytics block.",
@@ -160,8 +155,7 @@ Twitter Score = {twitter_engagement_score}
         "no_data": "No data",
         "no_token_distribution": "No token distribution data",
         "category_in_garbage_list": "Project category refers to the list of categories that need additional verification... Try a different token.",
-
-
+        "not_in_top_cmc": "You entered the wrong token ticker, or the token is not in the top 1000 list of the Coin Market Cap platform and poses high risks for investment",
         "calculation_type_choice": """
 If you want to simply calculate the token price based on similar projects, choose the 'Block of portfolio rebalancing' button.\n\n
 If you want a full comparison of token characteristics, choose the 'Block of projects analysis and evaluation' button.

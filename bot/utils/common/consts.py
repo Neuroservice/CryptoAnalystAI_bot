@@ -69,7 +69,9 @@ DOCUMENT_GARBAGE_LIST_URL = "https://docs.google.com/document/d/1B6EYH7ShOWzVZJp
 
 # Документ с промтами
 DOCUMENT_ID = "1_NHFo4b4FmWNxZn6ycQsjm_KaWGdG-mHp6SGCjtPvgI"
-DOCUMENT_URL = f"https://docs.google.com/document/d/{DOCUMENT_ID}/export?format=txt"
+DOCUMENT_URL = (
+    f"https://docs.google.com/document/d/{DOCUMENT_ID}/export?format=txt"
+)
 
 
 # Настройки модели GPT
@@ -108,7 +110,9 @@ CALCULATIONS_PATTERN_RU = r"(Результаты расчета для.*?)$"
 CALCULATIONS_PATTERN_ENG = r"(Calculation results for.*?)$"
 COMPARISON_PATTERN_RU = r"Сравнение\s*проекта\s*с\s*другими,\s*схожими\s*по\s*уровню\s*и\s*категории:"
 COMPARISON_PATTERN_ENG = r"Comparing\s*the\s*project\s*with\s*others\s*similar\s*in\s*level\s*and\s*category:"
-PATTERN_FOR_GARBAGE_LIST_WITH_END_TITLE = r"{start_title}(.*?)(?=\n{end_title})"
+PATTERN_FOR_GARBAGE_LIST_WITH_END_TITLE = (
+    r"{start_title}(.*?)(?=\n{end_title})"
+)
 PATTERN_FOR_GARBAGE_LIST_WITHOUT_END_TITLE = r"{start_title}(.*)"
 
 
@@ -697,7 +701,7 @@ ALL_DATA_STRING_FUNDS_AGENT = (
 )
 ALL_DATA_STRING_FLAGS_AGENT = (
     "Проект: {project_coin_name}\n"
-    "Category: {project_category}\n"
+    "Categories: {project_categories}\n"
     "Tier agent: {tier_answer}\n"
     "Tokemonic agent: {tokemonic_answer}\n"
     "Funds agent: {funds_answer}\n"

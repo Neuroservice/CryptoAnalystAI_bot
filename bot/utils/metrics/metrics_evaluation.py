@@ -25,7 +25,6 @@ def determine_project_tier(
     fundraising: float,
     twitter_followers: str,
     twitter_score: int,
-    category: str,
     investors: str,
     language: str,
 ):
@@ -43,7 +42,6 @@ def determine_project_tier(
             fundraising,
             twitter_followers,
             twitter_score,
-            category,
             investors,
         ]
     ):
@@ -346,7 +344,7 @@ def calculate_project_score(
         twitter_score * TWITTER_SCORE_MULTIPLIER, 2
     )
 
-    preliminary_score = (round(
+    preliminary_score = round(
         fundraising_score
         + investors_level_score
         + followers_score
@@ -355,8 +353,9 @@ def calculate_project_score(
         + tvl
         + top_100_wallet
         + growth_and_fall_score
-        + profitability_score, 2
-    ))
+        + profitability_score,
+        2,
+    )
 
     calculations_summary = CALCULATIONS_SUMMARY_STR.format(
         fundraising_score=fundraising_score,
