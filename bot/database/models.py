@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     BigInteger,
+    Table,
 )
 
 Base = declarative_base()
@@ -32,14 +33,30 @@ class User(Base):
         }
 
 
+project_category_association = Table(
+    "project_category_association",
+    Base.metadata,
+    Column("project_id", Integer, ForeignKey("project.id"), primary_key=True),
+    Column(
+        "category_id", Integer, ForeignKey("category.id"), primary_key=True
+    ),
+)
+
+
 class Project(Base):
     __tablename__ = "project"
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    category = Column(String(100), nullable=True)
+    tier = Column(String(30), nullable=True)
+    cmc_rank = Column(String(30), nullable=True)
     coin_name = Column(String(100), nullable=True)
 
     calculations = relationship("Calculation", back_populates="project")
+    categories = relationship(
+        "Category",
+        secondary=project_category_association,
+        back_populates="projects",
+    )
     basic_metrics = relationship("BasicMetrics", back_populates="project")
     investing_metrics = relationship(
         "InvestingMetrics", back_populates="project"
@@ -58,9 +75,23 @@ class Project(Base):
     def to_dict(self):
         return {
             "id": self.id,
-            "category": self.category,
             "coin_name": self.coin_name,
+            "cmc_rank:": self.cmc_rank,
+            "tier": self.tier,
         }
+
+
+class Category(Base):
+    __tablename__ = "category"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    category_name = Column(String(100), unique=True, nullable=False)
+
+    projects = relationship(
+        "Project",
+        secondary=project_category_association,
+        back_populates="categories",
+    )
 
 
 class Calculation(Base):
@@ -95,7 +126,6 @@ class BasicMetrics(Base):
         Integer, ForeignKey("project.id"), nullable=False, unique=True
     )
     entry_price = Column(Float, nullable=True)
-    sphere = Column(String(150), nullable=True)
     market_price = Column(Float, nullable=True)
 
     project = relationship("Project", back_populates="basic_metrics")
@@ -105,7 +135,6 @@ class BasicMetrics(Base):
             "id": self.id,
             "project_id": self.project_id,
             "entry_price": self.entry_price,
-            "sphere": self.sphere,
             "market_price": self.market_price,
         }
 

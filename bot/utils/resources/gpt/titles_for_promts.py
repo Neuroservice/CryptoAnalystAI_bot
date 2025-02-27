@@ -1,7 +1,5 @@
-start_title_for_category_agent = (
-    "1. Категории крипто проектов и краткое описание"
-)
-end_title_for_category_agent = "1. Краткое описание:"
+start_title_for_description_agent = "1. Краткое описание:"
+end_title_for_description_agent = "1. Категории крипто проектов:"
 
 start_title_for_tier_agent = "2. Тир проекта"
 end_title_for_tier_agent = (

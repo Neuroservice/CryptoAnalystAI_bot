@@ -8,7 +8,6 @@ from bot.utils.resources.exceptions.exceptions import PlaceholderMissingError
 async def phrase_by_user(
     phrase_id: str,
     user_id: int,
-    session,
     language: Optional[str] = None,
     **kwargs,
 ) -> str:

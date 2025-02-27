@@ -1,18 +1,44 @@
 import logging
 import re
 import traceback
-
-from typing import Optional, Union
 from datetime import datetime
+from typing import Optional, Union
+
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.database.db_operations import get_one, get_user_from_redis_or_db
-from bot.database.models import Calculation, AgentAnswer
+from bot.database.db_operations import (
+    get_one,
+    get_user_from_redis_or_db,
+    update_or_create,
+)
+from bot.database.models import Calculation, AgentAnswer, Project
 from bot.utils.common.bot_states import CalculateProject
+from bot.utils.common.consts import (
+    PROJECT_POINTS_ENG,
+    PROJECT_POINTS_RU,
+    TICKERS,
+    DATA_FOR_ANALYSIS_TEXT,
+    ALL_DATA_STRING_FLAGS_AGENT,
+    ALL_DATA_STRING_FUNDS_AGENT,
+    REPLACED_PROJECT_TWITTER,
+)
 from bot.utils.common.decorators import save_execute
-from bot.utils.common.sessions import session_local
+from bot.utils.metrics.metrics_evaluation import (
+    calculate_tokenomics_score,
+    calculate_project_score,
+    determine_project_tier,
+    project_investors_level,
+    analyze_project_metrics,
+)
+from bot.utils.project_data import (
+    generate_flags_answer,
+    get_user_project_info,
+    calculate_expected_x,
+    get_project_and_tokenomics,
+    get_top_projects_by_capitalization_and_category,
+)
 from bot.utils.resources.bot_phrases.bot_phrase_handler import (
     phrase_by_user,
     phrase_by_language,
@@ -32,34 +58,9 @@ from bot.utils.validations import (
     extract_red_green_flags,
     get_metric_value,
 )
-from bot.utils.common.consts import (
-    PROJECT_POINTS_ENG,
-    PROJECT_POINTS_RU,
-    TICKERS,
-    DATA_FOR_ANALYSIS_TEXT,
-    ALL_DATA_STRING_FLAGS_AGENT,
-    ALL_DATA_STRING_FUNDS_AGENT,
-    REPLACED_PROJECT_TWITTER,
-)
-from bot.utils.metrics.metrics_evaluation import (
-    calculate_tokenomics_score,
-    calculate_project_score,
-    determine_project_tier,
-    project_investors_level,
-    analyze_project_metrics,
-)
-from bot.utils.project_data import (
-    generate_flags_answer,
-    get_user_project_info,
-    calculate_expected_x,
-    get_project_and_tokenomics,
-    get_top_projects_by_capitalization_and_category,
-)
 
 
-@save_execute
 async def create_basic_report(
-    session: AsyncSession,
     state: FSMContext,
     message: Message = None,
     user_id: Optional[int] = None,
@@ -71,7 +72,7 @@ async def create_basic_report(
 
     state_data = await state.get_data()
     user_coin_name = state_data.get("user_coin_name")
-    chosen_project = state_data.get("chosen_project")
+    categories = state_data.get("categories")
     user_data = await get_user_from_redis_or_db(user_id)
     language = user_data.get("language", "ENG")
     agents_info = []
@@ -82,7 +83,7 @@ async def create_basic_report(
         basic_metrics = project_info.get("basic_metrics")
 
         projects, tokenomics_data_list = await get_project_and_tokenomics(
-            session_local, chosen_project, user_coin_name
+            categories, user_coin_name
         )
         top_projects = get_top_projects_by_capitalization_and_category(
             tokenomics_data_list
@@ -190,7 +191,7 @@ async def create_basic_report(
 
     except ValueProcessingError as e:
         error_message = f"{e}\n{traceback.format_exc()}"
-        return f"{await phrase_by_user('error_not_valid_input_data', user_id, session)}\n{error_message}"
+        return f"{await phrase_by_user('error_not_valid_input_data', user_id)}\n{error_message}"
 
 
 @save_execute
@@ -205,8 +206,6 @@ async def create_pdf_report(
     """
 
     state_data = await state.get_data()
-    chosen_project = state_data.get("chosen_project")
-    category_answer = state_data.get("category_answer")
     new_project = state_data.get("new_project")
     coin_name = state_data.get("coin_name")
     twitter_link = state_data.get("twitter_name")
@@ -216,7 +215,7 @@ async def create_pdf_report(
     calculation_record = state_data.get("calculation_record")
 
     row_data = []
-    coin_twitter, about, lower_name = twitter_link
+    coin_twitter, about, lower_name, categories = twitter_link
     twitter_name = REPLACED_PROJECT_TWITTER.get(coin_twitter, twitter_link)
     user_data = await get_user_from_redis_or_db(user_id)
     language = user_data.get("language", "ENG")
@@ -227,7 +226,9 @@ async def create_pdf_report(
 
     try:
         result = await get_project_and_tokenomics(
-            session, chosen_project, coin_name
+            project_names=categories,
+            user_coin_name=coin_name,
+            project_tier=new_project["tier"],
         )
 
         if not isinstance(result, tuple) or len(result) != 2:
@@ -236,6 +237,9 @@ async def create_pdf_report(
             )
 
         projects, tokenomics_data_list = result
+        top_projects = get_top_projects_by_capitalization_and_category(
+            tokenomics_data_list
+        )
 
         if "error" in projects:
             raise ValueProcessingError(
@@ -243,7 +247,7 @@ async def create_pdf_report(
             )
 
         for index, (project, tokenomics_data) in enumerate(
-            tokenomics_data_list, start=1
+            top_projects, start=1
         ):
             if tokenomics_data:
                 for tokenomics in tokenomics_data:
@@ -354,9 +358,9 @@ async def create_pdf_report(
             "funds_agent", topic=all_data_string_for_funds_agent
         )
 
-        capitalization = (
-            float(tokenomics_data.capitalization)
-            if tokenomics_data and tokenomics_data.capitalization
+        fdv = (
+            float(tokenomics_data.fdv)
+            if tokenomics_data and tokenomics_data.fdv
             else (phrase_by_language("no_data", language))
         )
         fundraising_amount = (
@@ -366,12 +370,8 @@ async def create_pdf_report(
         )
         investors_percent = float(funds_agent_answer.strip("%")) / 100
 
-        if isinstance(capitalization, float) and isinstance(
-            fundraising_amount, float
-        ):
-            result_ratio = (
-                capitalization * investors_percent
-            ) / fundraising_amount
+        if isinstance(fdv, float) and isinstance(fundraising_amount, float):
+            result_ratio = (fdv * investors_percent) / fundraising_amount
             final_score = f"{result_ratio:.2%}"
         else:
             result_ratio = phrase_by_language("no_data", language)
@@ -420,8 +420,8 @@ async def create_pdf_report(
             investors_level_score = 0
 
         tier_answer = determine_project_tier(
-            capitalization=tokenomics_data.capitalization
-            if tokenomics_data and tokenomics_data.capitalization
+            capitalization=tokenomics_data.fdv
+            if tokenomics_data and tokenomics_data.fdv
             else "N/A",
             fundraising=investing_metrics.fundraise
             if investing_metrics and investing_metrics.fundraise
@@ -432,13 +432,14 @@ async def create_pdf_report(
             twitter_score=social_metrics.twitterscore
             if social_metrics and social_metrics.twitterscore
             else "N/A",
-            category=project.category
-            if project and project.category
-            else "N/A",
             investors=investing_metrics.fund_level
             if investing_metrics and investing_metrics.fund_level
             else "N/A",
             language=language,
+        )
+
+        await update_or_create(
+            Project, id=project.id, defaults={"tier": tier_answer}
         )
 
         if existing_answer is None:
@@ -499,14 +500,13 @@ async def create_pdf_report(
                 "twitter_engagement_score"
             ]
             tokenomics_score = project_rating_result["tokenomics_score"]
-            tier_coefficient = project_rating_result["tier_coefficient"]
-            overal_final_score = project_rating_result["final_score"]
+            overal_final_score = project_rating_result["preliminary_score"]
             project_rating_text = project_rating_result["project_rating"]
 
             all_data_string_for_flags_agent = (
                 ALL_DATA_STRING_FLAGS_AGENT.format(
                     project_coin_name=project.coin_name,
-                    project_category=project.category,
+                    project_categories=categories,
                     tier_answer=tier_answer,
                     tokemonic_answer=tokemonic_answer,
                     funds_answer=funds_answer,
@@ -531,7 +531,7 @@ async def create_pdf_report(
                 tier_answer,
                 funds_answer,
                 tokemonic_answer,
-                category_answer,
+                categories,
                 twitter_link,
                 top_and_bottom,
                 language,
@@ -548,7 +548,6 @@ async def create_pdf_report(
             top_and_bottom_answer = await phrase_by_user(
                 "top_bottom_values",
                 message.from_user.id,
-                session_local,
                 current_value=round(basic_metrics.market_price, 4),
                 min_value=phrase_by_language("no_data", language),
                 max_value=phrase_by_language("no_data", language),
@@ -562,7 +561,6 @@ async def create_pdf_report(
                 top_and_bottom_answer = await phrase_by_user(
                     "top_bottom_values",
                     message.from_user.id,
-                    session_local,
                     current_value=round(basic_metrics.market_price, 4),
                     min_value=round(top_and_bottom.lower_threshold, 4),
                     max_value=round(top_and_bottom.upper_threshold, 4),
@@ -571,10 +569,7 @@ async def create_pdf_report(
             profit_text = await phrase_by_user(
                 "investor_profit_text",
                 message.from_user.id,
-                session_local,
-                capitalization=f"{capitalization:,.2f}"
-                if isinstance(capitalization, float)
-                else capitalization,
+                fdv=f"{fdv:,.2f}" if isinstance(fdv, float) else fdv,
                 investors_percent=f"{investors_percent:.0%}"
                 if isinstance(investors_percent, float)
                 else investors_percent,
@@ -669,7 +664,6 @@ async def create_pdf_report(
             project_evaluation = await phrase_by_user(
                 "project_rating_details",
                 user_id,
-                session_local,
                 fundraising_score=round(fundraising_score, 2),
                 tier=investors_level,
                 tier_score=investors_level_score,
@@ -693,7 +687,6 @@ async def create_pdf_report(
                 and tokenomics_data.total_supply
                 and tokenomics_data.capitalization
                 else 0,
-                tier_coefficient=tier_coefficient,
             )
 
             pdf_output, extracted_text = await generate_pdf(
@@ -710,7 +703,7 @@ async def create_pdf_report(
                 project_rating_text=project_rating_text,
                 current_date=current_date,
                 token_description=token_description,
-                chosen_project=chosen_project,
+                categories=categories,
                 lower_name=lower_name.capitalize(),
                 coin_name=coin_name.upper(),
             )
@@ -740,18 +733,17 @@ async def create_pdf_report(
                 existing_calculation, language, flags_answer
             )
 
-        if not existing_answer or (
-            existing_answer and not existing_answer.answer
-        ):
-            new_answer = AgentAnswer(
-                project_id=project.id, answer=extracted_text, language=language
-            )
-            session.add(new_answer)
+        await update_or_create(
+            model=AgentAnswer,
+            project_id=project.id,
+            defaults={"answer": extracted_text, "language": language},
+        )
 
-        existing_calculation.agent_answer = extracted_text
-        session.add(existing_calculation)
-
-        await session.commit()
+        await update_or_create(
+            model=Calculation,
+            id=existing_calculation.id,
+            defaults={"agent_answer": extracted_text},
+        )
         await state.set_state(CalculateProject.waiting_for_data)
 
         return (
@@ -768,4 +760,4 @@ async def create_pdf_report(
         error_message = str(processing_error)
         logging.error(f"ValueProcessingError: {error_message}")
 
-        return f"{await phrase_by_user('error_not_valid_input_data', message.from_user.id, session_local)}\n{error_message}"
+        return f"{await phrase_by_user('error_not_valid_input_data', message.from_user.id)}\n{error_message}"

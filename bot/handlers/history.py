@@ -35,9 +35,7 @@ async def history_command(message: types.Message):
     user_data = await get_user_from_redis_or_db(user_id)
     language = user_data.get("language", "ENG")
 
-    await message.answer(
-        await phrase_by_user("wait_for_zip", user_id, session_local)
-    )
+    await message.answer(await phrase_by_user("wait_for_zip", user_id))
 
     try:
         last_calculations = await get_all(model=Calculation, user_id=user_id)
@@ -48,9 +46,7 @@ async def history_command(message: types.Message):
         )[:5]
 
         if not last_calculations:
-            await phrase_by_user(
-                "no_calculations", message.from_user.id, session_local
-            )
+            await phrase_by_user("no_calculations", message.from_user.id)
             return
 
         zip_buffer = BytesIO()
@@ -76,12 +72,12 @@ async def history_command(message: types.Message):
         await message.answer_document(
             BufferedInputFile(
                 zip_buffer.read(),
-                filename=f"{await phrase_by_user('calculations_history', message.from_user.id, session_local)}",
+                filename=f"{await phrase_by_user('calculations_history', message.from_user.id)}",
             )
         )
 
     except Exception:
         error_details = traceback.format_exc()
         await message.answer(
-            f"{await phrase_by_user('error_common', message.from_user.id, session_local)} {error_details}"
+            f"{await phrase_by_user('error_common', message.from_user.id)} {error_details}"
         )

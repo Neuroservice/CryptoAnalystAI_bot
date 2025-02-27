@@ -25,7 +25,6 @@ def determine_project_tier(
     fundraising: float,
     twitter_followers: str,
     twitter_score: int,
-    category: str,
     investors: str,
     language: str,
 ):
@@ -43,7 +42,6 @@ def determine_project_tier(
             fundraising,
             twitter_followers,
             twitter_score,
-            category,
             investors,
         ]
     ):
@@ -159,8 +157,9 @@ def analyze_project_metrics(
     growth_and_fall_result = ""
     detailed_report = ""
 
-    final_score = None
-    if type(final_score) is float:
+    print("final_score: ", final_score)
+
+    if type(final_score) is not float and final_score != "Нет данных":
         final_score = float(final_score[:-1])
 
     if final_score and type(final_score) is float:
@@ -345,7 +344,7 @@ def calculate_project_score(
         twitter_score * TWITTER_SCORE_MULTIPLIER, 2
     )
 
-    preliminary_score = (
+    preliminary_score = round(
         fundraising_score
         + investors_level_score
         + followers_score
@@ -354,16 +353,8 @@ def calculate_project_score(
         + tvl
         + top_100_wallet
         + growth_and_fall_score
-        + profitability_score
-    )
-
-    tier_coefficient = TIER_COEFFICIENTS.get(
-        tier, NO_COEFFICIENT[0] if language == "RU" else NO_COEFFICIENT[1]
-    )
-    final_score = (
-        round(preliminary_score * tier_coefficient, 2)
-        if tier_coefficient not in NO_COEFFICIENT
-        else round(preliminary_score, 2)
+        + profitability_score,
+        2,
     )
 
     calculations_summary = CALCULATIONS_SUMMARY_STR.format(
@@ -373,12 +364,10 @@ def calculate_project_score(
         twitter_engagement_score=twitter_engagement_score,
         tokenomics_score=tokenomics_score,
         profitability_score=profitability_score,
-        preliminary_score=preliminary_score,
-        tier_coefficient=tier_coefficient,
-        final_score=final_score,
+        final_score=preliminary_score,
     )
 
-    project_rating = get_project_rating(final_score, language)
+    project_rating = get_project_rating(preliminary_score, language)
 
     return {
         "fundraising_score": fundraising_score,
@@ -388,8 +377,6 @@ def calculate_project_score(
         "tokenomics_score": tokenomics_score,
         "profitability_score": profitability_score,
         "preliminary_score": preliminary_score,
-        "tier_coefficient": tier_coefficient,
-        "final_score": final_score,
         "project_rating": project_rating,
         "calculations_summary": calculations_summary,
     }

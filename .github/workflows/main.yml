@@ -45,14 +45,19 @@ jobs:
           script: |
             cd /home/CryptoAnalyst_bot/test
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
-            sudo docker-compose -f docker-compose.yml down
-            sudo docker-compose -f docker-compose.yml pull
-            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate --remove-orphans
+            sudo docker-compose -f docker-compose.yml pull cryptoanalyst_bot_test
+            
+            sudo docker-compose -f docker-compose.yml run --rm \
+              -e ALEMBIC_URL=${{ secrets.ALEMBIC_URL }} \
+              cryptoanalyst_bot_test alembic upgrade head
+            
+            sudo docker-compose -f docker-compose.yml stop cryptoanalyst_bot_test
+            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate cryptoanalyst_bot_test
             sudo docker image prune --force
             sudo docker volume prune --force
 
   push_docker_hub_prod:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+    if: github.ref == 'refs/heads/main'
     name: Push Docker image for main dir
     runs-on: ubuntu-latest
     steps:
@@ -72,7 +77,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/bot_cryptoanalyst:prod
 
   deploy_to_prod_dir:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.base_ref == 'main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: push_docker_hub_prod
     steps:
@@ -85,8 +90,13 @@ jobs:
           script: |
             cd /home/CryptoAnalyst_bot/prod
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
-            sudo docker-compose -f docker-compose.yml down
-            sudo docker-compose -f docker-compose.yml pull
-            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate
+            sudo docker-compose -f docker-compose.yml pull cryptoanalyst_bot_prod
+            
+            sudo docker-compose -f docker-compose.yml run --rm \
+              -e ALEMBIC_URL=${{ secrets.ALEMBIC_URL }} \
+              cryptoanalyst_bot_prod alembic upgrade head
+            
+            sudo docker-compose -f docker-compose.yml stop cryptoanalyst_bot_prod
+            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate cryptoanalyst_bot_prod
             sudo docker image prune --force
             sudo docker volume prune --force

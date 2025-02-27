@@ -51,7 +51,6 @@ async def change_language(message: types.Message):
             await phrase_by_user(
                 "language_changed",
                 user_id,
-                session_local,
                 language=new_language,
             ),
             reply_markup=new_keyboard,
