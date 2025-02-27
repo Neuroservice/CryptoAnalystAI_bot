@@ -1,11 +1,13 @@
 import logging
+
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Optional, Type, Any, Tuple, Union, Dict
+from typing import Optional, Type, Any, Tuple, Dict
 
 from bot.database.models import User
 from bot.utils.common.decorators import save_execute
-from bot.utils.common.sessions import redis_client, session_local
+from bot.utils.common.sessions import redis_client
 from bot.utils.resources.exceptions.exceptions import (
     DatabaseError,
     DatabaseCreationError,
@@ -14,33 +16,77 @@ from bot.utils.resources.exceptions.exceptions import (
 
 
 @save_execute
-async def get_one(model: Type[Any], **filters) -> Optional[Any]:
+async def get_one(
+    session: AsyncSession, model: Type[Any], **filters
+) -> Optional[Any]:
     """
     Получить одну запись из базы данных.
     """
     try:
         query = select(model).filter_by(**filters)
-        result = await session_local.execute(query)
+        result = await session.execute(query)
         return result.scalars().first()
     except SQLAlchemyError as e:
         raise DatabaseFetchError(str(e))
 
 
 @save_execute
-async def get_all(model: Type[Any], **filters) -> list[Any]:
+async def get_all(
+    session: AsyncSession,
+    model: Type[Any],
+    join_model: Optional[Type[Any]] = None,
+    order_by=None,
+    limit=None,
+    **filters,
+) -> list[Any]:
     """
-    Получить все записи из базы данных.
+    Получить все записи из базы данных с возможностью сортировки, ограничения количества и объединения таблиц.
+
+    Аргументы:
+    - `model`: основная модель SQLAlchemy.
+    - `join_model`: таблица для `JOIN`, если требуется сортировка по связанной таблице.
+    - `order_by`: объект сортировки (например, Model.field.desc()).
+    - `limit`: ограничение количества записей.
+    - `filters`: фильтрация (поддерживает простые значения и функции, такие как `col.in_([...])`).
+
+    Возвращает:
+    - Список найденных объектов.
     """
     try:
-        query = select(model).filter_by(**filters)
-        result = await session_local.execute(query)
+        query = select(model)
+
+        # Если указан join_model, добавляем JOIN
+        if join_model:
+            query = query.join(join_model)
+
+        # Добавляем фильтры
+        for key, value in filters.items():
+            if callable(value):
+                query = query.filter(
+                    value(getattr(model, key))
+                )  # Если передана функция (например, col.in_([...]))
+            else:
+                query = query.filter(
+                    getattr(model, key) == value
+                )  # Обычное сравнение
+
+        # Добавляем сортировку, если передана
+        if order_by is not None:
+            query = query.order_by(order_by)
+
+        # Ограничиваем количество записей, если передан лимит
+        if limit is not None:
+            query = query.limit(limit)
+
+        result = await session.execute(query)
         return result.scalars().all()
+
     except SQLAlchemyError as e:
         raise DatabaseFetchError(str(e))
 
 
 @save_execute
-async def create(model: Type[Any], **fields) -> Any:
+async def create(session: AsyncSession, model: Type[Any], **fields) -> Any:
     """
     Создать новую запись в базе данных.
 
@@ -49,17 +95,20 @@ async def create(model: Type[Any], **fields) -> Any:
     """
     try:
         instance = model(**fields)
-        session_local.add(instance)
-        await session_local.commit()
+        session.add(instance)
+        await session.commit()
         return instance
     except SQLAlchemyError as e:
-        await session_local.rollback()
+        await session.rollback()
         raise DatabaseCreationError(str(e))
 
 
 @save_execute
 async def get_or_create(
-    model: Type[Any], defaults: Optional[dict] = None, **filters
+    session: AsyncSession,
+    model: Type[Any],
+    defaults: Optional[dict] = None,
+    **filters,
 ) -> Tuple[Any, bool]:
     """
     Получить запись по фильтрам или создать (если не найдена).
@@ -80,7 +129,9 @@ async def get_or_create(
 
 
 @save_execute
-async def get_user_from_redis_or_db(user_id: int) -> Optional[Dict[str, str]]:
+async def get_user_from_redis_or_db(
+    session: AsyncSession, user_id: int
+) -> Optional[Dict[str, str]]:
     """
     Сначала пытается получить данные из Redis.
     Если их нет, получает или создаёт пользователя в БД,
@@ -120,6 +171,7 @@ async def get_user_from_redis_or_db(user_id: int) -> Optional[Dict[str, str]]:
 
 @save_execute
 async def update_or_create(
+    session: AsyncSession,
     model: Any,
     project_id: Optional[int] = None,
     id: Optional[int] = None,
@@ -145,7 +197,7 @@ async def update_or_create(
             "Необходимо указать id или project_id для поиска записи."
         )
 
-    result = await session_local.execute(query)
+    result = await session.execute(query)
     instance = result.scalars().first()
 
     if instance:
@@ -166,7 +218,7 @@ async def update_or_create(
             raise ValueError(
                 "Необходимо указать id или project_id для создания записи."
             )
-        session_local.add(instance)
+        session.add(instance)
 
-    await session_local.commit()
+    await session.commit()
     return instance

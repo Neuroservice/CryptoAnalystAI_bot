@@ -90,7 +90,7 @@ def get_crypto_key(symbol: str) -> str:
 
 
 @save_execute
-async def get_user_project_info(user_coin_name: str):
+async def get_user_project_info(session: AsyncSession, user_coin_name: str):
     """
     Получает информацию о проекте и связанных метриках по имени монеты пользователя.
     """
@@ -496,6 +496,7 @@ async def fetch_tokenomics_data(url: str) -> list:
     return tokenomics_data
 
 
+@save_execute
 async def get_percentage_data(
     async_session: AsyncSession, lower_name: str, user_coin_name: str
 ):
@@ -749,16 +750,12 @@ async def fetch_coinmarketcap_data(
 
             result = {
                 "circulating_supply": circulating_supply
-                if circulating_supply not in (None, 0)
+                if circulating_supply
                 else None,
-                "total_supply": total_supply
-                if total_supply not in (None, 0)
-                else None,
-                "price": price if price not in (None, 0) else None,
-                "capitalization": market_cap
-                if market_cap not in (None, 0)
-                else None,
-                "coin_fdv": coin_fdv if coin_fdv not in (None, 0) else None,
+                "total_supply": total_supply if total_supply else None,
+                "price": price if price else None,
+                "capitalization": market_cap if market_cap else None,
+                "coin_fdv": coin_fdv if coin_fdv else None,
             }
 
             # Удаляем ключи, у которых значение None
@@ -1004,7 +1001,7 @@ async def fetch_top_100_wallets(coin_name: str):
 
 
 @save_execute
-async def fetch_fundraise_data(user_coin_name: str):
+async def fetch_fundraise_data(session: AsyncSession, user_coin_name: str):
     """
     Получение данных о фандрейзе токена.
     """
@@ -1162,6 +1159,7 @@ async def get_top_projects_by_capitalization(
         # Получение топ-тикеров по капитализации
         top_ticker_projects = await get_all(
             Project,
+            join_model=Tokenomics,
             category=project_type,
             coin_name=lambda col: col.in_(tickers),
             order_by=Tokenomics.capitalization.desc(),
@@ -1171,6 +1169,7 @@ async def get_top_projects_by_capitalization(
         # Получение других проектов по капитализации
         top_other_projects = await get_all(
             Project,
+            join_model=Tokenomics,
             category=project_type,
             coin_name=lambda col: col.in_(tickers),
             order_by=Tokenomics.capitalization.desc(),
@@ -1211,7 +1210,6 @@ async def check_and_run_tasks(
     network_metrics: NetworkMetrics,
     twitter_name: Any,
     user_coin_name: str,
-    session: AsyncSession,
     model_mapping: dict,
 ):
     """
@@ -1264,7 +1262,7 @@ async def check_and_run_tasks(
     ) or not funds_profit:
         tasks.append(
             (
-                get_percentage_data(session, lower_name, user_coin_name),
+                get_percentage_data(lower_name, user_coin_name),
                 "funds_profit",
             )
         )
