@@ -739,22 +739,34 @@ async def fetch_coinmarketcap_data(
             logging.info(f"{coin_name, data['data'][user_coin_name]['name']}")
 
             crypto_data = data["data"][user_coin_name]["quote"]["USD"]
-            circulating_supply = data["data"][user_coin_name]["circulating_supply"]
+            circulating_supply = data["data"][user_coin_name][
+                "circulating_supply"
+            ]
             total_supply = data["data"][user_coin_name]["total_supply"]
             price = crypto_data["price"]
             market_cap = crypto_data["market_cap"]
             coin_fdv = total_supply * price if price and price > 0 else None
 
             result = {
-                "circulating_supply": circulating_supply if circulating_supply not in (None, 0) else None,
-                "total_supply": total_supply if total_supply not in (None, 0) else None,
+                "circulating_supply": circulating_supply
+                if circulating_supply not in (None, 0)
+                else None,
+                "total_supply": total_supply
+                if total_supply not in (None, 0)
+                else None,
                 "price": price if price not in (None, 0) else None,
-                "capitalization": market_cap if market_cap not in (None, 0) else None,
+                "capitalization": market_cap
+                if market_cap not in (None, 0)
+                else None,
                 "coin_fdv": coin_fdv if coin_fdv not in (None, 0) else None,
             }
 
             # Удаляем ключи, у которых значение None
-            result = {key: value for key, value in result.items() if value is not None}
+            result = {
+                key: value
+                for key, value in result.items()
+                if value is not None
+            }
 
             if result:
                 result["coin_name"] = coin_name
@@ -768,7 +780,9 @@ async def fetch_coinmarketcap_data(
                     message.from_user.id,
                     session_local,
                 )
-            logging.info("Ошибка: данные о монете не получены. Проверьте введённый тикер.")
+            logging.info(
+                "Ошибка: данные о монете не получены. Проверьте введённый тикер."
+            )
             return None
 
     except AttributeError as attr_error:
@@ -1311,7 +1325,9 @@ async def check_and_run_tasks(
         # Запускаем задачи и выводим название каждой задачи перед выполнением
         task_results = []
         for task, (model_name) in tasks:
-            print(f"Запуск задачи для модели: {model_name}")  # Выводим название текущей задачи
+            print(
+                f"Запуск задачи для модели: {model_name}"
+            )  # Выводим название текущей задачи
             task_results.append(task)
 
         # Ожидаем выполнения всех задач
@@ -1339,7 +1355,11 @@ async def check_and_run_tasks(
                 # Преобразуем данные в формат для модели
                 data_dict = map_data_to_model_fields(model_name, data)
                 print("data_dict: ", data_dict)
-                if not data_dict or "N/A" in data_dict.values() or data_dict is None:
+                if (
+                    not data_dict
+                    or "N/A" in data_dict.values()
+                    or data_dict is None
+                ):
                     logging.warning(
                         f"Данные содержат N/A или равны None, пропускаем сохранение: {data}"
                     )

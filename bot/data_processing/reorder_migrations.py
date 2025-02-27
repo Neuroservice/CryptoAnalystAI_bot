@@ -3,7 +3,11 @@ import os
 from pathlib import Path
 from typing import List, Dict, Optional
 
-from bot.utils.common.consts import REVISION_PATTERN, REVISES_PATTERN, MIGRATIONS_DIR
+from bot.utils.common.consts import (
+    REVISION_PATTERN,
+    REVISES_PATTERN,
+    MIGRATIONS_DIR,
+)
 
 
 def extract_revision_data(file_path: Path) -> Dict[str, Optional[str]]:
@@ -21,11 +25,13 @@ def extract_revision_data(file_path: Path) -> Dict[str, Optional[str]]:
         return {
             "file": str(file_path),
             "revision": revision.group(1) if revision else None,
-            "revises": revises.group(1) if revises else None
+            "revises": revises.group(1) if revises else None,
         }
 
 
-def build_chain(revision_data: List[Dict[str, Optional[str]]]) -> List[Dict[str, Optional[str]]]:
+def build_chain(
+    revision_data: List[Dict[str, Optional[str]]]
+) -> List[Dict[str, Optional[str]]]:
     """
     Строит цепочку миграций на основе Revision ID и Revises.
 
@@ -36,15 +42,27 @@ def build_chain(revision_data: List[Dict[str, Optional[str]]]) -> List[Dict[str,
     chain = []
 
     # Найти первый элемент цепочки (где Revises == None)
-    current = next((item for item in revision_data if item["revises"] in (None, "None")), None)
+    current = next(
+        (item for item in revision_data if item["revises"] in (None, "None")),
+        None,
+    )
 
     while current:
         chain.append(current)
         next_revision = current["revision"]
-        current = next((item for item in revision_data if item["revises"] == next_revision), None)
+        current = next(
+            (
+                item
+                for item in revision_data
+                if item["revises"] == next_revision
+            ),
+            None,
+        )
 
     if len(chain) != len(revision_data):
-        print("Warning: Not all migrations are connected. Some files might be skipped.")
+        print(
+            "Warning: Not all migrations are connected. Some files might be skipped."
+        )
 
     return chain
 

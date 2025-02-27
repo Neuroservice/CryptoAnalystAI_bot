@@ -37,7 +37,9 @@ async def create_db():
                     await conn.run_sync(FundsProfit.metadata.create_all)
                     await conn.run_sync(TopAndBottom.metadata.create_all)
                     await conn.run_sync(MarketMetrics.metadata.create_all)
-                    await conn.run_sync(ManipulativeMetrics.metadata.create_all)
+                    await conn.run_sync(
+                        ManipulativeMetrics.metadata.create_all
+                    )
                     await conn.run_sync(NetworkMetrics.metadata.create_all)
                     await conn.run_sync(AgentAnswer.metadata.create_all)
                     print("Все таблицы созданы успешно.")

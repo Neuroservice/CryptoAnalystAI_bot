@@ -234,7 +234,11 @@ async def process_metrics(
     investing_metrics = results.get("investing_metrics")
     if investing_metrics is not None:
         await update_investing_metrics(
-            session, new_project.id, investing_metrics, user_coin_name, investors
+            session,
+            new_project.id,
+            investing_metrics,
+            user_coin_name,
+            investors,
         )
 
     # Обновление сетевых метрик, проверка на None
@@ -267,6 +271,8 @@ async def process_metrics(
     if market_metrics and all(metric is not None for metric in market_metrics):
         await update_market_metrics(session, new_project.id, market_metrics)
     else:
-        logging.warning("Неверные данные для рыночных метрик или отсутствуют значения.")
+        logging.warning(
+            "Неверные данные для рыночных метрик или отсутствуют значения."
+        )
 
     return new_project
