@@ -51,7 +51,7 @@ jobs:
               -e ALEMBIC_URL=${{ secrets.ALEMBIC_URL }} \
               cryptoanalyst_bot_test alembic upgrade head
             
-            sudo docker-compose -f docker-compose.yml stop cryptoanalyst_bot_test
+            sudo docker-compose -f docker-compose.yml down cryptoanalyst_bot_test
             sudo docker-compose -f docker-compose.yml up --build -d --no-recreate cryptoanalyst_bot_test
             sudo docker image prune --force
             sudo docker volume prune --force
@@ -96,7 +96,7 @@ jobs:
               -e ALEMBIC_URL=${{ secrets.ALEMBIC_URL }} \
               cryptoanalyst_bot_prod alembic upgrade head
             
-            sudo docker-compose -f docker-compose.yml stop cryptoanalyst_bot_prod
+            sudo docker-compose -f docker-compose.yml down cryptoanalyst_bot_prod
             sudo docker-compose -f docker-compose.yml up --build -d --no-recreate cryptoanalyst_bot_prod
             sudo docker image prune --force
             sudo docker volume prune --force
