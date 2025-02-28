@@ -393,7 +393,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
         await state.update_data(**data)
         report = await create_basic_report(
-            session_local, state, message=message, user_id=message.from_user.id
+            state, message=message, user_id=message.from_user.id
         )
 
         await message.answer(report)
