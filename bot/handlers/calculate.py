@@ -215,7 +215,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
         # Обновление или создание BasicMetrics
         await update_or_create(
-            session=session_local,
             model=BasicMetrics,
             project_id=new_project.id,
             defaults={
@@ -227,7 +226,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
         # Обновление или создание Tokenomics
         await update_or_create(
-            session=session_local,
             model=Tokenomics,
             project_id=new_project.id,
             defaults={
