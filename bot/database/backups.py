@@ -43,7 +43,7 @@ async def create_backup():
     os.makedirs(local_backup_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_file = os.path.join(local_backup_dir, f"backup_{timestamp}.backup")
+    backup_file = os.path.join(local_backup_dir, f"backup_{timestamp}_{DB_NAME}.backup")
 
     command = [
         "pg_dump",
