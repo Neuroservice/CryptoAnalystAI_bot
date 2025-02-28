@@ -82,7 +82,6 @@ async def parse_periodically(session):
                 await asyncio.gather(
                     fetch_crypto_data(session),
                     update_agent_answers(),
-                    create_backup(),
                 )
                 logging.info("Все задачи выполнены успешно.")
             except Exception as e:
@@ -175,3 +174,15 @@ async def parse_tokens_weekly():
 
         # Ожидание 7 дней
         await asyncio.sleep(7 * 24 * 60 * 60)
+
+
+async def backup_database():
+    """Создаёт бэкап базы данных каждый день."""
+    while True:
+        try:
+            await create_backup()
+            logging.info(f"Бэкап создан")
+        except Exception as e:
+            logging.error(f"Ошибка при создании бэкапа: {e}")
+
+        await asyncio.sleep(60 * 60 * 24)
