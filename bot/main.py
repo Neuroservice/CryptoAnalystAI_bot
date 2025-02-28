@@ -11,6 +11,7 @@ from bot.data_processing.tasks import (
     parse_categories_weekly,
     parse_tokens_weekly,
 )
+from bot.database.backups import create_backup
 from bot.handlers import history, select_language, donate
 from bot.utils.common.config import API_TOKEN
 from bot.utils.common.sessions import session_local, SessionLocal, redis_client
@@ -25,6 +26,18 @@ from bot.utils.validations import check_redis_connection
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+async def backup_database():
+    """Создаёт бэкап базы данных каждые 30 минут."""
+    while True:
+        try:
+            await create_backup()
+            logger.info(f"Бэкап создан")
+        except Exception as e:
+            logger.error(f"Ошибка при создании бэкапа: {e}")
+
+        await asyncio.sleep(30)
 
 
 async def main():
@@ -67,9 +80,10 @@ async def main():
             dp.update.middleware(RestoreStateMiddleware(SessionLocal))
 
             logging.info("Запуск периодического обновления данных.")
-            asyncio.create_task(parse_periodically(session_local))
-            asyncio.create_task(parse_categories_weekly())
-            asyncio.create_task(parse_tokens_weekly())
+            # asyncio.create_task(parse_periodically(session_local))
+            # asyncio.create_task(parse_categories_weekly())
+            # asyncio.create_task(parse_tokens_weekly())
+            asyncio.create_task(backup_database())
 
             await dp.start_polling(bot)
 

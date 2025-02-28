@@ -16,8 +16,6 @@ def load_document_for_garbage_list(
     """
 
     try:
-        print("start_title, end_title: ", start_title, end_title)
-
         # Получение содержимого документа в текстовом формате
         response = requests.get(DOCUMENT_GARBAGE_LIST_URL)
         response.raise_for_status()

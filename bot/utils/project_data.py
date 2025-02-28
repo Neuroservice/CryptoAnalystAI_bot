@@ -1241,7 +1241,7 @@ async def get_top_projects_by_capitalization(
         return [
             project.coin_name
             for project in (top_ticker_projects + top_other_projects)
-            if project.cmc_rank < 1000
+            if project.cmc_rank and project.cmc_rank < 1000
         ]
 
     except DatabaseFetchError as e:
