@@ -37,9 +37,7 @@ async def change_language(message: types.Message):
         user = await get_one(User, telegram_id=user_id)
 
         if user:
-            await update_or_create(
-                User, id=user.id, defaults={"language": new_language}
-            )
+            await update_or_create(User, id=user.id, defaults={"language": new_language})
         else:
             await create(User, telegram_id=user_id, language=new_language)
 

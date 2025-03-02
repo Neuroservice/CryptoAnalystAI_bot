@@ -82,16 +82,10 @@ async def create_basic_report(
         project = project_info.get("project")
         basic_metrics = project_info.get("basic_metrics")
 
-        projects, tokenomics_data_list = await get_project_and_tokenomics(
-            categories, user_coin_name
-        )
-        top_projects = get_top_projects_by_capitalization_and_category(
-            tokenomics_data_list
-        )
+        projects, tokenomics_data_list = await get_project_and_tokenomics(categories, user_coin_name, project.tier)
+        top_projects = get_top_projects_by_capitalization_and_category(tokenomics_data_list)
 
-        for index, (project, tokenomics_data) in enumerate(
-            top_projects, start=1
-        ):
+        for index, (project, tokenomics_data) in enumerate(top_projects, start=1):
             for tokenomics in tokenomics_data:
                 fdv = tokenomics.fdv if tokenomics.fdv else 0
                 calculation_result = calculate_expected_x(
@@ -101,9 +95,7 @@ async def create_basic_report(
                 )
 
                 if "error" in calculation_result:
-                    raise ValueProcessingError(
-                        str(calculation_result["error"])
-                    )
+                    raise ValueProcessingError(str(calculation_result["error"]))
 
                 fair_price = calculation_result["fair_price"]
                 fair_price = (
@@ -119,8 +111,7 @@ async def create_basic_report(
                             user_coin_name,
                             project.coin_name,
                             round(
-                                (float(calculation_result["expected_x"]) - 1.0)
-                                * 100,
+                                (float(calculation_result["expected_x"]) - 1.0) * 100,
                                 2,
                             ),
                             fair_price,
@@ -140,26 +131,16 @@ async def create_basic_report(
                 if project.coin_name in TICKERS:
                     try:
                         if not isinstance(fair_price, (str, int, float)):
-                            raise ValueProcessingError(
-                                f"Unexpected type for fair_price: {type(fair_price)}"
-                            )
+                            raise ValueProcessingError(f"Unexpected type for fair_price: {type(fair_price)}")
 
                         if not isinstance(index, int):
-                            raise ValueProcessingError(
-                                f"Unexpected type for index: {type(index)}"
-                            )
+                            raise ValueProcessingError(f"Unexpected type for index: {type(index)}")
                         if not isinstance(user_coin_name, str):
-                            raise ValueProcessingError(
-                                f"Unexpected type for user_coin_name: {type(user_coin_name)}"
-                            )
+                            raise ValueProcessingError(f"Unexpected type for user_coin_name: {type(user_coin_name)}")
                         if not isinstance(project_coin, str):
-                            raise ValueProcessingError(
-                                f"Unexpected type for project_coin: {type(project_coin)}"
-                            )
+                            raise ValueProcessingError(f"Unexpected type for project_coin: {type(project_coin)}")
 
-                        comparison_results += calculations_choices[
-                            language
-                        ].format(
+                        comparison_results += calculations_choices[language].format(
                             user_coin_name=user_coin_name,
                             project_coin_name=project_coin,
                             growth=expected_x,
@@ -170,18 +151,10 @@ async def create_basic_report(
                     except ValueProcessingError as e:
                         logging.error(f"{e}")
                         logging.error(f"index: {index}, type: {type(index)}")
-                        logging.error(
-                            f"user_coin_name: {user_coin_name}, type: {type(user_coin_name)}"
-                        )
-                        logging.error(
-                            f"project_coin: {project_coin}, type: {type(project_coin)}"
-                        )
-                        logging.error(
-                            f"growth: {expected_x}, type: {type(expected_x)}"
-                        )
-                        logging.error(
-                            f"fair_price: {fair_price}, type: {type(fair_price)}"
-                        )
+                        logging.error(f"user_coin_name: {user_coin_name}, type: {type(user_coin_name)}")
+                        logging.error(f"project_coin: {project_coin}, type: {type(project_coin)}")
+                        logging.error(f"growth: {expected_x}, type: {type(expected_x)}")
+                        logging.error(f"fair_price: {fair_price}, type: {type(fair_price)}")
                         raise
 
         answer = comparison_results + "\n"
@@ -220,9 +193,7 @@ async def create_pdf_report(
     user_data = await get_user_from_redis_or_db(user_id)
     language = user_data.get("language", "ENG")
     current_date = datetime.now().strftime("%d.%m.%Y")
-    existing_calculation = await get_one(
-        Calculation, id=calculation_record["id"]
-    )
+    existing_calculation = await get_one(Calculation, id=calculation_record["id"])
 
     try:
         result = await get_project_and_tokenomics(
@@ -232,23 +203,15 @@ async def create_pdf_report(
         )
 
         if not isinstance(result, tuple) or len(result) != 2:
-            raise ValueProcessingError(
-                "Unexpected result format from get_project_and_tokenomics."
-            )
+            raise ValueProcessingError("Unexpected result format from get_project_and_tokenomics.")
 
         projects, tokenomics_data_list = result
-        top_projects = get_top_projects_by_capitalization_and_category(
-            tokenomics_data_list
-        )
+        top_projects = get_top_projects_by_capitalization_and_category(tokenomics_data_list)
 
         if "error" in projects:
-            raise ValueProcessingError(
-                f"Error from project data: {projects['error']}"
-            )
+            raise ValueProcessingError(f"Error from project data: {projects['error']}")
 
-        for index, (project, tokenomics_data) in enumerate(
-            top_projects, start=1
-        ):
+        for index, (project, tokenomics_data) in enumerate(top_projects, start=1):
             if tokenomics_data:
                 for tokenomics in tokenomics_data:
 
@@ -260,15 +223,11 @@ async def create_pdf_report(
                     )
 
                     if "error" in calculation_result:
-                        raise ValueProcessingError(
-                            str(calculation_result["error"])
-                        )
+                        raise ValueProcessingError(str(calculation_result["error"]))
 
                     fair_price = (
                         f"{calculation_result['fair_price']:.5f}"
-                        if isinstance(
-                            calculation_result["fair_price"], (int, float)
-                        )
+                        if isinstance(calculation_result["fair_price"], (int, float))
                         else phrase_by_language("comparisons_error", language)
                     )
                     expected_x = f"{calculation_result['expected_x']:.5f}"
@@ -295,9 +254,7 @@ async def create_pdf_report(
         top_and_bottom = project_info.get("top_and_bottom")
         network_metrics = project_info.get("network_metrics")
 
-        existing_answer = await get_one(
-            AgentAnswer, project_id=project.id, language=language
-        )
+        existing_answer = await get_one(AgentAnswer, project_id=project.id, language=language)
 
         comparison_results = ""
         result_index = 1
@@ -308,27 +265,17 @@ async def create_pdf_report(
                     try:
                         # Проверка fair_price, чтобы убедиться, что это строка или число
                         if not isinstance(fair_price, (str, int, float)):
-                            raise ValueProcessingError(
-                                f"Unexpected type for fair_price: {type(fair_price)}"
-                            )
+                            raise ValueProcessingError(f"Unexpected type for fair_price: {type(fair_price)}")
 
                         # Проверяем типы других переменных
                         if not isinstance(index, int):
-                            raise ValueProcessingError(
-                                f"Unexpected type for index: {type(index)}"
-                            )
+                            raise ValueProcessingError(f"Unexpected type for index: {type(index)}")
                         if not isinstance(coin_name, str):
-                            raise ValueProcessingError(
-                                f"Unexpected type for user_coin_name: {type(coin_name)}"
-                            )
+                            raise ValueProcessingError(f"Unexpected type for user_coin_name: {type(coin_name)}")
                         if not isinstance(project_coin, str):
-                            raise ValueProcessingError(
-                                f"Unexpected type for project_coin_name: {type(project_coin)}"
-                            )
+                            raise ValueProcessingError(f"Unexpected type for project_coin_name: {type(project_coin)}")
 
-                        comparison_results += calculations_choices[
-                            language
-                        ].format(
+                        comparison_results += calculations_choices[language].format(
                             index=index,
                             user_coin_name=coin_name,
                             project_coin_name=project_coin,
@@ -350,13 +297,9 @@ async def create_pdf_report(
                         raise ValueProcessingError(error_message)
 
         all_data_string_for_funds_agent = ALL_DATA_STRING_FUNDS_AGENT.format(
-            funds_profit_distribution=get_metric_value(
-                funds_profit, "distribution"
-            )
+            funds_profit_distribution=get_metric_value(funds_profit, "distribution")
         )
-        funds_agent_answer = await agent_handler(
-            "funds_agent", topic=all_data_string_for_funds_agent
-        )
+        funds_agent_answer = await agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
 
         fdv = (
             float(tokenomics_data.fdv)
@@ -377,12 +320,7 @@ async def create_pdf_report(
             result_ratio = phrase_by_language("no_data", language)
             final_score = result_ratio
 
-        (
-            funds_answer,
-            funds_scores,
-            funds_score,
-            growth_and_fall_score,
-        ) = analyze_project_metrics(
+        (funds_answer, funds_scores, funds_score, growth_and_fall_score,) = analyze_project_metrics(
             final_score,
             get_metric_value(
                 market_metrics,
@@ -402,17 +340,14 @@ async def create_pdf_report(
             get_metric_value(
                 network_metrics,
                 "tvl",
-                transform=lambda tvl: (tvl / tokenomics_data.capitalization)
-                * 100
+                transform=lambda tvl: (tvl / tokenomics_data.capitalization) * 100
                 if tokenomics_data and tokenomics_data.capitalization
                 else None,
             ),
         )
 
         if investing_metrics and investing_metrics.fund_level:
-            project_investors_level_result = project_investors_level(
-                investors=investing_metrics.fund_level
-            )
+            project_investors_level_result = project_investors_level(investors=investing_metrics.fund_level)
             investors_level = project_investors_level_result["level"]
             investors_level_score = project_investors_level_result["score"]
         else:
@@ -420,27 +355,15 @@ async def create_pdf_report(
             investors_level_score = 0
 
         tier_answer = determine_project_tier(
-            capitalization=tokenomics_data.fdv
-            if tokenomics_data and tokenomics_data.fdv
-            else "N/A",
-            fundraising=investing_metrics.fundraise
-            if investing_metrics and investing_metrics.fundraise
-            else "N/A",
-            twitter_followers=social_metrics.twitter
-            if social_metrics and social_metrics.twitter
-            else "N/A",
-            twitter_score=social_metrics.twitterscore
-            if social_metrics and social_metrics.twitterscore
-            else "N/A",
-            investors=investing_metrics.fund_level
-            if investing_metrics and investing_metrics.fund_level
-            else "N/A",
+            capitalization=tokenomics_data.fdv if tokenomics_data and tokenomics_data.fdv else "N/A",
+            fundraising=investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else "N/A",
+            twitter_followers=social_metrics.twitter if social_metrics and social_metrics.twitter else "N/A",
+            twitter_score=social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else "N/A",
+            investors=investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else "N/A",
             language=language,
         )
 
-        await update_or_create(
-            Project, id=project.id, defaults={"tier": tier_answer}
-        )
+        await update_or_create(Project, id=project.id, defaults={"tier": tier_answer})
 
         if existing_answer is None:
             data_for_tokenomics = []
@@ -453,30 +376,17 @@ async def create_pdf_report(
             ) in row_data:
                 ticker = project_coin
                 growth_percent = expected_x
-                data_for_tokenomics.append(
-                    {ticker: {"growth_percent": growth_percent}}
-                )
+                data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
 
-            tokemonic_answer, tokemonic_score = calculate_tokenomics_score(
-                project.coin_name, data_for_tokenomics
-            )
+            tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
             project_rating_result = calculate_project_score(
-                investing_metrics.fundraise
-                if investing_metrics and investing_metrics.fundraise
-                else 0.0,
+                investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 0.0,
                 f"{tier_answer}",
                 investors_level_score,
-                social_metrics.twitter
-                if social_metrics and social_metrics.twitter
-                else 0,
-                social_metrics.twitterscore
-                if social_metrics and social_metrics.twitterscore
-                else 0.0,
+                social_metrics.twitter if social_metrics and social_metrics.twitter else 0,
+                social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 0.0,
                 tokemonic_score if tokemonic_score else 0.0,
-                int(
-                    (network_metrics.tvl / tokenomics_data.capitalization)
-                    * 100
-                )
+                int((network_metrics.tvl / tokenomics_data.capitalization) * 100)
                 if network_metrics
                 and network_metrics.tvl
                 and tokenomics_data
@@ -491,30 +401,24 @@ async def create_pdf_report(
                 language,
             )
 
-            project_rating_answer = project_rating_result[
-                "calculations_summary"
-            ]
+            project_rating_answer = project_rating_result["calculations_summary"]
             fundraising_score = project_rating_result["fundraising_score"]
             followers_score = project_rating_result["followers_score"]
-            twitter_engagement_score = project_rating_result[
-                "twitter_engagement_score"
-            ]
+            twitter_engagement_score = project_rating_result["twitter_engagement_score"]
             tokenomics_score = project_rating_result["tokenomics_score"]
             overal_final_score = project_rating_result["preliminary_score"]
             project_rating_text = project_rating_result["project_rating"]
 
-            all_data_string_for_flags_agent = (
-                ALL_DATA_STRING_FLAGS_AGENT.format(
-                    project_coin_name=project.coin_name,
-                    project_categories=categories,
-                    tier_answer=tier_answer,
-                    tokemonic_answer=tokemonic_answer,
-                    funds_answer=funds_answer,
-                    project_rating_answer=project_rating_answer,
-                    social_metrics_twitter=social_metrics.twitter,
-                    twitter_link=twitter_name,
-                    social_metrics_twitterscore=social_metrics.twitterscore,
-                )
+            all_data_string_for_flags_agent = ALL_DATA_STRING_FLAGS_AGENT.format(
+                project_coin_name=project.coin_name,
+                project_categories=categories,
+                tier_answer=tier_answer,
+                tokemonic_answer=tokemonic_answer,
+                funds_answer=funds_answer,
+                project_rating_answer=project_rating_answer,
+                social_metrics_twitter=social_metrics.twitter,
+                twitter_link=twitter_name,
+                social_metrics_twitterscore=social_metrics.twitterscore,
             )
 
             flags_answer = await generate_flags_answer(
@@ -553,11 +457,7 @@ async def create_pdf_report(
                 max_value=phrase_by_language("no_data", language),
             )
 
-            if (
-                top_and_bottom
-                and top_and_bottom.lower_threshold
-                and top_and_bottom.upper_threshold
-            ):
+            if top_and_bottom and top_and_bottom.lower_threshold and top_and_bottom.upper_threshold:
                 top_and_bottom_answer = await phrase_by_user(
                     "top_bottom_values",
                     message.from_user.id,
@@ -576,9 +476,7 @@ async def create_pdf_report(
                 fundraising_amount=f"{fundraising_amount:,.2f}"
                 if isinstance(fundraising_amount, float)
                 else fundraising_amount,
-                result_ratio=f"{result_ratio:.4f}"
-                if isinstance(result_ratio, float)
-                else result_ratio,
+                result_ratio=f"{result_ratio:.4f}" if isinstance(result_ratio, float) else result_ratio,
                 final_score=final_score,
             )
 
@@ -586,13 +484,9 @@ async def create_pdf_report(
                 print(funds_profit, funds_profit.distribution)
                 distribution_items = funds_profit.distribution.split("\n")
                 print(distribution_items)
-                formatted_distribution = "\n".join(
-                    [f"- {item}" for item in distribution_items]
-                )
+                formatted_distribution = "\n".join([f"- {item}" for item in distribution_items])
             else:
-                formatted_distribution = phrase_by_language(
-                    "no_token_distribution", language
-                )
+                formatted_distribution = phrase_by_language("no_token_distribution", language)
 
             formatted_metrics = [
                 format_metric(
@@ -672,15 +566,10 @@ async def create_pdf_report(
                 tokenomics_score=tokenomics_score,
                 profitability_score=round(funds_score, 2),
                 preliminary_score=int(growth_and_fall_score),
-                top_100_percent=round(
-                    manipulative_metrics.top_100_wallet * 100, 2
-                )
+                top_100_percent=round(manipulative_metrics.top_100_wallet * 100, 2)
                 if manipulative_metrics and manipulative_metrics.top_100_wallet
                 else 0,
-                tvl_percent=int(
-                    (network_metrics.tvl / tokenomics_data.capitalization)
-                    * 100
-                )
+                tvl_percent=int((network_metrics.tvl / tokenomics_data.capitalization) * 100)
                 if network_metrics
                 and network_metrics.tvl
                 and tokenomics_data
@@ -716,12 +605,8 @@ async def create_pdf_report(
             if language == "RU":
                 match = re.search(PROJECT_POINTS_RU, flags_answer)
 
-            overal_final_score = phrase_by_language(
-                "no_project_rating", language
-            )
-            project_rating_text = phrase_by_language(
-                "no_project_score", language
-            )
+            overal_final_score = phrase_by_language("no_project_rating", language)
+            project_rating_text = phrase_by_language("no_project_score", language)
 
             if match:
                 overal_final_score = float(match.group(1))  # Извлекаем баллы
@@ -729,9 +614,7 @@ async def create_pdf_report(
                 print(f"Итоговые баллы: {overal_final_score}")
                 print(f"Оценка проекта: {project_rating_text}")
 
-            pdf_output, extracted_text = create_pdf_file(
-                existing_calculation, language, flags_answer
-            )
+            pdf_output, extracted_text = create_pdf_file(existing_calculation, language, flags_answer)
 
         await update_or_create(
             model=AgentAnswer,

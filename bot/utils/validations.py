@@ -46,21 +46,15 @@ from bot.utils.resources.files_worker.google_doc import (
 )
 
 
-async def validate_user_input(
-    user_coin_name: str, message: types.Message, state: FSMContext
-):
+async def validate_user_input(user_coin_name: str, message: types.Message, state: FSMContext):
     """
     Проверяет введенный пользователем токен и выполняет соответствующие действия.
     """
 
     user_coin_name = user_coin_name.upper().replace(" ", "")
-    stablecoins = load_document_for_garbage_list(
-        START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS
-    )
+    stablecoins = load_document_for_garbage_list(START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS)
     scam_tokens = load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS)
-    fundamental_tokens = load_document_for_garbage_list(
-        START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL
-    )
+    fundamental_tokens = load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL)
 
     # Проверка на команду выхода
     if user_coin_name.lower() == "/exit":
@@ -73,9 +67,7 @@ async def validate_user_input(
 
     # Проверка на фундаментальный токен
     if user_coin_name in fundamental_tokens:
-        return await phrase_by_user(
-            "fundamental_tokens_answer", message.from_user.id
-        )
+        return await phrase_by_user("fundamental_tokens_answer", message.from_user.id)
 
     # Проверка на скам-токен
     if user_coin_name in scam_tokens:
@@ -100,11 +92,7 @@ def extract_description(topic: str, language: str) -> str:
     """
 
     match = re.search(PROJECT_DESCRIPTION_PATTERN, topic, re.DOTALL)
-    return (
-        match.group(1)
-        if match
-        else phrase_by_language("no_green_flags", language)
-    )
+    return match.group(1) if match else phrase_by_language("no_green_flags", language)
 
 
 def extract_red_green_flags(answer: str, language: str) -> str:
@@ -121,19 +109,11 @@ def extract_red_green_flags(answer: str, language: str) -> str:
 
     # Извлекаем положительные характеристики
     positive_match = re.search(positive_pattern, answer, re.S)
-    positive_text = (
-        positive_match.group(1)
-        if positive_match
-        else phrase_by_language("no_green_flags", language)
-    )
+    positive_text = positive_match.group(1) if positive_match else phrase_by_language("no_green_flags", language)
 
     # Извлекаем отрицательные характеристики
     negative_match = re.search(negative_pattern, answer, re.S)
-    negative_text = (
-        negative_match.group(1)
-        if negative_match
-        else phrase_by_language("no_red_flags", language)
-    )
+    negative_text = negative_match.group(1) if negative_match else phrase_by_language("no_red_flags", language)
 
     # Возвращаем объединенные результаты
     return f"{positive_text}\n{negative_text}"
@@ -163,12 +143,8 @@ def extract_calculations(answer: str, language: str):
         lines = extracted_text.split("\n")
 
         for i in range(1, len(lines)):
-            if (
-                language == "ENG"
-                and lines[i].startswith("Calculation results for")
-            ) or (
-                language != "ENG"
-                and lines[i].startswith("Результаты расчета для")
+            if (language == "ENG" and lines[i].startswith("Calculation results for")) or (
+                language != "ENG" and lines[i].startswith("Результаты расчета для")
             ):
                 lines[i] = "\n" + lines[i]
 
@@ -200,12 +176,8 @@ def extract_old_calculations(answer: str, language: str):
         lines = extracted_text.split("\n")
 
         for i in range(1, len(lines)):
-            if (
-                language == "ENG"
-                and lines[i].startswith("Calculation results for")
-            ) or (
-                language != "ENG"
-                and lines[i].startswith("Результаты расчета для")
+            if (language == "ENG" and lines[i].startswith("Calculation results for")) or (
+                language != "ENG" and lines[i].startswith("Результаты расчета для")
             ):
                 lines[i] = "\n" + lines[i]
 
@@ -343,9 +315,7 @@ def process_metric(value: Any, default=0.0):
     return float(value)
 
 
-def split_long_message(
-    text: str, max_length: int = MAX_MESSAGE_LENGTH
-) -> list[str]:
+def split_long_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
     """
     Разбивает длинный текст на части, если он превышает заданный лимит длины.
     """

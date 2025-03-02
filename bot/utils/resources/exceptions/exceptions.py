@@ -59,9 +59,7 @@ class MissingKeyError(KeyError):
     """
 
     def __init__(self, detail: str):
-        super().__init__(
-            f"Ошибка при извлечении данных: отсутствует ключ {detail}"
-        )
+        super().__init__(f"Ошибка при извлечении данных: отсутствует ключ {detail}")
 
 
 class DataTypeError(TypeError):

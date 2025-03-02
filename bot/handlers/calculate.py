@@ -96,8 +96,7 @@ async def project_chosen(message: types.Message, state: FSMContext):
 
 
 @calculate_router.message(
-    lambda message: message.text == LISTING_PRICE_BETA_RU
-    or message.text == LISTING_PRICE_BETA_ENG
+    lambda message: message.text == LISTING_PRICE_BETA_RU or message.text == LISTING_PRICE_BETA_ENG
 )
 async def project_chosen(message: types.Message, state: FSMContext):
     """
@@ -122,17 +121,11 @@ async def analysis_type_chosen(message: types.Message, state: FSMContext):
     analysis_type = message.text.lower()
 
     if analysis_type in LIST_OF_TEXT_FOR_REBALANCING_BLOCK:
-        await message.answer(
-            await phrase_by_user(
-                "rebalancing_input_token", message.from_user.id
-            )
-        )
+        await message.answer(await phrase_by_user("rebalancing_input_token", message.from_user.id))
         await state.set_state(CalculateProject.waiting_for_basic_data)
 
     elif analysis_type in LIST_OF_TEXT_FOR_ANALYSIS_BLOCK:
-        await message.answer(
-            await phrase_by_user("analysis_input_token", message.from_user.id)
-        )
+        await message.answer(await phrase_by_user("analysis_input_token", message.from_user.id))
         await state.set_state(CalculateProject.waiting_for_data)
 
 
@@ -156,9 +149,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     if await validate_user_input(user_coin_name, message, state):
         return
     else:
-        await message.answer(
-            await phrase_by_user("wait_for_calculations", message.from_user.id)
-        )
+        await message.answer(await phrase_by_user("wait_for_calculations", message.from_user.id))
 
     (
         twitter_name,
@@ -175,27 +166,17 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         coin_description += description
 
     if not categories or len(categories) == 0:
-        await message.answer(
-            await phrase_by_user(
-                "error_project_inappropriate_category", message.from_user.id
-            )
-        )
+        await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id))
 
     # Получаем или создаём категории в БД
     category_instances = []
     for category_name in categories:
         if category_name not in garbage_categories:
-            category_instance, _ = await get_or_create(
-                Category, category_name=category_name
-            )
+            category_instance, _ = await get_or_create(Category, category_name=category_name)
             category_instances.append(category_instance)
 
     if len(category_instances) == 0:
-        return await message.answer(
-            await phrase_by_user(
-                "category_in_garbage_list", message.from_user.id
-            )
-        )
+        return await message.answer(await phrase_by_user("category_in_garbage_list", message.from_user.id))
 
     new_project, _ = await get_or_create(Project, coin_name=lower_name)
 
@@ -217,17 +198,11 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     try:
         header_params = get_header_params(user_coin_name)
 
-        coin_data = await fetch_coinmarketcap_data(
-            message, user_coin_name, **header_params
-        )
+        coin_data = await fetch_coinmarketcap_data(message, user_coin_name, **header_params)
         if not coin_data:
             coin_data = await fetch_coingecko_data(user_coin_name)
             if not coin_data:
-                return await message.answer(
-                    await phrase_by_user(
-                        "error_input_token_from_user", message.from_user.id
-                    )
-                )
+                return await message.answer(await phrase_by_user("error_input_token_from_user", message.from_user.id))
 
         circulating_supply = coin_data["circulating_supply"]
         total_supply = coin_data["total_supply"]
@@ -311,9 +286,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
         )
 
         if tasks.get("social_metrics", []):
-            (twitter_subs, twitter_twitterscore) = tasks.get(
-                "social_metrics", []
-            )[0]
+            (twitter_subs, twitter_twitterscore) = tasks.get("social_metrics", [])[0]
             twitter = twitter_subs
             twitterscore = twitter_twitterscore
             if twitter and twitterscore:
@@ -351,9 +324,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                     project_id=new_project.id,
                     defaults={
                         "tvl": last_tvl if last_tvl else 0,
-                        "tvl_fdv": last_tvl / (price * total_supply)
-                        if last_tvl and total_supply and price
-                        else 0,
+                        "tvl_fdv": last_tvl / (price * total_supply) if last_tvl and total_supply and price else 0,
                     },
                 )
 
@@ -363,19 +334,13 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                 ManipulativeMetrics,
                 project_id=new_project.id,
                 defaults={
-                    "fdv_fundraise": (price * total_supply) / fundraise
-                    if fundraise
-                    else None,
+                    "fdv_fundraise": (price * total_supply) / fundraise if fundraise else None,
                     "top_100_wallet": top_100_wallets,
                 },
             )
 
         funds_profit_data = tasks.get("funds_profit", [])
-        output_string = (
-            "\n".join(funds_profit_data[0])
-            if funds_profit_data and funds_profit_data[0]
-            else ""
-        )
+        output_string = "\n".join(funds_profit_data[0]) if funds_profit_data and funds_profit_data[0] else ""
 
         if output_string and output_string != "":
             await update_or_create(
@@ -407,13 +372,12 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
         data = {
             "user_coin_name": user_coin_name,
+            "new_project": new_project.to_dict(),
             "categories": categories,
         }
 
         await state.update_data(**data)
-        report = await create_basic_report(
-            state, message=message, user_id=message.from_user.id
-        )
+        report = await create_basic_report(state, message=message, user_id=message.from_user.id)
 
         await message.answer(report)
         await message.answer(
@@ -451,9 +415,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         return await message.answer(user_input)
     else:
         # Сообщаем пользователю, что будут производиться расчеты
-        await message.answer(
-            await phrase_by_user("wait_for_calculations", message.from_user.id)
-        )
+        await message.answer(await phrase_by_user("wait_for_calculations", message.from_user.id))
 
     (
         twitter_name,
@@ -465,40 +427,24 @@ async def receive_data(message: types.Message, state: FSMContext):
     if description:
         coin_description += description
 
-    token_description = await agent_handler(
-        "description", topic=coin_description, language=language
-    )
+    token_description = await agent_handler("description", topic=coin_description, language=language)
 
     token_data = await fetch_token_quote(user_coin_name)
     if token_data.get("cmc_rank") and token_data.get("cmc_rank") > 1000:
-        return await message.answer(
-            await phrase_by_user(
-                "not_in_top_cmc", message.from_user.id, language=language
-            )
-        )
+        return await message.answer(await phrase_by_user("not_in_top_cmc", message.from_user.id, language=language))
 
     if not categories or len(categories) == 0:
-        return await message.answer(
-            await phrase_by_user(
-                "error_project_inappropriate_category", message.from_user.id
-            )
-        )
+        return await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id))
 
     # Получаем или создаём категории в БД
     category_instances = []
     for category_name in categories:
         if category_name not in garbage_categories:
-            category_instance, _ = await get_or_create(
-                Category, category_name=category_name
-            )
+            category_instance, _ = await get_or_create(Category, category_name=category_name)
             category_instances.append(category_instance)
 
     if len(category_instances) == 0:
-        return await message.answer(
-            await phrase_by_user(
-                "category_in_garbage_list", message.from_user.id
-            )
-        )
+        return await message.answer(await phrase_by_user("category_in_garbage_list", message.from_user.id))
 
     # Получаем проект (если его ещё нет)
     project_instance, _ = await get_or_create(Project, coin_name=lower_name)
@@ -542,9 +488,7 @@ async def receive_data(message: types.Message, state: FSMContext):
             or not tokenomics_data.fdv
             or not basic_metrics.market_price
         ):
-            coinmarketcap_data = await fetch_coinmarketcap_data(
-                message, user_coin_name, **header_params
-            )
+            coinmarketcap_data = await fetch_coinmarketcap_data(message, user_coin_name, **header_params)
             if coinmarketcap_data:
                 circulating_supply = coinmarketcap_data["circulating_supply"]
                 total_supply = coinmarketcap_data["total_supply"]
@@ -557,9 +501,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                 print("coingecko_data: ", coin_data)
                 if not coin_data:
                     return await message.answer(
-                        await phrase_by_user(
-                            "error_input_token_from_user", message.from_user.id
-                        )
+                        await phrase_by_user("error_input_token_from_user", message.from_user.id)
                     )
 
                 circulating_supply = coin_data["circulating_supply"]
@@ -608,9 +550,7 @@ async def receive_data(message: types.Message, state: FSMContext):
     )
 
     if tasks.get("social_metrics", []):
-        (twitter_subs, twitter_twitterscore) = tasks.get("social_metrics", [])[
-            0
-        ]
+        (twitter_subs, twitter_twitterscore) = tasks.get("social_metrics", [])[0]
         twitter = twitter_subs
         twitterscore = twitter_twitterscore
         if twitter and twitterscore:
@@ -645,9 +585,7 @@ async def receive_data(message: types.Message, state: FSMContext):
                 project_id=base_project.id,
                 defaults={
                     "tvl": last_tvl if last_tvl else 0,
-                    "tvl_fdv": last_tvl / (price * total_supply)
-                    if last_tvl and total_supply and price
-                    else 0,
+                    "tvl_fdv": last_tvl / (price * total_supply) if last_tvl and total_supply and price else 0,
                 },
             )
 
@@ -657,9 +595,7 @@ async def receive_data(message: types.Message, state: FSMContext):
             ManipulativeMetrics,
             project_id=base_project.id,
             defaults={
-                "fdv_fundraise": (price * total_supply) / fundraise
-                if fundraise
-                else None,
+                "fdv_fundraise": (price * total_supply) / fundraise if fundraise else None,
                 "top_100_wallet": top_100_wallets,
             },
         )
@@ -694,23 +630,15 @@ async def receive_data(message: types.Message, state: FSMContext):
     }
 
     await state.update_data(**data)
-    result = await create_pdf_report(
-        state, message=message, user_id=message.from_user.id
-    )
+    result = await create_pdf_report(state, message=message, user_id=message.from_user.id)
 
     if isinstance(result, tuple):
         result_message, pdf_output, filename = result
 
         await message.answer(result_message)
-        await message.answer_document(
-            document=BufferedInputFile(
-                pdf_output.getvalue(), filename=filename
-            )
-        )
+        await message.answer_document(document=BufferedInputFile(pdf_output.getvalue(), filename=filename))
         await message.answer(
-            await phrase_by_user(
-                "input_next_token_for_analysis", message.from_user.id
-            ),
+            await phrase_by_user("input_next_token_for_analysis", message.from_user.id),
             reply_markup=ReplyKeyboardRemove(),
         )
 
