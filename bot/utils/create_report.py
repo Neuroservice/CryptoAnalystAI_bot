@@ -174,7 +174,7 @@ async def create_pdf_report(
     user_id: Optional[int] = None,
 ):
     """
-    Создание pdf-файла с анализом метрик проекта.
+    Создание pdf-файла с анализом всех метрик проекта.
     """
 
     state_data = await state.get_data()
