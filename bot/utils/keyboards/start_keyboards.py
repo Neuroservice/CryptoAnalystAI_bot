@@ -13,24 +13,10 @@ async def main_menu_keyboard(user_id: int):
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(
-                    text=await button_text_by_user(
-                        "help_button", user_id=user_id
-                    )
-                ),
-                KeyboardButton(
-                    text=await button_text_by_user(
-                        "start_calculate_button", user_id=user_id
-                    )
-                ),
-                KeyboardButton(
-                    text=await button_text_by_user(
-                        "start_history_button", user_id=user_id
-                    )
-                ),
-                KeyboardButton(
-                    text=await button_text_by_user("donate", user_id=user_id)
-                ),
+                KeyboardButton(text=await button_text_by_user("help_button", user_id=user_id)),
+                KeyboardButton(text=await button_text_by_user("start_calculate_button", user_id=user_id)),
+                KeyboardButton(text=await button_text_by_user("start_history_button", user_id=user_id)),
+                KeyboardButton(text=await button_text_by_user("donate", user_id=user_id)),
             ],
         ],
         resize_keyboard=True,

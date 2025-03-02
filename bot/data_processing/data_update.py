@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 import re
@@ -5,6 +6,7 @@ import traceback
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.data_processing.tasks import update_static_data, update_weekly_data, update_dynamic_data
 from bot.database.db_operations import (
     get_one,
     update_or_create,
@@ -13,29 +15,16 @@ from bot.database.db_operations import (
 )
 from bot.database.models import (
     Project,
-    Tokenomics,
-    BasicMetrics,
-    InvestingMetrics,
-    ManipulativeMetrics,
-    NetworkMetrics,
-    FundsProfit,
     AgentAnswer,
     Category,
 )
 from bot.utils.common.consts import (
-    TICKERS,
-    PROJECT_TYPES,
-    EXPECTED_KEYS,
     DATA_FOR_ANALYSIS_TEXT,
     ALL_DATA_STRING_FUNDS_AGENT,
     ALL_DATA_STRING_FLAGS_AGENT,
     START_TITLE_FOR_GARBAGE_CATEGORIES,
     END_TITLE_FOR_GARBAGE_CATEGORIES,
-    START_TITLE_FOR_STABLECOINS,
-    END_TITLE_FOR_STABLECOINS,
 )
-from bot.utils.common.decorators import save_execute
-from bot.utils.common.params import get_header_params
 from bot.utils.metrics.metrics_evaluation import (
     determine_project_tier,
     calculate_tokenomics_score,
@@ -45,17 +34,11 @@ from bot.utils.metrics.metrics_evaluation import (
 )
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
-    fetch_top_100_wallets,
-    fetch_tvl_data,
     get_user_project_info,
     get_project_and_tokenomics,
     calculate_expected_x,
-    get_top_projects_by_capitalization,
-    fetch_coinmarketcap_data,
-    fetch_coingecko_data,
     generate_flags_answer,
     get_coin_description,
-    get_percentage_data,
 )
 from bot.utils.resources.bot_phrases.bot_phrase_handler import (
     phrase_by_language,
@@ -63,7 +46,6 @@ from bot.utils.resources.bot_phrases.bot_phrase_handler import (
 from bot.utils.resources.bot_phrases.bot_phrase_strings import (
     calculations_choices,
 )
-from bot.utils.resources.exceptions.exceptions import ExceptionError
 from bot.utils.resources.files_worker.google_doc import (
     load_document_for_garbage_list,
 )
@@ -83,163 +65,29 @@ current_day = datetime.datetime.now(datetime.timezone.utc).day
 async def fetch_crypto_data(async_session: AsyncSession):
     """
     Асинхронный эндпоинт для получения данных о криптопроектах.
+    Теперь вызывает три отдельных функции:
+    - `update_static_data` (раз в 3 месяца)
+    - `update_weekly_data` (раз в неделю)
+    - `update_dynamic_data` (ежедневно)
     """
 
     try:
-        for project_type in PROJECT_TYPES:
-            # Получение топовых проектов
-            symbols = await get_top_projects_by_capitalization(
-                project_type=project_type, tickers=TICKERS
-            )
+        logging.info("Starting fetch_crypto_data...")
 
-            if not symbols:
-                logging.info(f"No projects found for type: {project_type}")
-                continue
+        # Запускаем все три обновления асинхронно
+        static_task = asyncio.create_task(update_static_data(async_session))
+        weekly_task = asyncio.create_task(update_weekly_data(async_session))
+        dynamic_task = asyncio.create_task(update_dynamic_data(async_session))
 
-            print("0")
-            for symbol in symbols:
-                try:
-                    # ШАГ 1: Получение данных проекта
-                    print("1")
-                    project = await get_one(Project, coin_name=symbol)
-                    if not project:
-                        logging.error(f"Project not found for {symbol}")
-                        continue
-                    header_params = get_header_params(symbol)
-                    # ШАГ 2: Получение данных с CoinMarketCap
-                    print("2")
-                    data = await fetch_coinmarketcap_data(
-                        user_coin_name=symbol, **header_params
-                    )
-                    if not data:
-                        # Если данные с CoinMarketCap не получены, пробуем получить данные с CoinGecko
-                        logging.info(
-                            f"Trying to fetch data from CoinGecko for {symbol}"
-                        )
-                        data = await fetch_coingecko_data(symbol)
-                    print("2.1")
-                    if not data or not isinstance(data, dict):
-                        logging.error(
-                            f"Invalid data returned for {symbol}: {data}"
-                        )
-                        continue
-                    if not all(key in data for key in EXPECTED_KEYS):
-                        logging.warning(
-                            f"Missing required keys in data for {symbol}: {data}"
-                        )
-                        continue
-                    print("2.3")
-                    coin_data = data
-                    circulating_supply = coin_data.get("circulating_supply")
-                    total_supply = coin_data.get("total_supply")
-                    price = coin_data.get("price")
-                    market_cap = coin_data.get("capitalization")
-                    fdv = coin_data.get("coin_fdv")
-                    # ШАГ 3: Обновление Tokenomics
-                    print("3")
-                    await update_or_create(
-                        Tokenomics,
-                        project_id=project.id,
-                        defaults={
-                            "circ_supply": circulating_supply,
-                            "total_supply": total_supply,
-                            "capitalization": market_cap,
-                            "fdv": fdv,
-                        },
-                    )
-                    # ШАГ 4: Обновление BasicMetrics
-                    print("4")
-                    await update_or_create(
-                        BasicMetrics,
-                        project_id=project.id,
-                        defaults={
-                            "market_price": round(float(price), 4),
-                        },
-                    )
-                    # ШАГ 5: Обновление ManipulativeMetrics и других метрик
-                    print("5")
-                    investing_metrics = await get_one(
-                        InvestingMetrics, project_id=project.id
-                    )
-                    manipulative_metrics = await get_one(
-                        ManipulativeMetrics, project_id=project.id
-                    )
+        # Дожидаемся выполнения всех задач
+        results = await asyncio.gather(static_task, weekly_task, dynamic_task, return_exceptions=True)
 
-                    if manipulative_metrics and investing_metrics:
-                        fundraise = investing_metrics.fundraise
-                        top_100_wallets = await fetch_top_100_wallets(
-                            symbol.lower()
-                        )
-                        if top_100_wallets and fdv and fundraise:
-                            await update_or_create(
-                                ManipulativeMetrics,
-                                project_id=project.id,
-                                defaults={
-                                    "fdv_fundraise": fdv / fundraise,
-                                    "top_100_wallet": top_100_wallets,
-                                },
-                            )
-                    # ШАГ 6: Обновление NetworkMetrics (TVL)
-                    print("6")
-                    (
-                        twitter_name,
-                        description,
-                        lower_name,
-                        categories,
-                    ) = await get_twitter_link_by_symbol(symbol)
-                    if lower_name:
-                        tvl = await fetch_tvl_data(lower_name)
-                        if tvl and fdv:
-                            await update_or_create(
-                                NetworkMetrics,
-                                project_id=project.id,
-                                defaults={
-                                    "tvl": tvl,
-                                    "tvl_fdv": tvl / fdv,
-                                },
-                            )
-
-                    # ШАГ 7: Обновление FundsProfit
-                    print("7")
-                    funds_profit = await get_one(
-                        FundsProfit, project_id=project.id
-                    )
-
-                    if (
-                        not funds_profit
-                        or not funds_profit.distribution
-                        or funds_profit.distribution == "-"
-                    ):
-                        print("7.1")
-                        (
-                            twitter_link,
-                            description,
-                            lower_name,
-                            categories,
-                        ) = await get_twitter_link_by_symbol(symbol)
-                        tokenomics_percentage_data = await get_percentage_data(
-                            twitter_link, symbol
-                        )
-                        output_string = (
-                            "\n".join(tokenomics_percentage_data)
-                            if tokenomics_percentage_data
-                            else "-"
-                        )
-                        await update_or_create(
-                            FundsProfit,
-                            project_id=project.id,
-                            defaults={"distribution": output_string},
-                        )
-
-                    # Сохранение изменений
-                    print("8")
-
-                except Exception as error:
-                    logging.error(f"Error processing {symbol}: {error}")
-                    await async_session.rollback()  # Откат транзакции при ошибке
-                    raise ExceptionError(
-                        f"Error processing symbol {symbol}: {str(error)}"
-                    ) from error
+        # Логируем результаты
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logging.error(f"Error in task {['static', 'weekly', 'dynamic'][i]}: {result}")
+            else:
+                logging.info(f"{['Static', 'Weekly', 'Dynamic'][i]} data update completed: {result}")
 
         return {"status": "Data fetching completed"}
     except Exception as e:
@@ -269,9 +117,7 @@ async def update_agent_answers():
         START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES
     )
 
-    outdated_answers = await get_all(
-        AgentAnswer, updated_at=f"<={three_days_ago}"
-    )
+    outdated_answers = await get_all(AgentAnswer, updated_at=f"<={three_days_ago}")
 
     for agent_answer in outdated_answers:
         project = await get_one(Project, id=agent_answer.project_id)
@@ -294,9 +140,7 @@ async def update_agent_answers():
         if description:
             coin_description += description
 
-        token_description = await agent_handler(
-            "description", topic=coin_description, language=language
-        )
+        token_description = await agent_handler("description", topic=coin_description, language=language)
 
         if not categories or len(categories) == 0:
             continue
@@ -305,9 +149,7 @@ async def update_agent_answers():
         category_instances = []
         for category_name in categories:
             if category_name not in garbage_categories:
-                category_instance, _ = await get_or_create(
-                    Category, category_name=category_name
-                )
+                category_instance, _ = await get_or_create(Category, category_name=category_name)
                 category_instances.append(category_instance)
 
         if len(category_instances) == 0:
@@ -324,21 +166,15 @@ async def update_agent_answers():
         top_and_bottom = project_info.get("top_and_bottom")
         manipulative_metrics = project_info.get("manipulative_metrics")
         network_metrics = project_info.get("network_metrics")
-        _, tokenomics_data_list = await get_project_and_tokenomics(
-            categories, project.coin_name
-        )
+        _, tokenomics_data_list = await get_project_and_tokenomics(categories, project.coin_name)
 
         top_projects = sorted(
             tokenomics_data_list,
-            key=lambda item: item[1][0].capitalization
-            if item[1][0].capitalization
-            else 0,
+            key=lambda item: item[1][0].capitalization if item[1][0].capitalization else 0,
             reverse=True,
         )[:5]
 
-        for index, (top_projects, tokenomics_data) in enumerate(
-            top_projects, start=1
-        ):
+        for index, (top_projects, tokenomics_data) in enumerate(top_projects, start=1):
             project_coin = top_projects.coin_name
             for tokenomics in tokenomics_data:
                 calculation_result = calculate_expected_x(
@@ -351,14 +187,10 @@ async def update_agent_answers():
                 fair_price = (
                     f"{fair_price:.5f}"
                     if isinstance(fair_price, (int, float))
-                    else phrase_by_language(
-                        "comparisons_error", agent_answer.language
-                    )
+                    else phrase_by_language("comparisons_error", agent_answer.language)
                 )
 
-                comparison_results += calculations_choices[
-                    agent_answer.language
-                ].format(
+                comparison_results += calculations_choices[agent_answer.language].format(
                     user_coin_name=project.coin_name,
                     project_coin_name=project_coin,
                     growth=(calculation_result["expected_x"] - 1.0) * 100,
@@ -383,22 +215,14 @@ async def update_agent_answers():
         ) in agents_info:
             ticker = project_coin
             growth_percent = expected_x
-            data_for_tokenomics.append(
-                {ticker: {"growth_percent": growth_percent}}
-            )
+            data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
 
-        tokemonic_answer, tokemonic_score = calculate_tokenomics_score(
-            project.coin_name, data_for_tokenomics
-        )
+        tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
 
         all_data_string_for_funds_agent = ALL_DATA_STRING_FUNDS_AGENT.format(
-            funds_profit_distribution=get_metric_value(
-                funds_profit, "distribution"
-            )
+            funds_profit_distribution=get_metric_value(funds_profit, "distribution")
         )
-        funds_agent_answer = await agent_handler(
-            "funds_agent", topic=all_data_string_for_funds_agent
-        )
+        funds_agent_answer = await agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
 
         fdv = (
             float(tokenomics_data.fdv)
@@ -421,12 +245,7 @@ async def update_agent_answers():
             result_ratio = phrase_by_language("no_data", language)
             final_score = result_ratio
 
-        (
-            funds_answer,
-            funds_scores,
-            funds_score,
-            growth_and_fall_score,
-        ) = analyze_project_metrics(
+        (funds_answer, funds_scores, funds_score, growth_and_fall_score,) = analyze_project_metrics(
             final_score,
             get_metric_value(
                 market_metrics,
@@ -446,17 +265,14 @@ async def update_agent_answers():
             get_metric_value(
                 network_metrics,
                 "tvl",
-                transform=lambda tvl: (tvl / tokenomics_data.capitalization)
-                * 100
+                transform=lambda tvl: (tvl / tokenomics_data.capitalization) * 100
                 if tokenomics_data and tokenomics_data.capitalization
                 else None,
             ),
         )
 
         if investing_metrics and investing_metrics.fund_level:
-            project_investors_level_result = project_investors_level(
-                investors=investing_metrics.fund_level
-            )
+            project_investors_level_result = project_investors_level(investors=investing_metrics.fund_level)
             investors_level = project_investors_level_result["level"]
             investors_level_score = project_investors_level_result["score"]
         else:
@@ -488,9 +304,7 @@ async def update_agent_answers():
         project_rating_answer = project_rating_result["calculations_summary"]
         fundraising_score = project_rating_result["fundraising_score"]
         followers_score = project_rating_result["followers_score"]
-        twitter_engagement_score = project_rating_result[
-            "twitter_engagement_score"
-        ]
+        twitter_engagement_score = project_rating_result["twitter_engagement_score"]
         overal_final_score = project_rating_result["preliminary_score"]
         tokenomics_score = project_rating_result["tokenomics_score"]
         project_rating_text = project_rating_result["project_rating"]
@@ -529,9 +343,7 @@ async def update_agent_answers():
         answer = re.sub(
             r"\n\s*\n",
             "\n",
-            flags_answer.replace("**", "")
-            + DATA_FOR_ANALYSIS_TEXT
-            + comparison_results,
+            flags_answer.replace("**", "") + DATA_FOR_ANALYSIS_TEXT + comparison_results,
         )
 
         red_green_flags = extract_red_green_flags(answer, language)
@@ -545,11 +357,7 @@ async def update_agent_answers():
             max_value=phrase_by_language("no_data", language),
         )
 
-        if (
-            top_and_bottom
-            and top_and_bottom.lower_threshold
-            and top_and_bottom.upper_threshold
-        ):
+        if top_and_bottom and top_and_bottom.lower_threshold and top_and_bottom.upper_threshold:
             top_and_bottom_answer = phrase_by_language(
                 "top_bottom_values",
                 language,
@@ -562,27 +370,19 @@ async def update_agent_answers():
             "investor_profit_text",
             language=language,
             fdv=f"{fdv:,.2f}" if isinstance(fdv, float) else fdv,
-            investors_percent=f"{investors_percent:.0%}"
-            if isinstance(investors_percent, float)
-            else investors_percent,
+            investors_percent=f"{investors_percent:.0%}" if isinstance(investors_percent, float) else investors_percent,
             fundraising_amount=f"{fundraising_amount:,.2f}"
             if isinstance(fundraising_amount, float)
             else fundraising_amount,
-            result_ratio=f"{result_ratio:.4f}"
-            if isinstance(result_ratio, float)
-            else result_ratio,
+            result_ratio=f"{result_ratio:.4f}" if isinstance(result_ratio, float) else result_ratio,
             final_score=final_score,
         )
 
         if funds_profit and funds_profit.distribution:
             distribution_items = funds_profit.distribution.split("\n")
-            formatted_distribution = "\n".join(
-                [f"- {item}" for item in distribution_items]
-            )
+            formatted_distribution = "\n".join([f"- {item}" for item in distribution_items])
         else:
-            formatted_distribution = phrase_by_language(
-                "no_token_distribution", language
-            )
+            formatted_distribution = phrase_by_language("no_token_distribution", language)
 
         formatted_metrics = [
             format_metric(
@@ -665,9 +465,7 @@ async def update_agent_answers():
             top_100_percent=round(manipulative_metrics.top_100_wallet * 100, 2)
             if manipulative_metrics and manipulative_metrics.top_100_wallet
             else 0,
-            tvl_percent=int(
-                (network_metrics.tvl / tokenomics_data.capitalization) * 100
-            )
+            tvl_percent=int((network_metrics.tvl / tokenomics_data.capitalization) * 100)
             if network_metrics.tvl and tokenomics_data.total_supply
             else 0,
         )

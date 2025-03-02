@@ -118,9 +118,7 @@ async def update_network_metrics(
                 project_id=project_id,
                 defaults={
                     "tvl": last_tvl,
-                    "tvl_fdv": last_tvl / (price * total_supply)
-                    if price * total_supply
-                    else 0,
+                    "tvl_fdv": last_tvl / (price * total_supply) if price * total_supply else 0,
                 },
             )
 
@@ -142,9 +140,7 @@ async def update_manipulative_metrics(
             ManipulativeMetrics,
             project_id=project_id,
             defaults={
-                "fdv_fundraise": (price * total_supply) / fundraise
-                if fundraise
-                else None,
+                "fdv_fundraise": (price * total_supply) / fundraise if fundraise else None,
                 "top_100_wallet": top_100_wallets,
             },
         )
@@ -155,11 +151,7 @@ async def update_funds_profit(project_id: int, funds_profit_data: dict):
     Обновляет информацию о распределении токенов проекта.
     """
 
-    output_string = (
-        "\n".join(funds_profit_data[0])
-        if funds_profit_data and funds_profit_data[0]
-        else ""
-    )
+    output_string = "\n".join(funds_profit_data[0]) if funds_profit_data and funds_profit_data[0] else ""
     if output_string:
         await update_or_create(
             FundsProfit,
@@ -168,9 +160,7 @@ async def update_funds_profit(project_id: int, funds_profit_data: dict):
         )
 
 
-async def update_market_metrics(
-    project_id: int, market_metrics: dict, top_and_bottom: dict
-):
+async def update_market_metrics(project_id: int, market_metrics: dict, top_and_bottom: dict):
     """
     Обновляет информацию о рыночных метриках проекта
     """
@@ -237,16 +227,12 @@ async def process_metrics(
     # Обновление инвестиционных метрик, проверка на None
     investing_metrics = results.get("investing_metrics")
     if investing_metrics is not None:
-        await update_investing_metrics(
-            new_project.id, investing_metrics, user_coin_name, investors
-        )
+        await update_investing_metrics(new_project.id, investing_metrics, user_coin_name, investors)
 
     # Обновление сетевых метрик, проверка на None
     network_metrics = results.get("network_metrics")
     if network_metrics is not None:
-        await update_network_metrics(
-            new_project.id, network_metrics, price, total_supply
-        )
+        await update_network_metrics(new_project.id, network_metrics, price, total_supply)
 
     # Обновление манипулятивных метрик, проверка на None
     manipulative_metrics = results.get("manipulative_metrics")
@@ -269,12 +255,8 @@ async def process_metrics(
     top_and_bottom = results.get("top_and_bottom")
     # Проверка на None и наличие значений
     if market_metrics and all(metric is not None for metric in market_metrics):
-        await update_market_metrics(
-            new_project.id, market_metrics, top_and_bottom
-        )
+        await update_market_metrics(new_project.id, market_metrics, top_and_bottom)
     else:
-        logging.warning(
-            "Неверные данные для рыночных метрик или отсутствуют значения."
-        )
+        logging.warning("Неверные данные для рыночных метрик или отсутствуют значения.")
 
     return new_project

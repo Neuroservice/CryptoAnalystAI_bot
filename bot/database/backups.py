@@ -74,9 +74,7 @@ async def create_backup():
     logger.info(f"pg_dump завершился с кодом: {result.returncode}")
 
     if os.path.exists(backup_file) and os.path.getsize(backup_file) > 0:
-        upload_backup_to_s3(
-            backup_file, f"fasolka_backups/{os.path.basename(backup_file)}"
-        )
+        upload_backup_to_s3(backup_file, f"fasolka_backups/{os.path.basename(backup_file)}")
         os.remove(backup_file)
         logger.info("Временный файл бэкапа успешно удален")
         delete_old_backups_from_s3()

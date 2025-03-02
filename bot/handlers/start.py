@@ -43,9 +43,7 @@ async def start_command(message: types.Message, state: FSMContext):
                 reply_markup=language_keyboard(),
             )
     else:
-        await message.answer(
-            "Ошибка при работе с базой данных. Попробуйте позже."
-        )
+        await message.answer("Ошибка при работе с базой данных. Попробуйте позже.")
 
 
 @start_router.message(lambda message: message.text in ["Русский", "English"])
@@ -73,6 +71,4 @@ async def language_choice(message: types.Message):
             reply_markup=await main_menu_keyboard(user_id=user_id),
         )
     else:
-        await message.answer(
-            "Ошибка при работе с базой данных. Попробуйте позже."
-        )
+        await message.answer("Ошибка при работе с базой данных. Попробуйте позже.")
