@@ -82,7 +82,7 @@ async def create_basic_report(
         project = project_info.get("project")
         basic_metrics = project_info.get("basic_metrics")
 
-        projects, tokenomics_data_list = await get_project_and_tokenomics(categories, user_coin_name)
+        projects, tokenomics_data_list = await get_project_and_tokenomics(categories, user_coin_name, project.tier)
         top_projects = get_top_projects_by_capitalization_and_category(tokenomics_data_list)
 
         for index, (project, tokenomics_data) in enumerate(top_projects, start=1):

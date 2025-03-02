@@ -31,8 +31,6 @@ def load_document_for_garbage_list(start_title: str = None, end_title: str = Non
 
         match = re.search(pattern, full_text, re.DOTALL)
 
-        print("match: ", match)
-
         if not match:
             print("Не удалось найти текст между заголовками.")
             return []

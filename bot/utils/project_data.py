@@ -132,7 +132,7 @@ async def get_user_project_info(user_coin_name: str):
         raise ExceptionError(str(e))
 
 
-async def get_project_and_tokenomics(project_names: list, user_coin_name: str, project_tier: str):
+async def get_project_and_tokenomics(project_names: list, user_coin_name: str, project_tier: str = None):
     """
     Получает информацию о проекте и связанных метриках по категории и токену пользователя.
     """
@@ -153,9 +153,19 @@ async def get_project_and_tokenomics(project_names: list, user_coin_name: str, p
                 .join(Category)
                 .filter(
                     Category.category_name == project_name,
-                    Project.tier == project_tier,
                 ),
             )
+
+            if project_tier:
+                projects_data = await get_all(
+                    Project,
+                    join_model=lambda q: q.join(project_category_association)
+                    .join(Category)
+                    .filter(
+                        Category.category_name == project_name,
+                        Project.tier == project_tier,
+                    ),
+                )
 
             if not projects_data:
                 logger.warning(f"Проект с именем {project_name} не найден.")
@@ -540,7 +550,7 @@ async def get_fundraise(user_coin_name: str, message: Message = None):
         if not user_coin_key:
             if message:
                 await message.answer(f"Токен '{user_coin_name}' не найден в CryptoRank API")
-            return None, []
+            return None, "-"
 
         url = f"{CRYPTORANK_WEBSITE}ico/{user_coin_key}"
         response = requests.get(url)
@@ -593,13 +603,13 @@ async def get_fundraise(user_coin_name: str, message: Message = None):
                     return clean_data, investors_data
 
             logging.error("Элемент для клика не найден")
-            return None, []
+            return None, "-"
         else:
             if message:
                 await message.answer(f"Ошибка получения данных для монеты '{user_coin_name}'")
 
             logging.error(f"Ошибка при получении данных: {response.status_code}")
-            return None, []
+            return None, "-"
 
     except AttributeError as attr_error:
         raise AttributeAccessError(str(attr_error))
@@ -1029,7 +1039,7 @@ async def get_top_projects_by_capitalization(
     top_n_other: int = 10,
 ) -> list[str]:
     """
-    Получение топ-проектов по капитализации для определенного проектного вида (например, Layer 1).
+    Получение топ-проектов по капитализации по категориям (например, Layer 1).
     Использует универсальные функции для запросов в базу данных и обрабатывает ошибки с кастомными исключениями.
     """
     try:
@@ -1062,6 +1072,8 @@ async def get_top_projects_by_capitalization(
             options=[selectinload(Project.categories)],
         )
 
+        print(top_ticker_projects, "\n\n")
+
         top_other_projects = await get_all(
             Project,
             join_model=lambda q: (
@@ -1077,11 +1089,12 @@ async def get_top_projects_by_capitalization(
                 )
                 .filter(Category.category_name == project_type)
             ),
-            coin_name=lambda col: col.in_(tickers),
             order_by=Tokenomics.capitalization.desc(),
             limit=top_n_other,
             options=[selectinload(Project.categories)],
         )
+
+        print(top_other_projects, "\n\n")
 
         # Возвращаем список имен монет
         return [

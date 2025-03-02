@@ -148,10 +148,13 @@ async def update_or_create_token(session: AsyncSession, token_data: dict) -> Tup
     if instance:
         # Обновляем значение рейтинга и сохраняем изменения
         instance.cmc_rank = cmc_rank
+        print("Instance", instance.coin_name, instance.cmc_rank)
+        session.add(instance)
         await session.commit()
         return instance, False
     else:
         new_instance = await create(Project, coin_name=symbol, cmc_rank=cmc_rank)
+        print("new_instance", new_instance)
         return new_instance, True
 
 

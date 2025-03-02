@@ -46,7 +46,7 @@ class Project(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     tier = Column(String(30), nullable=True)
-    cmc_rank = Column(String(30), nullable=True)
+    cmc_rank = Column(Integer, nullable=True)
     coin_name = Column(String(100), nullable=True)
 
     calculations = relationship("Calculation", back_populates="project")

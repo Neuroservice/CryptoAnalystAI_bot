@@ -372,6 +372,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
         data = {
             "user_coin_name": user_coin_name,
+            "new_project": new_project.to_dict(),
             "categories": categories,
         }
 

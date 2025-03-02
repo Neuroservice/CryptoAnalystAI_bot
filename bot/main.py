@@ -6,7 +6,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand
 
-from bot.data_processing.tasks import (
+from bot.data_processing.data_update import (
     parse_periodically,
     parse_categories_weekly,
     parse_tokens_weekly,
@@ -69,9 +69,9 @@ async def main():
 
             logging.info("Запуск периодического обновления данных.")
             asyncio.create_task(parse_periodically(session_local))
-            asyncio.create_task(parse_categories_weekly())
-            asyncio.create_task(parse_tokens_weekly())
-            asyncio.create_task(backup_database())
+            # asyncio.create_task(parse_categories_weekly())
+            # asyncio.create_task(parse_tokens_weekly())
+            # asyncio.create_task(backup_database())
 
             await dp.start_polling(bot)
 
