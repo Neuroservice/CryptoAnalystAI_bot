@@ -45,14 +45,14 @@ jobs:
           script: |
             cd /home/CryptoAnalyst_bot/test
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
-            sudo docker-compose -f docker-compose.yml down
-            sudo docker-compose -f docker-compose.yml pull
+            sudo docker-compose -f docker-compose.yml pull cryptoanalyst_bot_test
+            sudo docker-compose -f docker-compose.yml down cryptoanalyst_bot_test
             
             sudo docker-compose -f docker-compose.yml run --rm \
               -e ALEMBIC_URL=${{ secrets.ALEMBIC_URL }} \
               cryptoanalyst_bot_test alembic upgrade head
             
-            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate --remove-orphans
+            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate cryptoanalyst_bot_test
             sudo docker image prune --force
             sudo docker volume prune --force
 
@@ -90,13 +90,13 @@ jobs:
           script: |
             cd /home/CryptoAnalyst_bot/prod
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
-            sudo docker-compose -f docker-compose.yml down
-            sudo docker-compose -f docker-compose.yml pull
+            sudo docker-compose -f docker-compose.yml down cryptoanalyst_bot_prod
+            sudo docker-compose -f docker-compose.yml pull cryptoanalyst_bot_prod
             
             sudo docker-compose -f docker-compose.yml run --rm \
               -e ALEMBIC_URL=${{ secrets.ALEMBIC_URL }} \
               cryptoanalyst_bot_prod alembic upgrade head
             
-            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate
+            sudo docker-compose -f docker-compose.yml up --build -d --no-recreate cryptoanalyst_bot_prod
             sudo docker image prune --force
             sudo docker volume prune --force
