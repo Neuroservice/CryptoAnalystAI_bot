@@ -1,8 +1,11 @@
 import logging
-from sqlalchemy import Table, insert
-from sqlalchemy.future import select
-from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional, Type, Any, Tuple, Dict, Union, Callable
+
+from sqlalchemy import Table, insert
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
 from bot.database.models import User, Project
 from bot.utils.common.decorators import save_execute
 from bot.utils.common.sessions import redis_client
@@ -11,9 +14,6 @@ from bot.utils.resources.exceptions.exceptions import (
     DatabaseCreationError,
     DatabaseFetchError,
 )
-
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @save_execute
@@ -153,8 +153,10 @@ async def update_or_create_token(session: AsyncSession, token_data: dict) -> Tup
         await session.commit()
         return instance, False
     else:
+        # Создаём новый проект
         new_instance = await create(Project, coin_name=symbol, cmc_rank=cmc_rank)
-        print("new_instance", new_instance)
+        print("New instance created:", new_instance.coin_name)
+
         return new_instance, True
 
 

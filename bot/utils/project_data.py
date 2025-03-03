@@ -9,6 +9,7 @@ import requests
 from aiogram.types import Message
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from bot.database.db_operations import (
@@ -50,7 +51,9 @@ from bot.utils.common.consts import (
     SELECTOR_TWITTERSCORE,
     RATING_LABELS,
     CRYPTORANK_API_URL,
+    EXPECTED_KEYS,
 )
+from bot.utils.common.decorators import save_execute
 from bot.utils.common.params import (
     get_header_params,
     get_cryptocompare_params,
@@ -1072,8 +1075,6 @@ async def get_top_projects_by_capitalization(
             options=[selectinload(Project.categories)],
         )
 
-        print(top_ticker_projects, "\n\n")
-
         top_other_projects = await get_all(
             Project,
             join_model=lambda q: (
@@ -1093,8 +1094,6 @@ async def get_top_projects_by_capitalization(
             limit=top_n_other,
             options=[selectinload(Project.categories)],
         )
-
-        print(top_other_projects, "\n\n")
 
         # Возвращаем список имен монет
         return [
