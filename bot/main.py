@@ -13,7 +13,7 @@ from bot.data_processing.data_update import (
     fetch_crypto_data,
     update_agent_answers,
 )
-from bot.database.backups import create_backup
+from bot.database.backups import create_backup, backup_database
 from bot.handlers import history, select_language, donate
 from bot.utils.middlewares import RestoreStateMiddleware
 from bot.utils.resources.exceptions.exceptions import (
@@ -98,7 +98,6 @@ async def parse_periodically(session: AsyncSession):
                 await asyncio.gather(
                     fetch_crypto_data(session),
                     update_agent_answers(),
-                    create_backup(),
                 )
                 logging.info("Все задачи выполнены успешно.")
             except Exception as e:
@@ -147,6 +146,7 @@ async def main():
             # Логируем старт таски перед ее запуском
             logging.info("Запуск периодического обновления данных.")
             asyncio.create_task(parse_periodically(session_local))
+            asyncio.create_task(backup_database())
 
             await dp.start_polling(bot)
 
