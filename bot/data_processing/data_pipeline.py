@@ -60,10 +60,11 @@ async def update_static_data():
 
         # Фильтруем токены
         valid_projects = [
-            project for project in projects
+            project
+            for project in projects
             if project.coin_name not in stablecoins
-               and project.coin_name not in fundamental
-               and project.coin_name not in scam_tokens
+            and project.coin_name not in fundamental
+            and project.coin_name not in scam_tokens
         ]
 
         # Ограничиваем список до 1000 проектов
@@ -97,10 +98,11 @@ async def update_weekly_data():
 
         # Фильтруем токены
         valid_projects = [
-            project for project in projects
+            project
+            for project in projects
             if project.coin_name not in stablecoins
-               and project.coin_name not in fundamental
-               and project.coin_name not in scam_tokens
+            and project.coin_name not in fundamental
+            and project.coin_name not in scam_tokens
         ]
 
         # Ограничиваем список до 1000 проектов
@@ -133,7 +135,8 @@ async def update_dynamic_data():
 
         # Фильтруем токены
         valid_projects = [
-            project for project in projects
+            project
+            for project in projects
             if project.coin_name not in stablecoins
             and project.coin_name not in fundamental
             and project.coin_name not in scam_tokens

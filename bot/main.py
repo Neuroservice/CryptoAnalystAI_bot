@@ -64,10 +64,10 @@ async def main():
             dp.update.middleware(RestoreStateMiddleware(SessionLocal))
 
             logging.info("Запуск периодического обновления данных.")
-            # asyncio.create_task(parse_periodically(session_local))
-            # asyncio.create_task(parse_categories_weekly())
+            asyncio.create_task(parse_periodically(session_local))
+            asyncio.create_task(parse_categories_weekly())
             asyncio.create_task(parse_tokens_weekly())
-            # asyncio.create_task(backup_database())
+            asyncio.create_task(backup_database())
 
             await dp.start_polling(bot)
 
