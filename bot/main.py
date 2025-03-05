@@ -6,12 +6,8 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand
 
-from bot.data_processing.tasks import (
-    parse_periodically,
-    parse_categories_weekly,
-    parse_tokens_weekly,
-    backup_database,
-)
+from bot.data_processing.data_pipeline import parse_categories_weekly, parse_tokens_weekly
+from bot.data_processing.tasks import parse_periodically, backup_database
 from bot.handlers import history, select_language, donate
 from bot.utils.common.config import API_TOKEN
 from bot.utils.common.sessions import session_local, SessionLocal, redis_client

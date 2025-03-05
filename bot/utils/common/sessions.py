@@ -31,6 +31,4 @@ SessionLocal = sessionmaker(
 session_local = SessionLocal()
 client_session = ClientSession
 
-redis_client = redis.Redis(
-    host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True
-)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)

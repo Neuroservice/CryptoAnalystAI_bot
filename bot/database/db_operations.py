@@ -1,8 +1,11 @@
 import logging
-from sqlalchemy import Table, insert
-from sqlalchemy.future import select
-from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional, Type, Any, Tuple, Dict, Union, Callable
+
+from sqlalchemy import Table, insert
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
 from bot.database.models import User, Project
 from bot.utils.common.decorators import save_execute
 from bot.utils.common.sessions import redis_client
@@ -13,13 +16,8 @@ from bot.utils.resources.exceptions.exceptions import (
 )
 
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-
 @save_execute
-async def get_one(
-    session: AsyncSession, model: Type[Any], **filters: Any
-) -> Optional[Any]:
+async def get_one(session: AsyncSession, model: Type[Any], **filters: Any) -> Optional[Any]:
     """
     Получить одну запись из базы данных.
     """
@@ -89,9 +87,7 @@ async def get_all(
 
 
 @save_execute
-async def create(
-    session: AsyncSession, model: Type[Any], **fields: Any
-) -> Any:
+async def create(session: AsyncSession, model: Type[Any], **fields: Any) -> Any:
     """
     Создать новую запись в базе данных.
 
@@ -133,9 +129,7 @@ async def get_or_create(
 
 
 @save_execute
-async def update_or_create_token(
-    session: AsyncSession, token_data: dict
-) -> Tuple[Any, bool]:
+async def update_or_create_token(session: AsyncSession, token_data: dict) -> Tuple[Any, bool]:
     """
     Обновляет токен, если он уже существует, иначе создаёт новый.
 
@@ -154,19 +148,20 @@ async def update_or_create_token(
     if instance:
         # Обновляем значение рейтинга и сохраняем изменения
         instance.cmc_rank = cmc_rank
+        print("Instance", instance.coin_name, instance.cmc_rank)
+        session.add(instance)
         await session.commit()
         return instance, False
     else:
-        new_instance = await create(
-            Project, coin_name=symbol, cmc_rank=cmc_rank
-        )
+        # Создаём новый проект
+        new_instance = await create(Project, coin_name=symbol, cmc_rank=cmc_rank)
+        print("New instance created:", new_instance.coin_name)
+
         return new_instance, True
 
 
 @save_execute
-async def get_user_from_redis_or_db(
-    session: AsyncSession, user_id: int
-) -> Optional[Dict[str, str]]:
+async def get_user_from_redis_or_db(session: AsyncSession, user_id: int) -> Optional[Dict[str, str]]:
     """
     Сначала пытается получить данные из Redis.
     Если их нет, получает или создаёт пользователя в БД,
@@ -183,9 +178,7 @@ async def get_user_from_redis_or_db(
 
     # 2. Если нет в Redis, пытаемся получить или создать пользователя в БД
     try:
-        user, _ = await get_or_create(
-            session, User, defaults={"language": "ENG"}, telegram_id=user_id
-        )
+        user, _ = await get_or_create(session, User, defaults={"language": "ENG"}, telegram_id=user_id)
 
         # 3. Сохраняем в Redis и возвращаем словарь
         user_dict = {
@@ -212,9 +205,7 @@ async def update_or_create(
     """
     Функция для обновления или создания записи.
     """
-    logging.info(
-        f"project_id: {project_id}, id: {id}, defaults: {defaults}, kwargs: {kwargs}"
-    )
+    logging.info(f"project_id: {project_id}, id: {id}, defaults: {defaults}, kwargs: {kwargs}")
     defaults = defaults or {}
     kwargs = kwargs or {}
 
@@ -224,9 +215,7 @@ async def update_or_create(
     elif project_id:
         query = query.filter_by(project_id=project_id)
     else:
-        raise ValueError(
-            "Необходимо указать id или project_id для поиска записи."
-        )
+        raise ValueError("Необходимо указать id или project_id для поиска записи.")
 
     result = await session.execute(query)
     instance = result.scalars().first()
@@ -236,9 +225,7 @@ async def update_or_create(
             if hasattr(instance, key):
                 setattr(instance, key, value)
             else:
-                logging.warning(
-                    f"Поле '{key}' отсутствует в модели '{model.__name__}'. Пропускаем."
-                )
+                logging.warning(f"Поле '{key}' отсутствует в модели '{model.__name__}'. Пропускаем.")
     else:
         params = {**kwargs, **defaults}
         if id:
@@ -246,9 +233,7 @@ async def update_or_create(
         elif project_id:
             instance = model(project_id=project_id, **params)
         else:
-            raise ValueError(
-                "Необходимо указать id или project_id для создания записи."
-            )
+            raise ValueError("Необходимо указать id или project_id для создания записи.")
         session.add(instance)
 
     await session.commit()
@@ -256,9 +241,7 @@ async def update_or_create(
 
 
 @save_execute
-async def create_association(
-    session: AsyncSession, table: Table, **fields: Any
-):
+async def create_association(session: AsyncSession, table: Table, **fields: Any):
     """
     Создать запись в таблице связей (например, project_category_association).
     """

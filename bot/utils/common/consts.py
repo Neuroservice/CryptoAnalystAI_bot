@@ -64,14 +64,14 @@ MAX_MESSAGE_LENGTH = 4096
 
 
 # URL документа c мусорным списком категорий и токенов
-DOCUMENT_GARBAGE_LIST_URL = "https://docs.google.com/document/d/1B6EYH7ShOWzVZJpcA2J8bmUpffaMi9kb7LHq4h65I7c/export?format=txt"
+DOCUMENT_GARBAGE_LIST_URL = (
+    "https://docs.google.com/document/d/1B6EYH7ShOWzVZJpcA2J8bmUpffaMi9kb7LHq4h65I7c/export?format=txt"
+)
 
 
 # Документ с промтами
 DOCUMENT_ID = "1_NHFo4b4FmWNxZn6ycQsjm_KaWGdG-mHp6SGCjtPvgI"
-DOCUMENT_URL = (
-    f"https://docs.google.com/document/d/{DOCUMENT_ID}/export?format=txt"
-)
+DOCUMENT_URL = f"https://docs.google.com/document/d/{DOCUMENT_ID}/export?format=txt"
 
 
 # Настройки модели GPT
@@ -92,27 +92,17 @@ REVISION_PATTERN = re.compile(r"Revision ID: (\w+)")
 REVISES_PATTERN = re.compile(r"Revises: (\w+|None)")
 OVERALL_PROJECT_CATEGORY_PATTERN = r'Общая категория проекта:\s*"([^"]+)"'
 PROJECT_DESCRIPTION_PATTERN = r"Описание проекта:\s*(.+?)(?=\n\s*\n|$)"
-POSITIVE_PATTERN_RU = (
-    r"(Положительные характеристики:.*?)(?=\s*Отрицательные характеристики|$)"
-)
-NEGATIVE_PATTERN_RU = (
-    r"(Отрицательные характеристики:.*?)(?=\s*Данные для анализа|$)"
-)
-POSITIVE_PATTERN_ENG = (
-    r"(?i)(Positive Characteristics:.*?)(?=\s*Negative Characteristics|$)"
-)
-NEGATIVE_PATTERN_ENG = (
-    r"(?i)(Negative Characteristics:.*?)(?=\s*Data to analyze|$)"
-)
+POSITIVE_PATTERN_RU = r"(Положительные характеристики:.*?)(?=\s*Отрицательные характеристики|$)"
+NEGATIVE_PATTERN_RU = r"(Отрицательные характеристики:.*?)(?=\s*Данные для анализа|$)"
+POSITIVE_PATTERN_ENG = r"(?i)(Positive Characteristics:.*?)(?=\s*Negative Characteristics|$)"
+NEGATIVE_PATTERN_ENG = r"(?i)(Negative Characteristics:.*?)(?=\s*Data to analyze|$)"
 TOKENOMICS_PATTERN_RU = r"Данные для анализа токеномики:\s*"
 TOKENOMICS_PATTERN_ENG = r"Data for tokenomic analysis:\s*"
 CALCULATIONS_PATTERN_RU = r"(Результаты расчета для.*?)$"
 CALCULATIONS_PATTERN_ENG = r"(Calculation results for.*?)$"
 COMPARISON_PATTERN_RU = r"Сравнение\s*проекта\s*с\s*другими,\s*схожими\s*по\s*уровню\s*и\s*категории:"
 COMPARISON_PATTERN_ENG = r"Comparing\s*the\s*project\s*with\s*others\s*similar\s*in\s*level\s*and\s*category:"
-PATTERN_FOR_GARBAGE_LIST_WITH_END_TITLE = (
-    r"{start_title}(.*?)(?=\n{end_title})"
-)
+PATTERN_FOR_GARBAGE_LIST_WITH_END_TITLE = r"{start_title}(.*?)(?=\n{end_title})"
 PATTERN_FOR_GARBAGE_LIST_WITHOUT_END_TITLE = r"{start_title}(.*)"
 
 
@@ -437,19 +427,11 @@ AI_HELP_EN_SPLIT = (
 )
 
 # Регулярные выражения для поиска баллов и оценки
-PROJECT_OVERALL_SCORE_RU = (
-    r"Итоговые баллы проекта:\s*([\d.,]+)\s*баллов?\s*– оценка\s*\"(.+?)\""
-)
-PROJECT_OVERALL_SCORE_ENG = (
-    r"Overall project score:\s*([\d.,]+)\s*points\s*– rating\s*\"(.+?)\""
-)
+PROJECT_OVERALL_SCORE_RU = r"Итоговые баллы проекта:\s*([\d.,]+)\s*баллов?\s*– оценка\s*\"(.+?)\""
+PROJECT_OVERALL_SCORE_ENG = r"Overall project score:\s*([\d.,]+)\s*points\s*– rating\s*\"(.+?)\""
 PROJECT_POINTS_RU = r"Общая оценка проекта\s*([\d.]+)\s*баллов?\s*\((.+?)\)"
-PROJECT_POINTS_ENG = (
-    r"Overall project evaluation\s*([\d.]+)\s*points\s*\((.+?)\)"
-)
-PROJECT_ANALYSIS = (
-    r"Анализ проекта .+?\(\$\w+?\)|Project analysis .+?\(\$\w+?\)"
-)
+PROJECT_POINTS_ENG = r"Overall project evaluation\s*([\d.]+)\s*points\s*\((.+?)\)"
+PROJECT_ANALYSIS = r"Анализ проекта .+?\(\$\w+?\)|Project analysis .+?\(\$\w+?\)"
 
 
 # Заголовки, между которыми находятся категории
@@ -686,9 +668,7 @@ LLAMA_API_PROTOCOL = "https://api.llama.fi/protocol/"
 
 
 # Селекторы
-SELECTOR_TOP_100_WALLETS = (
-    ".overflow-right-box .holder-Statistics #holders_top100"
-)
+SELECTOR_TOP_100_WALLETS = ".overflow-right-box .holder-Statistics #holders_top100"
 SELECTOR_TWITTERSCORE = "span.more-info-data"
 SELECTOR_GET_INVESTORS = "p.sc-56567222-0"
 SELECTOR_PERCENTAGE_DATA = 'div[class*="overflow-y-auto"]'
@@ -696,9 +676,7 @@ SELECTOR_PERCENTAGE_TOKEN = "div.flex.items-center.w-"
 
 
 # Информация для анализа моделью
-ALL_DATA_STRING_FUNDS_AGENT = (
-    "Распределение токенов: {funds_profit_distribution}\n"
-)
+ALL_DATA_STRING_FUNDS_AGENT = "Распределение токенов: {funds_profit_distribution}\n"
 ALL_DATA_STRING_FLAGS_AGENT = (
     "Проект: {project_coin_name}\n"
     "Categories: {project_categories}\n"

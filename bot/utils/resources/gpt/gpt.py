@@ -57,9 +57,7 @@ def load_document_for_description_agent() -> str:
     Загружает текст из документа Google и извлекает текст для промта агента определения категории проекта.
     """
 
-    return load_document(
-        start_title_for_description_agent, end_title_for_description_agent
-    )
+    return load_document(start_title_for_description_agent, end_title_for_description_agent)
 
 
 def load_document_for_tier_agent() -> str:
@@ -75,9 +73,7 @@ def load_document_for_funds_agent() -> str:
     Загружает текст из документа Google и извлекает текст для промта агента определения профита инвесторов.
     """
 
-    return load_document(
-        start_title_for_funds_agent, end_title_for_funds_agent
-    )
+    return load_document(start_title_for_funds_agent, end_title_for_funds_agent)
 
 
 def load_document_for_project_rating_agent() -> str:
@@ -96,9 +92,7 @@ def load_document_for_flags_agent() -> str:
     Загружает текст из документа Google и извлекает текст для промта агента определения ред/грин флагов проекта.
     """
 
-    return load_document(
-        start_title_for_flags_agent, end_title_for_flags_agent
-    )
+    return load_document(start_title_for_flags_agent, end_title_for_flags_agent)
 
 
 async def create_agent_response(system_content: str, user_prompt: str) -> str:
@@ -127,9 +121,7 @@ async def description_agent(topic: str, language: str):
     """
 
     system = load_document_for_description_agent()
-    user_prompt = user_prompt_for_description_agent.format(
-        language=language, topic=topic
-    )
+    user_prompt = user_prompt_for_description_agent.format(language=language, topic=topic)
 
     return await create_agent_response(system, user_prompt)
 
@@ -170,9 +162,7 @@ async def flags_agent(topic: str, language: str):
     """
 
     system = load_document_for_flags_agent()
-    user_prompt = user_prompt_for_flags_agent.format(
-        language=language, topic=topic
-    )
+    user_prompt = user_prompt_for_flags_agent.format(language=language, topic=topic)
     return await create_agent_response(system, user_prompt)
 
 
