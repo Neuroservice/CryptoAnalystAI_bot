@@ -25,7 +25,7 @@ from bot.utils.common.consts import (
     START_TITLE_FOR_FUNDAMENTAL,
     START_TITLE_FOR_SCAM_TOKENS,
     END_TITLE_FOR_STABLECOINS,
-    END_TITLE_FOR_FUNDAMENTAL,
+    END_TITLE_FOR_FUNDAMENTAL, REPLACED_PROJECT_TWITTER,
 )
 from bot.utils.common.params import get_header_params, get_cryptocompare_params_with_full_name, get_cryptocompare_params
 from bot.utils.project_data import (
@@ -252,7 +252,9 @@ async def fetch_weekly_data(symbol: str) -> bool:
         if not lower_name:
             lower_name = await get_lower_name(symbol)
 
-        twitter, twitterscore = await fetch_twitter_data(twitter_name)
+        twitter_link = REPLACED_PROJECT_TWITTER.get(twitter_name, twitter_name)
+
+        twitter, twitterscore = await fetch_twitter_data(twitter_link)
         top_100_wallets = await fetch_top_100_wallets(symbol.lower())
         tvl = await fetch_tvl_data(symbol.lower())
 
