@@ -477,7 +477,8 @@ async def receive_data(message: types.Message, state: FSMContext):
     network_metrics = project_info.get("network_metrics")
 
     header_params = get_header_params(coin_name=user_coin_name)
-    twitter_name = await get_twitter_link_by_symbol(user_coin_name)
+    twitter_name, description, lower_name, categories = await get_twitter_link_by_symbol(user_coin_name)
+    twitter_link = REPLACED_PROJECT_TWITTER.get(twitter_name, twitter_name)
 
     try:
         if (
@@ -543,7 +544,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         investing_metrics=investing_metrics,
         manipulative_metrics=manipulative_metrics,
         network_metrics=network_metrics,
-        twitter_name=twitter_name,
+        twitter_name=twitter_link,
         user_coin_name=user_coin_name,
         lower_name=lower_name,
         model_mapping=MODEL_MAPPING,
@@ -623,7 +624,9 @@ async def receive_data(message: types.Message, state: FSMContext):
         "new_project": new_project.to_dict(),
         "calculation_record": calculation_record.to_dict(),
         "token_description": token_description,
-        "twitter_name": twitter_name,
+        "twitter_name": twitter_link,
+        "categories": categories,
+        "lower_name": lower_name,
         "coin_name": user_coin_name,
         "price": price,
         "total_supply": total_supply,

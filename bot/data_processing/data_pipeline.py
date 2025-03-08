@@ -75,6 +75,8 @@ async def update_static_data():
             if not success:
                 logging.error(f"Skipping {project.coin_name} due to static data fetch error")
 
+            await asyncio.sleep(1)
+
         return True
     except Exception as e:
         logging.error(f"Critical error in update_static_data: {e}")
@@ -86,8 +88,6 @@ async def update_weekly_data():
     Обновление данных, которые меняются раз в неделю.
     """
     try:
-        tokens_task = asyncio.create_task(parse_tokens_weekly())
-        categories_task = asyncio.create_task(parse_categories_weekly())
 
         projects = await get_all(Project)
 
@@ -95,6 +95,9 @@ async def update_weekly_data():
         stablecoins = set(load_document_for_garbage_list(START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS))
         fundamental = set(load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL))
         scam_tokens = set(load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS))
+
+        tokens_task = asyncio.create_task(parse_tokens_weekly())
+        categories_task = asyncio.create_task(parse_categories_weekly())
 
         # Фильтруем токены
         valid_projects = [
@@ -112,6 +115,8 @@ async def update_weekly_data():
             success = await fetch_weekly_data(project.coin_name)
             if not success:
                 logging.error(f"Skipping {project.coin_name} due to weekly data fetch error")
+
+            await asyncio.sleep(1)
 
         await asyncio.gather(tokens_task, categories_task)
 
@@ -153,6 +158,8 @@ async def update_dynamic_data():
                     logging.error(f"Skipping {project.coin_name} due to data fetch error")
                     continue
 
+                await asyncio.sleep(1)
+
             except Exception as error:
                 logging.error(f"Error processing dynamic data for {project.coin_name}: {error}")
                 return False
@@ -183,7 +190,7 @@ async def fetch_static_data(symbol: str) -> bool:
 
         header_params = get_header_params(symbol)
 
-        fundraising_data, investors = await fetch_fundraise_data(lower_name)
+        fundraising_data, investors = await fetch_fundraise_data(symbol)
         tokenomics_percentage_data = await get_percentage_data(twitter_name, symbol)
         output_string = "\n".join(tokenomics_percentage_data) if tokenomics_percentage_data else "-"
 
@@ -459,8 +466,6 @@ async def parse_tokens_weekly():
 
             # Оставляем ровно 1000 токенов
             top_1000_tokens = filtered_tokens[:1000]
-
-            print("top_1000_tokens: ", top_1000_tokens)
 
             for token in top_1000_tokens:
                 instance, bool_type = await update_or_create_token(

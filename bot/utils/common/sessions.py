@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import sessionmaker
 
-from bot.utils.common.config import REDIS_HOST, DB_PASSWORD, REDIS_PORT
+from bot.utils.common.config import REDIS_HOST, REDIS_PORT
 from bot.utils.common.consts import DATABASE_URL
 
 async_engine: AsyncEngine = create_async_engine(

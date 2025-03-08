@@ -84,8 +84,11 @@ def get_crypto_key(symbol: str) -> str:
     headers = {"X-Api-Key": CRYPTORANK_API_KEY, "Accept": "application/json"}
     response = requests.get(CRYPTORANK_API_URL, params=params, headers=headers)
 
+    print(f"response in get_crypto_key {response}")
+
     if response.status_code == 200:
         data = response.json()
+        print(f"data in get_crypto_key: {data}")
         if "data" in data and len(data["data"]) > 0:
             return data["data"][0]["key"]
 
@@ -561,56 +564,61 @@ async def get_fundraise(user_coin_name: str, message: Message = None):
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
 
-            link = soup.select_one("a.sc-1f2a5732-0.jwxUWV")
-            if link:
-                new_url = urljoin(url, link["href"])
-                response = requests.get(new_url)
+            # Ищем div, который содержит два <p>, первый из которых "Total Raised"
+            funding_divs = soup.find_all("div")
 
-                if response.status_code == 200:
-                    soup = BeautifulSoup(response.text, "html.parser")
+            clean_data = None
+            for div in funding_divs:
+                p_tags = div.find_all("p")  # Все <p> внутри div
 
-                    # Получение информации о фандрайзе
-                    fundraising_elements = soup.select("p.sc-56567222-0.fzulHc")
-                    if len(fundraising_elements) > 1:
-                        fundraising_data = fundraising_elements[1].text
-                        clean_data = clean_fundraise_data(fundraising_data)
-                    else:
-                        clean_data = None
+                if len(p_tags) == 2 and p_tags[0].text.strip() == "Total Raised":
+                    clean_data = clean_fundraise_data(p_tags[1].text.strip())
+                    break  # Нашли нужный div, выходим
 
-                    # Инициализация переменной investors_data пустым списком
-                    investors_data = ""
+            print("Total Raised:", clean_data)
 
-                    # Получение инвесторов и их тиров
-                    investors_rows = soup.select("table.sc-9b3136d-1.cnOWhJ tbody tr")
+            investors_data = ""
 
-                    if not investors_rows:
-                        print("❌ Таблица инвесторов не найдена!")
+            # Ищем абзац <p> или заголовок <h2>, <h3>, содержащий "Investors and Backers"
+            investor_heading = soup.find(
+                lambda tag: tag.name in ["p", "h2", "h3"] and "Investors and Backers" in tag.get_text(strip=True)
+            )
+
+            if investor_heading:
+                print(f"🔹 Найден заголовок: {investor_heading.text.strip()}")
+            else:
+                print("❌ Заголовок 'Investors and Backers' не найден!")
+
+            if investor_heading:
+                # Найти следующую таблицу после заголовка
+                investors_table = investor_heading.find_next("table")
+
+                if investors_table:
+                    investors_rows = investors_table.select("tbody tr")
 
                     for investor in investors_rows[:5]:  # Ограничение до 5 элементов
                         try:
                             # Извлекаем название инвестора
-                            name_tag = investor.select_one("td.sc-4b43e9a5-0.dpEQjJ p.sc-56567222-0.ktClAm")
+                            name_tag = investor.select_one("td.sc-7338db8c-0.jHJJVG p.sc-dec2158d-0.jYFsAb")
                             name = name_tag.get_text(strip=True) if name_tag else "Не найдено"
 
                             # Извлекаем Tier
-                            tier_tag = investor.select_one("td.sc-4b43e9a5-0.hMDMTF p.sc-56567222-0.ktClAm")
+                            tier_tag = investor.select_one("td.sc-7338db8c-0.hakNfu p.sc-dec2158d-0.jYFsAb")
                             tier = tier_tag.get_text(strip=True) if tier_tag else "Не найдено"
 
+                            # Сохраняем данные в неизменном формате
                             investors_data += f"{name} (Tier: {tier}), "
 
                         except AttributeError as e:
                             print(f"❌ Ошибка при обработке инвестора: {e}")
                             continue
 
-                    logging.info(f"Инвесторы, fundraise: {investors_data, clean_data}")
-                    return clean_data, investors_data
+            logging.info(f"Инвесторы, fundraise: {investors_data, clean_data}")
+            return clean_data, investors_data
 
-            logging.error("Элемент для клика не найден")
-            return None, "-"
         else:
             if message:
                 await message.answer(f"Ошибка получения данных для монеты '{user_coin_name}'")
-
             logging.error(f"Ошибка при получении данных: {response.status_code}")
             return None, "-"
 
@@ -955,8 +963,8 @@ async def fetch_tvl_data(coin_name: str):
                     data = await response.json()
                     if isinstance(data, list) and data:
                         last_entry = data[-1]
-                        last_tvl = last_entry.get("totalLiquidityUSD", 0)
-                        logging.info(f"Последний TVL (base_url): {last_tvl}")
+                        print('last_entry: ', last_entry)
+                        last_tvl = last_entry.get("tvl", 0)
                         return float(last_tvl)
                     else:
                         logging.error(f"No TVL data found for {coin_name} using base_url.")
@@ -1151,7 +1159,7 @@ async def check_and_run_tasks(
             ]
         )
     ) or not investing_metrics:
-        tasks.append((fetch_fundraise_data(lower_name), "investing_metrics"))
+        tasks.append((fetch_fundraise_data(project.coin_name), "investing_metrics"))
 
     if (
         social_metrics

@@ -180,15 +180,15 @@ async def create_pdf_report(
     state_data = await state.get_data()
     new_project = state_data.get("new_project")
     coin_name = state_data.get("coin_name")
-    twitter_link = state_data.get("twitter_name")
+    coin_twitter = state_data.get("twitter_name")
     token_description = state_data.get("token_description")
+    categories = state_data.get("categories")
+    lower_name = state_data.get("lower_name")
     price = state_data.get("price")
     total_supply = state_data.get("total_supply")
     calculation_record = state_data.get("calculation_record")
 
     row_data = []
-    coin_twitter, about, lower_name, categories = twitter_link
-    twitter_name = REPLACED_PROJECT_TWITTER.get(coin_twitter, twitter_link)
     user_data = await get_user_from_redis_or_db(user_id)
     language = user_data.get("language", "ENG")
     current_date = datetime.now().strftime("%d.%m.%Y")
@@ -416,7 +416,7 @@ async def create_pdf_report(
                 funds_answer=funds_answer,
                 project_rating_answer=project_rating_answer,
                 social_metrics_twitter=social_metrics.twitter,
-                twitter_link=twitter_name,
+                twitter_link=coin_twitter,
                 social_metrics_twitterscore=social_metrics.twitterscore,
             )
 
@@ -435,7 +435,7 @@ async def create_pdf_report(
                 funds_answer,
                 tokemonic_answer,
                 categories,
-                twitter_link,
+                coin_twitter,
                 top_and_bottom,
                 language,
             )
@@ -518,7 +518,7 @@ async def create_pdf_report(
                 ),
                 format_metric(
                     "twitter_followers",
-                    f"{get_metric_value(social_metrics, 'twitter')} ({twitter_name[0]})"
+                    f"{get_metric_value(social_metrics, 'twitter')} ({coin_twitter})"
                     if get_metric_value(social_metrics, "twitter")
                     else None,
                     language,
