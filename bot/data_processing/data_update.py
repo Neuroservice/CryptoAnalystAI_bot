@@ -100,7 +100,7 @@ async def update_agent_answers():
     """
 
     current_time = datetime.datetime.now(datetime.timezone.utc)
-    three_days_ago = current_time - datetime.timedelta(days=1)
+    one_days_ago = (current_time - datetime.timedelta(days=1)).replace(tzinfo=None)
     current_date = current_time.strftime("%d.%m.%Y")
     comparison_results = ""
     language = "ENG"
@@ -109,8 +109,7 @@ async def update_agent_answers():
     garbage_categories = load_document_for_garbage_list(
         START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES
     )
-
-    outdated_answers = await get_all(AgentAnswer, updated_at=f"<={three_days_ago}")
+    outdated_answers = await get_all(AgentAnswer, updated_at=lambda col: col <= one_days_ago)
 
     for agent_answer in outdated_answers:
         project = await get_one(Project, id=agent_answer.project_id)
@@ -490,3 +489,5 @@ async def update_agent_answers():
                 "updated_at": current_time,
             },
         )
+
+        await asyncio.sleep(10)

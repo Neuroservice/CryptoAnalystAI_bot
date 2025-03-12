@@ -22,11 +22,7 @@ async_engine: AsyncEngine = create_async_engine(
     connect_args={"timeout": 60},
 )
 
-SessionLocal = sessionmaker(
-    class_=AsyncSession,
-    expire_on_commit=False,
-    bind=async_engine
-)
+SessionLocal = sessionmaker(class_=AsyncSession, expire_on_commit=False, bind=async_engine)
 
 session_local = SessionLocal()
 client_session = ClientSession
