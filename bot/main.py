@@ -6,11 +6,11 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand
 
-from bot.data_processing.data_pipeline import parse_categories_weekly, parse_tokens_weekly
-from bot.data_processing.tasks import parse_periodically, backup_database
+from bot.data_processing.data_pipeline import parse_tokens_weekly, parse_categories_weekly
+from bot.data_processing.tasks import backup_database, parse_data_and_answers
 from bot.handlers import history, select_language, donate
 from bot.utils.common.config import API_TOKEN
-from bot.utils.common.sessions import session_local, SessionLocal, redis_client
+from bot.utils.common.sessions import SessionLocal, redis_client
 from bot.utils.middlewares import RestoreStateMiddleware
 from bot.utils.resources.exceptions.exceptions import (
     ExceptionError,
@@ -64,7 +64,7 @@ async def main():
             dp.update.middleware(RestoreStateMiddleware(SessionLocal))
 
             logging.info("Запуск периодического обновления данных.")
-            asyncio.create_task(parse_periodically(session_local))
+            asyncio.create_task(parse_data_and_answers())
             asyncio.create_task(parse_categories_weekly())
             asyncio.create_task(parse_tokens_weekly())
             asyncio.create_task(backup_database())

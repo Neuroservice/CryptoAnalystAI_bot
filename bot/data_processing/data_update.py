@@ -4,22 +4,17 @@ import logging
 import re
 import traceback
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from bot.data_processing.data_pipeline import (
     update_static_data,
     update_weekly_data,
     update_dynamic_data,
-    fetch_static_data,
-    fetch_weekly_data,
+    update_current_price,
 )
-from bot.database.backups import create_backup
 from bot.database.db_operations import (
     get_one,
     update_or_create,
     get_all,
     get_or_create,
-    update_or_create_token,
 )
 from bot.database.models import (
     Project,
@@ -32,13 +27,6 @@ from bot.utils.common.consts import (
     ALL_DATA_STRING_FLAGS_AGENT,
     START_TITLE_FOR_GARBAGE_CATEGORIES,
     END_TITLE_FOR_GARBAGE_CATEGORIES,
-    TICKERS,
-    PROJECT_TYPES,
-    START_TITLE_FOR_SCAM_TOKENS,
-    START_TITLE_FOR_FUNDAMENTAL,
-    END_TITLE_FOR_FUNDAMENTAL,
-    END_TITLE_FOR_STABLECOINS,
-    START_TITLE_FOR_STABLECOINS,
 )
 from bot.utils.metrics.metrics_evaluation import (
     determine_project_tier,
@@ -54,9 +42,6 @@ from bot.utils.project_data import (
     calculate_expected_x,
     generate_flags_answer,
     get_coin_description,
-    get_top_projects_by_capitalization,
-    fetch_top_tokens,
-    fetch_categories,
 )
 from bot.utils.resources.bot_phrases.bot_phrase_handler import (
     phrase_by_language,
@@ -80,40 +65,29 @@ logging.basicConfig(level=logging.INFO)
 current_day = datetime.datetime.now(datetime.timezone.utc).day
 
 
-async def fetch_crypto_data(async_session: AsyncSession):
+async def fetch_crypto_data():
     """
     Асинхронный эндпоинт для получения данных о криптопроектах.
-    Теперь вызывает три отдельных функции:
+    Запускает три фоновых обновления:
     - `update_static_data` (раз в 3 месяца)
     - `update_weekly_data` (раз в неделю)
     - `update_dynamic_data` (ежедневно)
     """
-
     try:
         logging.info("Starting fetch_crypto_data...")
 
-        # Запускаем все три обновления асинхронно
-        static_task = asyncio.create_task(update_static_data())
-        weekly_task = asyncio.create_task(update_weekly_data())
-        dynamic_task = asyncio.create_task(update_dynamic_data())
+        asyncio.create_task(update_static_data())
+        asyncio.create_task(update_weekly_data())
+        asyncio.create_task(update_dynamic_data())
+        asyncio.create_task(update_current_price())
 
-        # Дожидаемся выполнения всех задач
-        results = await asyncio.gather(static_task, weekly_task, dynamic_task, return_exceptions=True)
+        logging.info("All update tasks started successfully.")
 
-        # Логируем результаты
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logging.error(f"Error in task {['static', 'weekly', 'dynamic'][i]}: {result}")
-            else:
-                logging.info(f"{['Static', 'Weekly', 'Dynamic'][i]} data update completed: {result}")
-
-        return {"status": "Data fetching completed"}
     except Exception as e:
         logging.error(f"Critical error in fetch_crypto_data: {e}")
         logging.error(f"Exception type: {type(e).__name__}")
         logging.error("Traceback:")
-        logging.error(traceback.format_exc())  # Логирует весь стек вызовов
-        return {"status": "Error", "message": str(e)}
+        logging.error(traceback.format_exc())
 
 
 async def update_agent_answers():
