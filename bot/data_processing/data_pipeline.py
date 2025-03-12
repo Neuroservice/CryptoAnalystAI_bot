@@ -17,15 +17,14 @@ from bot.database.models import (
 )
 from bot.utils.common.consts import (
     EXPECTED_KEYS,
-    TICKERS,
-    PROJECT_TYPES,
     START_TITLE_FOR_GARBAGE_CATEGORIES,
     END_TITLE_FOR_GARBAGE_CATEGORIES,
     START_TITLE_FOR_STABLECOINS,
     START_TITLE_FOR_FUNDAMENTAL,
     START_TITLE_FOR_SCAM_TOKENS,
     END_TITLE_FOR_STABLECOINS,
-    END_TITLE_FOR_FUNDAMENTAL, REPLACED_PROJECT_TWITTER,
+    END_TITLE_FOR_FUNDAMENTAL,
+    REPLACED_PROJECT_TWITTER,
 )
 from bot.utils.common.params import get_header_params, get_cryptocompare_params_with_full_name, get_cryptocompare_params
 from bot.utils.project_data import (
@@ -39,7 +38,6 @@ from bot.utils.project_data import (
     fetch_top_100_wallets,
     fetch_tvl_data,
     fetch_cryptocompare_data,
-    get_top_projects_by_capitalization,
     fetch_categories,
     fetch_top_tokens,
 )
@@ -102,9 +100,6 @@ async def update_weekly_data():
             fundamental = set(load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL))
             scam_tokens = set(load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS))
 
-            tokens_task = asyncio.create_task(parse_tokens_weekly())
-            categories_task = asyncio.create_task(parse_categories_weekly())
-
             # Фильтруем токены
             valid_projects = [
                 project
@@ -122,9 +117,7 @@ async def update_weekly_data():
                 if not success:
                     logging.error(f"Skipping {project.coin_name} due to weekly data fetch error")
 
-                await asyncio.sleep(1)
-
-            await asyncio.gather(tokens_task, categories_task)
+                await asyncio.sleep(10)
 
             logging.info("Обновление недельных данных завершено. Ожидание 7 дней...")
         except Exception as e:
@@ -167,9 +160,8 @@ async def update_dynamic_data():
 
                     if not success:
                         logging.error(f"Skipping {project.coin_name} due to data fetch error")
-                        continue
 
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(10)
 
                 except Exception as error:
                     logging.error(f"Error processing dynamic data for {project.coin_name}: {error}")
@@ -217,7 +209,7 @@ async def update_current_price():
                         logging.error(f"Skipping {project.coin_name} due to data fetch error")
                         continue
 
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(10)
 
                 except Exception as error:
                     logging.error(f"Error processing dynamic data for {project.coin_name}: {error}")
@@ -580,7 +572,7 @@ async def parse_tokens_weekly():
                     if not weekly_data_success:
                         logging.error(f"Weekly data fetch failed for {token}")
 
-                await asyncio.sleep(1)
+                    await asyncio.sleep(5)
 
             logging.info("Обновление списка токенов завершено. В базе 1000 отфильтрованных токенов.")
         except Exception as e:

@@ -146,8 +146,9 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     )
     language = user_data.get("language", "ENG")
 
-    if await validate_user_input(user_coin_name, message, state):
-        return
+    validate_answer = await validate_user_input(user_coin_name, message, state)
+    if validate_answer:
+        return message.answer(validate_answer)
     else:
         await message.answer(await phrase_by_user("wait_for_calculations", message.from_user.id))
 
@@ -165,14 +166,17 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     if description:
         coin_description += description
 
+    print("categories: ", categories)
+
     if not categories or len(categories) == 0:
-        await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id))
+        return await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id, token=user_coin_name))
 
     # Получаем или создаём категории в БД
     category_instances = []
     for category_name in categories:
         if category_name not in garbage_categories:
             category_instance, _ = await get_or_create(Category, category_name=category_name)
+            print("category_instance: ", category_instance.category_name)
             category_instances.append(category_instance)
 
     if len(category_instances) == 0:
@@ -400,8 +404,6 @@ async def receive_data(message: types.Message, state: FSMContext):
 
     user_coin_name = message.text.upper().replace(" ", "")
     investors = None
-    price = None
-    total_supply = None
     fundraise = None
     calculation_record = None
     user_data = await get_user_from_redis_or_db(message.from_user.id)
@@ -410,9 +412,9 @@ async def receive_data(message: types.Message, state: FSMContext):
     )
     language = user_data.get("language", "ENG")
 
-    user_input = await validate_user_input(user_coin_name, message, state)
-    if user_input:
-        return await message.answer(user_input)
+    validate_answer = await validate_user_input(user_coin_name, message, state)
+    if validate_answer:
+        return message.answer(validate_answer)
     else:
         # Сообщаем пользователю, что будут производиться расчеты
         await message.answer(await phrase_by_user("wait_for_calculations", message.from_user.id))
@@ -434,7 +436,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         return await message.answer(await phrase_by_user("not_in_top_cmc", message.from_user.id, language=language))
 
     if not categories or len(categories) == 0:
-        return await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id))
+        return await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id, token=user_coin_name))
 
     # Получаем или создаём категории в БД
     category_instances = []

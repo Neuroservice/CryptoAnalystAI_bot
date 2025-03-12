@@ -42,5 +42,9 @@ async def backup_database():
 
 async def periodically_update_answers():
     while True:
-        await update_agent_answers()
+        try:
+            await update_agent_answers()
+        except Exception as e:
+            logging.error(f"Ошибка при обновлении ответов агентов: {e}")
+
         await asyncio.sleep(60 * 60 * 12)

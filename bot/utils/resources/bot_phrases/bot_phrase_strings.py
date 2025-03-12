@@ -55,7 +55,7 @@ phrase_dict = {
         "error_common": "Произошла ошибка.\nПодробности ошибки:",
         "error_file_format_message": "Пожалуйста, выберите формат файла: PDF или Excel.",
         "error_user_not_found": "Пользователь не найден в базе данных.",
-        "error_project_inappropriate_category": "Токен не подошел ни под одну из категорий, попробуйте другой.",
+        "error_project_inappropriate_category": "Токен {token} не подошел ни под одну из категорий, попробуйте другой.",
         "error_project_not_found": "Проект с таким именем не найден.",
         "no_red_flags": "Нет 'ред' флагов",
         "no_green_flags": "Нет 'грин' флагов",
@@ -65,7 +65,7 @@ phrase_dict = {
         "comparisons_error": "Ошибка в расчетах",
         "no_data": "Нет данных",
         "no_token_distribution": "Нет данных по распределению токенов",
-        "category_in_garbage_list": "Категория проекта относиться к списку категорий, которые нуждаются в дополнительной проверке... Попробуйте другой токен.",
+        "category_in_garbage_list": "Категория проекта относится к списку категорий, которые нуждаются в дополнительной проверке... Попробуйте другой токен.",
         "not_in_top_cmc": "Вы ввели неправильный тикер токена, либо токен не находится в списке топ 1000 платформы Coin Market Cap и представляет высокие риски для инвестирования",
         "calculation_type_choice": """
 Если вы хотите просто рассчитать цену токена, на основании похожих проектов, выберите кнопку 'Блок ребалансировки портфеля'.\n\n
@@ -144,7 +144,7 @@ Twitter Score = {twitter_engagement_score}
         "error_common": "An error has occurred.\nDetails of the error:",
         "error_file_format_message": "Please select the file format: PDF or Excel.",
         "error_user_not_found": "User not found in the database.",
-        "error_project_inappropriate_category": "The token did not fit any of the categories, try another one.",
+        "error_project_inappropriate_category": "The token {token} did not fit any of the categories, try another one.",
         "error_project_not_found": "Project with this name was not found.",
         "no_red_flags": "No 'red' flags",
         "no_green_flags": "No 'green' flags",
