@@ -245,8 +245,6 @@ async def fetch_static_data(symbol: str) -> bool:
             return False
 
         twitter_name, description, lower_name, categories = await get_twitter_link_by_symbol(symbol)
-        if not lower_name:
-            lower_name = await get_lower_name(symbol)
 
         header_params = get_header_params(symbol)
 
@@ -581,6 +579,8 @@ async def parse_tokens_weekly():
 
                     if not weekly_data_success:
                         logging.error(f"Weekly data fetch failed for {token}")
+
+                await asyncio.sleep(1)
 
             logging.info("Обновление списка токенов завершено. В базе 1000 отфильтрованных токенов.")
         except Exception as e:
