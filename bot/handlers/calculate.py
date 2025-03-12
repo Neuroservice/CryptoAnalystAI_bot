@@ -169,7 +169,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     print("categories: ", categories)
 
     if not categories or len(categories) == 0:
-        await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id))
+        return await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id, token=user_coin_name))
 
     # Получаем или создаём категории в БД
     category_instances = []
@@ -436,7 +436,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         return await message.answer(await phrase_by_user("not_in_top_cmc", message.from_user.id, language=language))
 
     if not categories or len(categories) == 0:
-        return await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id))
+        return await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id, token=user_coin_name))
 
     # Получаем или создаём категории в БД
     category_instances = []

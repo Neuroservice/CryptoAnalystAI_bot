@@ -309,7 +309,7 @@ async def get_twitter(name: str):
             return None
 
         try:
-            await page.wait_for_selector(SELECTOR_TWITTERSCORE, timeout=25000)
+            await page.wait_for_selector(SELECTOR_TWITTERSCORE, timeout=30000)
             twitter = await page.locator(SELECTOR_TWITTERSCORE).first.inner_text()
             print("twitter: ", twitter)
         except:
