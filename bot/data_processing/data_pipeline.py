@@ -50,124 +50,184 @@ async def update_static_data():
     """
     Обновление данных, которые меняются редко (раз в 3 месяца).
     """
-    try:
-        projects = await get_all(Project)
+    while True:
+        try:
+            logging.info("Запуск обновления статических данных...")
 
-        # Загружаем списки мусорных токенов
-        stablecoins = set(load_document_for_garbage_list(START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS))
-        fundamental = set(load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL))
-        scam_tokens = set(load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS))
+            projects = await get_all(Project)
 
-        # Фильтруем токены
-        valid_projects = [
-            project
-            for project in projects
-            if project.coin_name not in stablecoins
-            and project.coin_name not in fundamental
-            and project.coin_name not in scam_tokens
-        ]
+            # Загружаем списки мусорных токенов
+            stablecoins = set(load_document_for_garbage_list(START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS))
+            fundamental = set(load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL))
+            scam_tokens = set(load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS))
 
-        # Ограничиваем список до 1000 проектов
-        top_1000_projects = valid_projects[:1000]
+            # Фильтруем токены
+            valid_projects = [
+                project
+                for project in projects
+                if project.coin_name not in stablecoins
+                and project.coin_name not in fundamental
+                and project.coin_name not in scam_tokens
+            ]
 
-        for project in top_1000_projects:
-            success = await fetch_static_data(project.coin_name)
-            if not success:
-                logging.error(f"Skipping {project.coin_name} due to static data fetch error")
+            # Ограничиваем список до 1000 проектов
+            top_1000_projects = valid_projects[:1000]
 
-            await asyncio.sleep(1)
+            for project in top_1000_projects:
+                success = await fetch_static_data(project.coin_name)
+                if not success:
+                    logging.error(f"Skipping {project.coin_name} due to static data fetch error")
 
-        return True
-    except Exception as e:
-        logging.error(f"Critical error in update_static_data: {e}")
-        return False
+                await asyncio.sleep(1)  # Минимальная задержка между запросами
+
+            logging.info("Обновление статических данных завершено. Ожидание 3 месяца...")
+        except Exception as e:
+            logging.error(f"Critical error in update_static_data: {e}")
+
+        await asyncio.sleep(60 * 60 * 24 * 30 * 3)
 
 
 async def update_weekly_data():
     """
     Обновление данных, которые меняются раз в неделю.
     """
-    try:
+    while True:
+        try:
+            logging.info("Запуск обновления недельных данных...")
 
-        projects = await get_all(Project)
+            projects = await get_all(Project)
 
-        # Загружаем списки мусорных токенов
-        stablecoins = set(load_document_for_garbage_list(START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS))
-        fundamental = set(load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL))
-        scam_tokens = set(load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS))
+            # Загружаем списки мусорных токенов
+            stablecoins = set(load_document_for_garbage_list(START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS))
+            fundamental = set(load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL))
+            scam_tokens = set(load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS))
 
-        tokens_task = asyncio.create_task(parse_tokens_weekly())
-        categories_task = asyncio.create_task(parse_categories_weekly())
+            tokens_task = asyncio.create_task(parse_tokens_weekly())
+            categories_task = asyncio.create_task(parse_categories_weekly())
 
-        # Фильтруем токены
-        valid_projects = [
-            project
-            for project in projects
-            if project.coin_name not in stablecoins
-            and project.coin_name not in fundamental
-            and project.coin_name not in scam_tokens
-        ]
+            # Фильтруем токены
+            valid_projects = [
+                project
+                for project in projects
+                if project.coin_name not in stablecoins
+                and project.coin_name not in fundamental
+                and project.coin_name not in scam_tokens
+            ]
 
-        # Ограничиваем список до 1000 проектов
-        top_1000_projects = valid_projects[:1000]
+            # Ограничиваем список до 1000 проектов
+            top_1000_projects = valid_projects[:1000]
 
-        for project in top_1000_projects:
-            success = await fetch_weekly_data(project.coin_name)
-            if not success:
-                logging.error(f"Skipping {project.coin_name} due to weekly data fetch error")
+            for project in top_1000_projects:
+                success = await fetch_weekly_data(project.coin_name)
+                if not success:
+                    logging.error(f"Skipping {project.coin_name} due to weekly data fetch error")
 
-            await asyncio.sleep(1)
+                await asyncio.sleep(1)
 
-        await asyncio.gather(tokens_task, categories_task)
+            await asyncio.gather(tokens_task, categories_task)
 
-        return True
-    except Exception as e:
-        logging.error(f"Critical error in update_weekly_data: {e}")
-        return False
+            logging.info("Обновление недельных данных завершено. Ожидание 7 дней...")
+        except Exception as e:
+            logging.error(f"Critical error in update_weekly_data: {e}")
+
+        # Ожидание 7 дней перед следующим запуском
+        await asyncio.sleep(60 * 60 * 24 * 7)
 
 
 async def update_dynamic_data():
     """
     Обновление динамических данных (ежедневно).
     """
-    try:
-        projects = await get_all(Project)
+    while True:
+        try:
+            logging.info("Запуск обновления ежедневных данных...")
 
-        # Загружаем списки мусорных токенов
-        stablecoins = set(load_document_for_garbage_list(START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS))
-        fundamental = set(load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL))
-        scam_tokens = set(load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS))
+            projects = await get_all(Project)
 
-        # Фильтруем токены
-        valid_projects = [
-            project
-            for project in projects
-            if project.coin_name not in stablecoins
-            and project.coin_name not in fundamental
-            and project.coin_name not in scam_tokens
-        ]
+            # Загружаем списки мусорных токенов
+            stablecoins = set(load_document_for_garbage_list(START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS))
+            fundamental = set(load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL))
+            scam_tokens = set(load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS))
 
-        # Ограничиваем список до 1000 проектов
-        top_1000_projects = valid_projects[:1000]
+            # Фильтруем токены
+            valid_projects = [
+                project
+                for project in projects
+                if project.coin_name not in stablecoins
+                and project.coin_name not in fundamental
+                and project.coin_name not in scam_tokens
+            ]
 
-        for project in top_1000_projects:
-            try:
-                success = await fetch_dynamic_data(project.coin_name)
+            # Ограничиваем список до 1000 проектов
+            top_1000_projects = valid_projects[:1000]
 
-                if not success:
-                    logging.error(f"Skipping {project.coin_name} due to data fetch error")
-                    continue
+            for project in top_1000_projects:
+                try:
+                    success = await fetch_dynamic_data(project.coin_name)
 
-                await asyncio.sleep(1)
+                    if not success:
+                        logging.error(f"Skipping {project.coin_name} due to data fetch error")
+                        continue
 
-            except Exception as error:
-                logging.error(f"Error processing dynamic data for {project.coin_name}: {error}")
-                return False
+                    await asyncio.sleep(1)
 
-        return True
-    except Exception as e:
-        logging.error(f"Critical error in update_dynamic_data: {e}")
-        return False
+                except Exception as error:
+                    logging.error(f"Error processing dynamic data for {project.coin_name}: {error}")
+
+            logging.info("Обновление ежедневных данных завершено. Ожидание 24 часа...")
+        except Exception as e:
+            logging.error(f"Critical error in update_dynamic_data: {e}")
+
+        # Ожидание 24 часа перед следующим запуском
+        await asyncio.sleep(60 * 60 * 24)
+
+
+async def update_current_price():
+    """
+    Обновление текущей и максимальной цен раз в 6 часов.
+    """
+    while True:
+        try:
+            logging.info("Запуск обновления ежедневных данных...")
+
+            projects = await get_all(Project)
+
+            # Загружаем списки мусорных токенов
+            stablecoins = set(load_document_for_garbage_list(START_TITLE_FOR_STABLECOINS, END_TITLE_FOR_STABLECOINS))
+            fundamental = set(load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL))
+            scam_tokens = set(load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS))
+
+            # Фильтруем токены
+            valid_projects = [
+                project
+                for project in projects
+                if project.coin_name not in stablecoins
+                and project.coin_name not in fundamental
+                and project.coin_name not in scam_tokens
+            ]
+
+            # Ограничиваем список до 1000 проектов
+            top_1000_projects = valid_projects[:1000]
+
+            for project in top_1000_projects:
+                try:
+                    success = await fetch_current_price(project.coin_name)
+
+                    if not success:
+                        logging.error(f"Skipping {project.coin_name} due to data fetch error")
+                        continue
+
+                    await asyncio.sleep(1)
+
+                except Exception as error:
+                    logging.error(f"Error processing dynamic data for {project.coin_name}: {error}")
+
+            logging.info("Обновление ежедневных данных завершено. Ожидание 24 часа...")
+        except Exception as e:
+            logging.error(f"Critical error in update_dynamic_data: {e}")
+
+        # Ожидание 24 часа перед следующим запуском
+        await asyncio.sleep(60 * 60 * 12)
 
 
 async def fetch_static_data(symbol: str) -> bool:
@@ -311,6 +371,76 @@ async def fetch_weekly_data(symbol: str) -> bool:
         return False
 
 
+async def fetch_current_price(symbol: str):
+    """
+    Получает/обновляет текущую и максимальную цены для указанного токена.
+    """
+    try:
+        # Получаем объект проекта
+        project = await get_one(Project, coin_name=symbol)
+        if not project:
+            logging.error(f"Project not found for {symbol}")
+            return False
+
+        header_params = get_header_params(symbol)
+
+        # Пробуем получить цену с CoinMarketCap
+        data = await fetch_coinmarketcap_data(user_coin_name=symbol, **header_params)
+
+        if not data or not isinstance(data, dict) or "price" not in data:
+            logging.warning(f"CoinMarketCap не дал цену для {symbol}, пробуем CoinGecko...")
+            data = await fetch_coingecko_data(symbol)
+
+        # Получаем дополнительные данные о проекте
+        twitter_name, description, lower_name, categories = await get_twitter_link_by_symbol(symbol)
+        if not lower_name:
+            lower_name = await get_lower_name(symbol)
+
+        # Подготавливаем параметры для API-запросов
+        cryptocompare_params = get_cryptocompare_params(symbol)
+        cryptocompare_params_with_full_coin_name = get_cryptocompare_params_with_full_name(lower_name.upper())
+
+        price = data.get("price")
+
+        # Получаем границы рынка
+        result = await fetch_cryptocompare_data(
+            cryptocompare_params,
+            cryptocompare_params_with_full_coin_name,
+            price,
+            "top_and_bottom",
+        )
+
+        if result is None:
+            result = (None, None, None, None)
+
+        fail_high, growth_low, max_price, min_price = result
+
+        if price:
+            await update_or_create(
+                BasicMetrics,
+                project_id=project.id,
+                defaults={"market_price": round(float(price), 4)},
+            )
+
+        # Обновление границ рынка
+        if max_price and fail_high:
+            await update_or_create(
+                TopAndBottom,
+                project_id=project.id,
+                defaults={"upper_threshold": max_price},
+            )
+            await update_or_create(
+                MarketMetrics,
+                project_id=project.id,
+                defaults={"fail_high": fail_high},
+            )
+
+        logging.error(f"Не удалось получить цену для {symbol}: {data}")
+
+    except Exception as e:
+        logging.error(f"Ошибка при получении цены {symbol}: {e}")
+
+
 async def fetch_dynamic_data(symbol: str) -> bool:
     """
     Получает и обновляет данные о проекте.
@@ -352,20 +482,6 @@ async def fetch_dynamic_data(symbol: str) -> bool:
         # Данные о цене и капитализации
         capitalization = data.get("capitalization")
         fdv = data.get("coin_fdv")
-        price = data.get("price")
-
-        # Получаем границы рынка
-        result = await fetch_cryptocompare_data(
-            cryptocompare_params,
-            cryptocompare_params_with_full_coin_name,
-            price,
-            "top_and_bottom",
-        )
-
-        if result is None:
-            result = (None, None, None, None)
-
-        fail_high, growth_low, max_price, min_price = result
 
         # Обновление капитализации и цены
         await update_or_create(
@@ -373,25 +489,6 @@ async def fetch_dynamic_data(symbol: str) -> bool:
             project_id=project.id,
             defaults={"capitalization": capitalization, "fdv": fdv},
         )
-
-        await update_or_create(
-            BasicMetrics,
-            project_id=project.id,
-            defaults={"market_price": round(float(price), 4)},
-        )
-
-        # Обновление границ рынка
-        if max_price and fail_high:
-            await update_or_create(
-                TopAndBottom,
-                project_id=project.id,
-                defaults={"upper_threshold": max_price},
-            )
-            await update_or_create(
-                MarketMetrics,
-                project_id=project.id,
-                defaults={"fail_high": fail_high},
-            )
 
         # Обновление манипулятивных метрик
         investing_metrics = await get_one(InvestingMetrics, project_id=project.id)
