@@ -72,6 +72,7 @@ async def fetch_crypto_data():
     - `update_static_data` (раз в 3 месяца)
     - `update_weekly_data` (раз в неделю)
     - `update_dynamic_data` (ежедневно)
+    - `update_current_price` (раз в 6 часов)
     """
     try:
         logging.info("Starting fetch_crypto_data...")
