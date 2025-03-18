@@ -1,7 +1,7 @@
-import logging
 import re
-
+import logging
 import requests
+
 from langchain_openai import ChatOpenAI
 
 from bot.utils.common.config import GPT_SECRET_KEY_FASOLKAAI

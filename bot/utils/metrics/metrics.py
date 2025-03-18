@@ -1,16 +1,13 @@
 import logging
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from bot.utils.common.consts import TICKERS
+from bot.utils.resources.exceptions.exceptions import ExceptionError
 from bot.database.db_operations import (
     get_one,
     update_or_create,
     get_or_create,
     create_association,
 )
-from bot.utils.common.consts import TICKERS
-from bot.utils.resources.exceptions.exceptions import ExceptionError
-from bot.utils.common.decorators import save_execute
 from bot.database.models import (
     BasicMetrics,
     TopAndBottom,

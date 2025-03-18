@@ -1,9 +1,11 @@
-import asyncio
-import datetime
-import logging
 import re
+import asyncio
+import logging
+import datetime
 import traceback
 
+from bot.utils.resources.files_worker.pdf_worker import generate_pdf
+from bot.utils.resources.gpt.gpt import agent_handler
 from bot.data_processing.data_pipeline import (
     update_static_data,
     update_weekly_data,
@@ -52,8 +54,6 @@ from bot.utils.resources.bot_phrases.bot_phrase_strings import (
 from bot.utils.resources.files_worker.google_doc import (
     load_document_for_garbage_list,
 )
-from bot.utils.resources.files_worker.pdf_worker import generate_pdf
-from bot.utils.resources.gpt.gpt import agent_handler
 from bot.utils.validations import (
     extract_red_green_flags,
     extract_calculations,
@@ -158,7 +158,7 @@ async def update_agent_answers():
         top_and_bottom = project_info.get("top_and_bottom")
         manipulative_metrics = project_info.get("manipulative_metrics")
         network_metrics = project_info.get("network_metrics")
-        _, tokenomics_data_list = await get_project_and_tokenomics(categories, project.coin_name, project.tier)
+        _, tokenomics_data_list = await get_project_and_tokenomics(categories, project.tier)
 
         top_projects = sorted(
             tokenomics_data_list,
@@ -274,6 +274,7 @@ async def update_agent_answers():
         project_rating_result = calculate_project_score(
             get_metric_value(investing_metrics, "fundraise"),
             tier_answer,
+            investors_level,
             investors_level_score,
             get_metric_value(social_metrics, "twitter"),
             get_metric_value(social_metrics, "twitterscore"),

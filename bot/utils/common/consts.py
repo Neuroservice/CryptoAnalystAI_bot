@@ -556,7 +556,7 @@ RESULT_STRING = (
 CALCULATIONS_SUMMARY_STR = """
 Расчеты:
     Баллы за привлеченные инвестиции: {fundraising_score} баллов.
-    Баллы за Уровень инвесторов проекта: {tier_score} баллов.
+    Баллы за Уровень инвесторов (Tier {tier}) проекта: {tier_score} баллов.
     Баллы за количество подписчиков в Twitter: {followers_score} баллов.
     Баллы за Twitter Score: {twitter_engagement_score} баллов.
     Баллы от оценки токеномики: {tokenomics_score} баллов.
@@ -679,8 +679,8 @@ SELECTOR_PERCENTAGE_TOKEN = "div.flex.items-center.w-"
 ALL_DATA_STRING_FUNDS_AGENT = "Распределение токенов: {funds_profit_distribution}\n"
 ALL_DATA_STRING_FLAGS_AGENT = (
     "Проект: {project_coin_name}\n"
-    "Categories: {project_categories}\n"
-    "Tier agent: {tier_answer}\n"
+    "Категории проекта: {project_categories}\n"
+    "Общий тир проекта: {tier_answer}\n"
     "Tokemonic agent: {tokemonic_answer}\n"
     "Funds agent: {funds_answer}\n"
     "Project rating agent: {project_rating_answer}\n"

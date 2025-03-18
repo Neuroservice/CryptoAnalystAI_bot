@@ -1,9 +1,9 @@
 from aiogram.types import Message, Update
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 
-from bot.database.db_operations import get_one
 from bot.database.models import User
-from bot.utils.common.sessions import session_local, redis_client
+from bot.database.db_operations import get_one
+from bot.utils.common.sessions import redis_client
 
 
 class RestoreStateMiddleware(BaseMiddleware):

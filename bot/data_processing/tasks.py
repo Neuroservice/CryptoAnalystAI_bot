@@ -2,8 +2,8 @@ import asyncio
 import logging
 import traceback
 
-from bot.data_processing.data_update import fetch_crypto_data, update_agent_answers
 from bot.database.backups import create_backup
+from bot.data_processing.data_update import fetch_crypto_data, update_agent_answers
 
 
 async def parse_data_and_answers():

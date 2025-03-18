@@ -1,7 +1,11 @@
 import asyncio
 import logging
 
+from tenacity import retry, stop_after_attempt, wait_fixed
+
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
 from bot.database.db_operations import get_one, update_or_create, get_or_create, update_or_create_token, get_all
+from bot.utils.common.params import get_header_params, get_cryptocompare_params_with_full_name, get_cryptocompare_params
 from bot.database.models import (
     Project,
     InvestingMetrics,
@@ -26,7 +30,6 @@ from bot.utils.common.consts import (
     END_TITLE_FOR_FUNDAMENTAL,
     REPLACED_PROJECT_TWITTER,
 )
-from bot.utils.common.params import get_header_params, get_cryptocompare_params_with_full_name, get_cryptocompare_params
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
     get_lower_name,
@@ -41,9 +44,9 @@ from bot.utils.project_data import (
     fetch_categories,
     fetch_top_tokens,
 )
-from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_static_data():
     """
     Обновление данных, которые меняются редко (раз в 3 месяца).
@@ -85,6 +88,7 @@ async def update_static_data():
         await asyncio.sleep(60 * 60 * 24 * 30 * 3)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_weekly_data():
     """
     Обновление данных, которые меняются раз в неделю.
@@ -127,6 +131,7 @@ async def update_weekly_data():
         await asyncio.sleep(60 * 60 * 24 * 7)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_dynamic_data():
     """
     Обновление динамических данных (ежедневно).
@@ -174,6 +179,7 @@ async def update_dynamic_data():
         await asyncio.sleep(60 * 60 * 24)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_current_price():
     """
     Обновление текущей и максимальной цен раз в 6 часов.
@@ -222,6 +228,7 @@ async def update_current_price():
         await asyncio.sleep(60 * 60 * 12)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_static_data(symbol: str) -> bool:
     """
     Получает и обновляет статические данные (раз в 3 месяца).
@@ -282,6 +289,7 @@ async def fetch_static_data(symbol: str) -> bool:
         return False
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_weekly_data(symbol: str) -> bool:
     """
     Получает и обновляет еженедельные данные.
@@ -361,6 +369,7 @@ async def fetch_weekly_data(symbol: str) -> bool:
         return False
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_current_price(symbol: str):
     """
     Получает/обновляет текущую и максимальную цены для указанного токена.
@@ -431,6 +440,7 @@ async def fetch_current_price(symbol: str):
         logging.error(f"Ошибка при получении цены {symbol}: {e}")
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_dynamic_data(symbol: str) -> bool:
     """
     Получает и обновляет данные о проекте.
@@ -497,6 +507,7 @@ async def fetch_dynamic_data(symbol: str) -> bool:
         return False
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def parse_categories_weekly():
     """
     Еженедельно парсит категории криптовалют и сохраняет только не-мусорные категории.
@@ -523,6 +534,7 @@ async def parse_categories_weekly():
         await asyncio.sleep(7 * 24 * 60 * 60)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def parse_tokens_weekly():
     """
     Еженедельно парсит топ-1000 токенов CoinMarketCap, исключая стейблкоины и скам-токены.

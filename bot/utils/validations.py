@@ -1,24 +1,14 @@
-import logging
 import re
+import logging
 
 from aiogram import types
 from typing import Any, Optional, Callable
 from aiogram.fsm.context import FSMContext
 
-from bot.utils.common.sessions import session_local, redis_client
-from bot.utils.resources.bot_phrases.bot_phrase_handler import (
-    phrase_by_user,
-    phrase_by_language,
-)
-from bot.utils.resources.exceptions.exceptions import (
-    ExceptionError,
-    ValueProcessingError,
-    MissingKeyError,
-    AttributeAccessError,
-)
+from bot.utils.common.sessions import redis_client
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user, phrase_by_language
 from bot.utils.common.consts import (
-    STABLECOINS,
-    FUNDAMENTAL_TOKENS,
     OVERALL_PROJECT_CATEGORY_PATTERN,
     PROJECT_DESCRIPTION_PATTERN,
     POSITIVE_PATTERN_RU,
@@ -41,8 +31,11 @@ from bot.utils.common.consts import (
     START_TITLE_FOR_FUNDAMENTAL,
     END_TITLE_FOR_FUNDAMENTAL,
 )
-from bot.utils.resources.files_worker.google_doc import (
-    load_document_for_garbage_list,
+from bot.utils.resources.exceptions.exceptions import (
+    ExceptionError,
+    ValueProcessingError,
+    MissingKeyError,
+    AttributeAccessError,
 )
 
 

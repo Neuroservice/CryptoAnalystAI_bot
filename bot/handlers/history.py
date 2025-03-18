@@ -1,19 +1,18 @@
+import zipfile
 import logging
 import traceback
-import zipfile
 import matplotlib
 
+from fpdf import FPDF
 from io import BytesIO
 from aiogram import Router, types
 from aiogram.types import BufferedInputFile
-from fpdf import FPDF
 
-from bot.database.db_operations import get_all, get_user_from_redis_or_db
 from bot.database.models import Calculation
-from bot.utils.common.consts import CALC_HISTORY_TEXT_RU, CALC_HISTORY_TEXT_ENG
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.utils.resources.files_worker.pdf_worker import create_pdf_file
-from bot.utils.common.sessions import session_local, redis_client
+from bot.database.db_operations import get_all, get_user_from_redis_or_db
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
+from bot.utils.common.consts import CALC_HISTORY_TEXT_RU, CALC_HISTORY_TEXT_ENG
 
 history_router = Router()
 matplotlib.use("Agg")

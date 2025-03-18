@@ -3,7 +3,6 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from bot.handlers.calculate import CalculateProject
-from bot.utils.common.sessions import session_local
 from bot.utils.keyboards.calculate_keyboards import analysis_type_keyboard
 from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 
