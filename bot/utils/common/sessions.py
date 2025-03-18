@@ -1,15 +1,15 @@
 import redis.asyncio as redis
 
 from aiohttp import ClientSession
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     AsyncSession,
     AsyncEngine,
 )
-from sqlalchemy.orm import sessionmaker
 
-from bot.utils.common.config import REDIS_HOST, REDIS_PORT
 from bot.utils.common.consts import DATABASE_URL
+from bot.utils.common.config import REDIS_HOST, REDIS_PORT
 
 async_engine: AsyncEngine = create_async_engine(
     DATABASE_URL,

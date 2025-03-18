@@ -4,7 +4,15 @@ from datetime import datetime
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, ReplyKeyboardRemove
+from tenacity import retry, stop_after_attempt, wait_fixed
 
+from bot.utils.common.params import get_header_params
+from bot.utils.metrics.metrics import process_metrics
+from bot.utils.resources.gpt.gpt import agent_handler
+from bot.utils.validations import validate_user_input
+from bot.utils.common.bot_states import CalculateProject
+from bot.utils.keyboards.calculate_keyboards import analysis_type_keyboard
+from bot.utils.create_report import create_pdf_report, create_basic_report
 from bot.database.db_operations import (
     get_one,
     update_or_create,
@@ -28,7 +36,6 @@ from bot.database.models import (
     project_category_association,
     Category,
 )
-from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.consts import (
     TICKERS,
     MODEL_MAPPING,
@@ -43,11 +50,6 @@ from bot.utils.common.consts import (
     START_TITLE_FOR_GARBAGE_CATEGORIES,
     END_TITLE_FOR_GARBAGE_CATEGORIES,
 )
-from bot.utils.common.params import get_header_params
-from bot.utils.common.sessions import session_local
-from bot.utils.create_report import create_pdf_report, create_basic_report
-from bot.utils.keyboards.calculate_keyboards import analysis_type_keyboard
-from bot.utils.metrics.metrics import process_metrics
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
     fetch_coinmarketcap_data,
@@ -69,8 +71,6 @@ from bot.utils.resources.exceptions.exceptions import (
 from bot.utils.resources.files_worker.google_doc import (
     load_document_for_garbage_list,
 )
-from bot.utils.resources.gpt.gpt import agent_handler
-from bot.utils.validations import validate_user_input
 
 calculate_router = Router()
 logging.basicConfig(level=logging.INFO)
@@ -130,6 +130,7 @@ async def analysis_type_chosen(message: types.Message, state: FSMContext):
 
 
 @calculate_router.message(CalculateProject.waiting_for_basic_data)
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def receive_basic_data(message: types.Message, state: FSMContext):
     """
     Функция, для обработки выбранного пользователем пункта 'Блок ребалансировки портфеля'.
@@ -169,7 +170,9 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     print("categories: ", categories)
 
     if not categories or len(categories) == 0:
-        return await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id, token=user_coin_name))
+        return await message.answer(
+            await phrase_by_user("error_project_inappropriate_category", message.from_user.id, token=user_coin_name)
+        )
 
     # Получаем или создаём категории в БД
     category_instances = []
@@ -182,7 +185,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     if len(category_instances) == 0:
         return await message.answer(await phrase_by_user("category_in_garbage_list", message.from_user.id))
 
-    new_project, _ = await get_or_create(Project, coin_name=lower_name)
+    new_project, _ = await get_or_create(Project, coin_name=user_coin_name)
 
     # Добавляем связи между проектом и категориями
     for category in category_instances:
@@ -394,6 +397,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
 
 @calculate_router.message(CalculateProject.waiting_for_data)
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def receive_data(message: types.Message, state: FSMContext):
     """
     Функция, для обработки выбранного пользователем пункта 'Блок анализа и оценки проектов'.
@@ -416,7 +420,6 @@ async def receive_data(message: types.Message, state: FSMContext):
     if validate_answer:
         return message.answer(validate_answer)
     else:
-        # Сообщаем пользователю, что будут производиться расчеты
         await message.answer(await phrase_by_user("wait_for_calculations", message.from_user.id))
 
     (
@@ -436,7 +439,9 @@ async def receive_data(message: types.Message, state: FSMContext):
         return await message.answer(await phrase_by_user("not_in_top_cmc", message.from_user.id, language=language))
 
     if not categories or len(categories) == 0:
-        return await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id, token=user_coin_name))
+        return await message.answer(
+            await phrase_by_user("error_project_inappropriate_category", message.from_user.id, token=user_coin_name)
+        )
 
     # Получаем или создаём категории в БД
     category_instances = []
@@ -449,7 +454,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         return await message.answer(await phrase_by_user("category_in_garbage_list", message.from_user.id))
 
     # Получаем проект (если его ещё нет)
-    project_instance, _ = await get_or_create(Project, coin_name=lower_name)
+    project_instance, _ = await get_or_create(Project, coin_name=user_coin_name)
 
     # Добавляем связи между проектом и категориями
     for category in category_instances:

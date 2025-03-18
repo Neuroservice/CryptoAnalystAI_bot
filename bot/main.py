@@ -2,24 +2,24 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
-from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand
+from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.client.session.aiohttp import AiohttpSession
 
-from bot.data_processing.data_pipeline import parse_categories_weekly, parse_tokens_weekly
-from bot.data_processing.data_update import fetch_crypto_data
-from bot.data_processing.tasks import backup_database
-from bot.handlers import history, select_language, donate
 from bot.utils.common.config import API_TOKEN
-from bot.utils.common.sessions import SessionLocal, redis_client
+from bot.data_processing.tasks import backup_database
 from bot.utils.middlewares import RestoreStateMiddleware
+from bot.utils.validations import check_redis_connection
+from bot.handlers import history, select_language, donate
+from bot.data_processing.data_update import fetch_crypto_data
+from bot.utils.common.sessions import SessionLocal, redis_client
+from bot.data_processing.data_pipeline import parse_categories_weekly, parse_tokens_weekly
 from bot.utils.resources.exceptions.exceptions import (
     ExceptionError,
     ValueProcessingError,
     MissingKeyError,
     AttributeAccessError,
 )
-from bot.utils.validations import check_redis_connection
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,10 +65,10 @@ async def main():
             dp.update.middleware(RestoreStateMiddleware(SessionLocal))
 
             logging.info("Запуск периодического обновления данных.")
-            asyncio.create_task(fetch_crypto_data())
-            asyncio.create_task(parse_categories_weekly())
-            asyncio.create_task(parse_tokens_weekly())
-            asyncio.create_task(backup_database())
+            # asyncio.create_task(fetch_crypto_data())
+            # asyncio.create_task(parse_categories_weekly())
+            # asyncio.create_task(parse_tokens_weekly())
+            # asyncio.create_task(backup_database())
 
             await dp.start_polling(bot)
 

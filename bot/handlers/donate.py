@@ -1,12 +1,11 @@
 from aiogram import Router, types
 
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.utils.common.consts import (
     WALLET_ADDRESS,
     DONATE_TEXT_RU,
     DONATE_TEXT_ENG,
 )
-from bot.utils.common.sessions import session_local
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 
 donate_router = Router()
 
