@@ -76,10 +76,11 @@ async def update_static_data():
 
             for project in top_1000_projects:
                 success = await fetch_static_data(project.coin_name)
+
+                await asyncio.sleep(20)
+
                 if not success:
                     logging.error(f"Skipping {project.coin_name} due to static data fetch error")
-
-                await asyncio.sleep(15)  # Минимальная задержка между запросами
 
             logging.info("Обновление статических данных завершено. Ожидание 3 месяца...")
         except Exception as e:
@@ -118,10 +119,11 @@ async def update_weekly_data():
 
             for project in top_1000_projects:
                 success = await fetch_weekly_data(project.coin_name)
+
+                await asyncio.sleep(20)
+
                 if not success:
                     logging.error(f"Skipping {project.coin_name} due to weekly data fetch error")
-
-                await asyncio.sleep(10)
 
             logging.info("Обновление недельных данных завершено. Ожидание 7 дней...")
         except Exception as e:
@@ -163,10 +165,10 @@ async def update_dynamic_data():
                 try:
                     success = await fetch_dynamic_data(project.coin_name)
 
+                    await asyncio.sleep(20)
+
                     if not success:
                         logging.error(f"Skipping {project.coin_name} due to data fetch error")
-
-                    await asyncio.sleep(10)
 
                 except Exception as error:
                     logging.error(f"Error processing dynamic data for {project.coin_name}: {error}")
@@ -211,11 +213,11 @@ async def update_current_price():
                 try:
                     success = await fetch_current_price(project.coin_name)
 
+                    await asyncio.sleep(20)
+
                     if not success:
                         logging.error(f"Skipping {project.coin_name} due to data fetch error")
                         continue
-
-                    await asyncio.sleep(10)
 
                 except Exception as error:
                     logging.error(f"Error processing dynamic data for {project.coin_name}: {error}")
