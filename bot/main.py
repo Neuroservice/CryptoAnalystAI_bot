@@ -6,6 +6,7 @@ from aiogram.types import BotCommand
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.client.session.aiohttp import AiohttpSession
 
+from bot.utils.browser import close_browser, init_browser
 from bot.utils.common.config import API_TOKEN
 from bot.data_processing.tasks import backup_database
 from bot.utils.middlewares import RestoreStateMiddleware
@@ -64,6 +65,8 @@ async def main():
 
             dp.update.middleware(RestoreStateMiddleware(SessionLocal))
 
+            await init_browser()
+
             logging.info("Запуск периодического обновления данных.")
             asyncio.create_task(fetch_crypto_data())
             asyncio.create_task(parse_categories_weekly())
@@ -82,6 +85,7 @@ async def main():
         raise ExceptionError(str(e))
 
     finally:
+        await close_browser()
         logger.info("Завершение работы бота.")
 
 

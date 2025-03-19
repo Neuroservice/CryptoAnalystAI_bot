@@ -8,9 +8,9 @@ from bs4 import BeautifulSoup
 from aiogram.types import Message
 from typing import Any, Dict, Optional
 from sqlalchemy.orm import selectinload
-from playwright.async_api import async_playwright
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+from bot.utils.browser import context
 from bot.utils.common.sessions import client_session
 from bot.utils.resources.gpt.gpt import agent_handler
 from bot.utils.common.config import CRYPTORANK_API_KEY, API_KEY
@@ -298,58 +298,43 @@ async def get_twitter(name: str):
     Получает информацию о твиттере и твиттерскоре по токену.
     """
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-gpu",
-                "--no-sandbox",
-                "--disable-extensions",
-                "--disable-dev-shm-usage",
-                "--disable-background-timer-throttling",
-                "--disable-backgrounding-occluded-windows",
-                "--disable-renderer-backgrounding",
-                "--blink-settings=imagesEnabled=false",
-            ]
-        )
-        context = await browser.new_context()
-        page = await context.new_page()
+    if context is None:
+        raise RuntimeError("❌ Ошибка: контекст браузера не инициализирован!")
 
-        if type(name) is str:
-            coin_name = name
-        else:
-            coin_name, about, lower_name, categories = name
+    page = await context.new_page()
+    if type(name) is str:
+        coin_name = name
+    else:
+        coin_name, about, lower_name, categories = name
 
-        await page.route(
-            "**/*",
-            lambda route: route.continue_() if "image" not in route.request.resource_type else route.abort(),
-        )
-        coin = coin_name.split("/")[-1]
+    await page.route(
+        "**/*",
+        lambda route: route.continue_() if "image" not in route.request.resource_type else route.abort(),
+    )
+    coin = coin_name.split("/")[-1]
 
-        try:
-            await page.goto(f"{TWITTERSCORE_API}twitter/{coin}/overview/?i=16846")
-            await asyncio.sleep(15)
-        except Exception as e:
-            await context.close()
-            await browser.close()
-            return None
+    try:
+        await page.goto(f"{TWITTERSCORE_API}twitter/{coin}/overview/?i=16846")
+        await asyncio.sleep(15)
+    except Exception as e:
+        await page.close()
+        return None
 
-        try:
-            await page.wait_for_selector(SELECTOR_TWITTERSCORE, timeout=30000)
-            twitter = await page.locator(SELECTOR_TWITTERSCORE).first.inner_text()
-            print("twitter: ", twitter)
-        except:
-            twitter = None
+    try:
+        await page.wait_for_selector(SELECTOR_TWITTERSCORE, timeout=30000)
+        twitter = await page.locator(SELECTOR_TWITTERSCORE).first.inner_text()
+        print("twitter: ", twitter)
+    except:
+        twitter = None
 
-        try:
-            twitterscore = await page.locator("#insideChartCount").inner_text()
-        except:
-            twitterscore = None
+    try:
+        twitterscore = await page.locator("#insideChartCount").inner_text()
+    except:
+        twitterscore = None
 
-        await context.close()
-        await browser.close()
+    await page.close()
 
-        return {"twitter": twitter, "twitterscore": twitterscore} if twitter or twitterscore else None
+    return {"twitter": twitter, "twitterscore": twitterscore} if twitter or twitterscore else None
 
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
@@ -358,62 +343,48 @@ async def get_top_100_wallets(user_coin_name: str):
     Получает процент токенов на топ 100 кошельках блокчейна.
     """
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=[
-                    "--disable-gpu",
-                    "--no-sandbox",
-                    "--disable-extensions",
-                    "--disable-dev-shm-usage",
-                    "--disable-background-timer-throttling",
-                    "--disable-backgrounding-occluded-windows",
-                    "--disable-renderer-backgrounding",
-                    "--blink-settings=imagesEnabled=false",
-                ]
-            )
+        if context is None:
+            raise RuntimeError("❌ Ошибка: контекст браузера не инициализирован!")
 
-            context = await browser.new_context()
-            page = await context.new_page()
-            coin = user_coin_name.split("/")[-1]
-            logging.info(f"Запрашиваем данные для {coin}")
+        page = await context.new_page()
+        coin = user_coin_name.split("/")[-1]
+        logging.info(f"Запрашиваем данные для {coin}")
 
+        try:
+            # Переход на страницу richlist
+            await page.goto(f"{COINCARP_API}{coin}/richlist/", timeout=120000)
+
+            # Даем время для загрузки JS
+            await page.wait_for_load_state("networkidle")
+            await asyncio.sleep(5)  # Подстраховка
+
+            # Проверяем наличие элемента
+            element = await page.query_selector(SELECTOR_TOP_100_WALLETS)
+
+            if not element:
+                logging.warning(f"Элемент {SELECTOR_TOP_100_WALLETS} не найден для {coin}")
+                return None  # Возвращаем None, если элемент не найден
+
+            top_100_text = await element.inner_text()
+
+            logging.info(f"Текст топ-100: {top_100_text}")
+
+            # Преобразуем в число
             try:
-                # Переход на страницу richlist
-                await page.goto(f"{COINCARP_API}{coin}/richlist/", timeout=120000)
+                top_100_percentage = float(top_100_text.replace("%", "").strip())
+                return round(top_100_percentage / 100, 2)
+            except ValueError:
+                return None
 
-                # Даем время для загрузки JS
-                await page.wait_for_load_state("networkidle")
-                await asyncio.sleep(5)  # Подстраховка
+        except TimeoutError as time_error:
+            logging.info(f"Таймаут ожидания страницы: {time_error}")
+        except ValueError as value_error:
+            logging.info(f"Ошибка обработки данных: {value_error}")
+        except Exception as e:
+            logging.info(f"Непредвиденная ошибка: {e}")
 
-                # Проверяем наличие элемента
-                element = await page.query_selector(SELECTOR_TOP_100_WALLETS)
-
-                if not element:
-                    logging.warning(f"Элемент {SELECTOR_TOP_100_WALLETS} не найден для {coin}")
-                    return None  # Возвращаем None, если элемент не найден
-
-                top_100_text = await element.inner_text()
-
-                logging.info(f"Текст топ-100: {top_100_text}")
-
-                # Преобразуем в число
-                try:
-                    top_100_percentage = float(top_100_text.replace("%", "").strip())
-                    return round(top_100_percentage / 100, 2)
-                except ValueError:
-                    return None
-
-            except TimeoutError as time_error:
-                logging.info(f"Таймаут ожидания страницы: {time_error}")
-            except ValueError as value_error:
-                logging.info(f"Ошибка обработки данных: {value_error}")
-            except Exception as e:
-                logging.info(f"Непредвиденная ошибка: {e}")
-
-            finally:
-                await context.close()
-                await browser.close()
+        finally:
+            await page.close()
 
     except AttributeError as attr_error:
         raise AttributeAccessError(f"Ошибка доступа к атрибуту: {attr_error}")
@@ -432,131 +403,117 @@ async def fetch_tokenomics_data(url: str) -> list:
     """
     tokenomics_data = []
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-gpu",
-                "--no-sandbox",
-                "--disable-extensions",
-                "--disable-dev-shm-usage",
-                "--disable-background-timer-throttling",
-                "--disable-backgrounding-occluded-windows",
-                "--disable-renderer-backgrounding",
-                "--blink-settings=imagesEnabled=false",
-            ]
-        )
+    if context is None:
+        raise RuntimeError("❌ Ошибка: контекст браузера не инициализирован!")
 
-        context = await browser.new_context()
-        page = await context.new_page()
+    page = await context.new_page()
 
-        try:
+    try:
 
-            # Поиск таблицы на Cryptorank (для 'vesting' запросов)
-            if "vesting" in url:
-                try:
-                    await page.goto(url, wait_until="networkidle")
-
-                    # Ждем появление контента с увеличенным таймаутом
-                    await page.wait_for_selector("table", timeout=5000)
-                    content = await page.content()
-                    soup = BeautifulSoup(content, "html.parser")
-
-                    table = soup.find("table")
-                    if table:
-                        rows = table.find_all("tr")[1:]
-                        for row in rows:
-                            columns = row.find_all("td")
-                            if len(columns) >= 2:
-                                name = columns[0].get_text(strip=True)
-                                percentage = columns[1].get_text(strip=True)
-                                tokenomics_data.append(f"{name} ({percentage})")
-                except Exception as e:
-                    print(f"❌ Ошибка при поиске таблицы: {e}")
-
-            # Парсим ICO-токеномику (Cryptorank API - ico)
-            elif "ico" in url:
+        # Поиск таблицы на Cryptorank (для 'vesting' запросов)
+        if "vesting" in url:
+            try:
                 await page.goto(url, wait_until="networkidle")
 
-                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                await page.wait_for_timeout(2000)
+                # Ждем появление контента с увеличенным таймаутом
+                await page.wait_for_selector("table", timeout=5000)
+                content = await page.content()
+                soup = BeautifulSoup(content, "html.parser")
 
-                try:
-                    # 1. Ждём появления заголовка с текстом 'Token allocation'
-                    token_allocation_header = await page.query_selector(
-                        "xpath=//h3[contains(text(), 'Token allocation')]"
-                    )
-                    if not token_allocation_header:
-                        print("❌ 'Token allocation' не найдено на странице.")
-
-                    # 2. Поднимаемся к родительскому контейнеру.
-                    tokenomics_container = await token_allocation_header.query_selector(
-                        "xpath=ancestor::div[contains(@class, 'sc-c6d4550b-0')]"
-                    )
-                    if not tokenomics_container:
-                        print("❌ Не удалось найти контейнер с классом 'sc-c6d4550b-0'.")
-
-                    # 3. Внутри контейнера ищем список <ul>
-                    ul_element = await tokenomics_container.query_selector("ul")
-                    if not ul_element:
-                        print("❌ Не найден тег <ul> в блоке tokenomics.")
-
-                    # 4. Собираем все элементы <li> внутри <ul>
-                    li_elements = await ul_element.query_selector_all("li")
-                    if not li_elements:
-                        print("❌ Нет элементов <li> внутри <ul>.")
-
-                    print(f"✅ Найдено {len(li_elements)} элементов <li> с распределением.")
-
-                    for li in li_elements:
-                        try:
-                            print("li: ------", li)
-                            # Ищем название (p, например 'Allocated After 2030')
-                            name_tag = await li.query_selector("p")
-                            name = await name_tag.inner_text() if name_tag else "Не найдено"
-
-                            # Ищем процент (span, например '52.172%')
-                            span_tags = await li.query_selector_all("span")
-                            if len(span_tags) > 1:
-                                percentage = await span_tags[1].inner_text()
-
-                            if name != "Не найдено" and percentage != "Не найдено":
-                                tokenomics_data.append(f"{name} ({percentage})")
-                            else:
-                                print(f"⚠️ Пропущен элемент (нет данных): {await li.inner_html()}")
-                        except Exception as e:
-                            print(f"❌ Ошибка при обработке <li>: {e}")
-                            print(f"🚨 Проблемный элемент: {await li.inner_html()}")
-
-                except Exception as exc:
-                    print(f"❌ Сбой при поиске 'Token allocation': {exc}")
-
-            # Для Tokenomist API
-            else:
-                try:
-                    await page.goto(url, wait_until="networkidle")
-
-                    await page.wait_for_selector("div.tokenomics-container > div", timeout=5000)
-                    content = await page.content()
-                    soup = BeautifulSoup(content, "html.parser")
-
-                    allocation_divs = soup.select("div.tokenomics-container > div")
-                    for div in allocation_divs:
-                        try:
-                            name = div.select_one("p").get_text(strip=True)
-                            percentage = div.select_one("span").get_text(strip=True)
+                table = soup.find("table")
+                if table:
+                    rows = table.find_all("tr")[1:]
+                    for row in rows:
+                        columns = row.find_all("td")
+                        if len(columns) >= 2:
+                            name = columns[0].get_text(strip=True)
+                            percentage = columns[1].get_text(strip=True)
                             tokenomics_data.append(f"{name} ({percentage})")
-                        except AttributeError:
-                            continue
-                except Exception as e:
-                    print(f"❌ Ошибка при поиске данных Tokenomist: {e}")
+            except Exception as e:
+                print(f"❌ Ошибка при поиске таблицы: {e}")
 
-        except Exception as e:
-            logging.error(f"🚨 Ошибка при получении данных: {e}")
+        # Парсим ICO-токеномику (Cryptorank API - ico)
+        elif "ico" in url:
+            await page.goto(url, wait_until="networkidle")
 
-        finally:
-            await context.close()
-            await browser.close()
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(2000)
+
+            try:
+                # 1. Ждём появления заголовка с текстом 'Token allocation'
+                token_allocation_header = await page.query_selector(
+                    "xpath=//h3[contains(text(), 'Token allocation')]"
+                )
+                if not token_allocation_header:
+                    print("❌ 'Token allocation' не найдено на странице.")
+
+                # 2. Поднимаемся к родительскому контейнеру.
+                tokenomics_container = await token_allocation_header.query_selector(
+                    "xpath=ancestor::div[contains(@class, 'sc-c6d4550b-0')]"
+                )
+                if not tokenomics_container:
+                    print("❌ Не удалось найти контейнер с классом 'sc-c6d4550b-0'.")
+
+                # 3. Внутри контейнера ищем список <ul>
+                ul_element = await tokenomics_container.query_selector("ul")
+                if not ul_element:
+                    print("❌ Не найден тег <ul> в блоке tokenomics.")
+
+                # 4. Собираем все элементы <li> внутри <ul>
+                li_elements = await ul_element.query_selector_all("li")
+                if not li_elements:
+                    print("❌ Нет элементов <li> внутри <ul>.")
+
+                print(f"✅ Найдено {len(li_elements)} элементов <li> с распределением.")
+
+                for li in li_elements:
+                    try:
+                        print("li: ------", li)
+                        # Ищем название (p, например 'Allocated After 2030')
+                        name_tag = await li.query_selector("p")
+                        name = await name_tag.inner_text() if name_tag else "Не найдено"
+
+                        # Ищем процент (span, например '52.172%')
+                        span_tags = await li.query_selector_all("span")
+                        if len(span_tags) > 1:
+                            percentage = await span_tags[1].inner_text()
+
+                        if name != "Не найдено" and percentage != "Не найдено":
+                            tokenomics_data.append(f"{name} ({percentage})")
+                        else:
+                            print(f"⚠️ Пропущен элемент (нет данных): {await li.inner_html()}")
+                    except Exception as e:
+                        print(f"❌ Ошибка при обработке <li>: {e}")
+                        print(f"🚨 Проблемный элемент: {await li.inner_html()}")
+
+            except Exception as exc:
+                print(f"❌ Сбой при поиске 'Token allocation': {exc}")
+
+        # Для Tokenomist API
+        else:
+            try:
+                await page.goto(url, wait_until="networkidle")
+
+                await page.wait_for_selector("div.tokenomics-container > div", timeout=5000)
+                content = await page.content()
+                soup = BeautifulSoup(content, "html.parser")
+
+                allocation_divs = soup.select("div.tokenomics-container > div")
+                for div in allocation_divs:
+                    try:
+                        name = div.select_one("p").get_text(strip=True)
+                        percentage = div.select_one("span").get_text(strip=True)
+                        tokenomics_data.append(f"{name} ({percentage})")
+                    except AttributeError:
+                        continue
+            except Exception as e:
+                print(f"❌ Ошибка при поиске данных Tokenomist: {e}")
+
+    except Exception as e:
+        logging.error(f"🚨 Ошибка при получении данных: {e}")
+
+    finally:
+        await page.close()
 
     return tokenomics_data
 
