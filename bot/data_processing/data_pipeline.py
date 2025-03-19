@@ -79,7 +79,7 @@ async def update_static_data():
                 if not success:
                     logging.error(f"Skipping {project.coin_name} due to static data fetch error")
 
-                await asyncio.sleep(1)  # Минимальная задержка между запросами
+                await asyncio.sleep(15)  # Минимальная задержка между запросами
 
             logging.info("Обновление статических данных завершено. Ожидание 3 месяца...")
         except Exception as e:
@@ -584,7 +584,7 @@ async def parse_tokens_weekly():
                     if not weekly_data_success:
                         logging.error(f"Weekly data fetch failed for {token}")
 
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(15)
 
             logging.info("Обновление списка токенов завершено. В базе 1000 отфильтрованных токенов.")
         except Exception as e:
