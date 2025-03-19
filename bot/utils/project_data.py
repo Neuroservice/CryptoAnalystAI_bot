@@ -300,7 +300,17 @@ async def get_twitter(name: str):
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True, args=["--disable-gpu", "--no-sandbox", "--disable-extensions", "--disable-dev-shm-usage"]
+            headless=True,
+            args=[
+                "--disable-gpu",
+                "--no-sandbox",
+                "--disable-extensions",
+                "--disable-dev-shm-usage",
+                "--disable-background-timer-throttling",
+                "--disable-backgrounding-occluded-windows",
+                "--disable-renderer-backgrounding",
+                "--blink-settings=imagesEnabled=false",
+            ]
         )
         context = await browser.new_context()
         page = await context.new_page()
@@ -350,7 +360,17 @@ async def get_top_100_wallets(user_coin_name: str):
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(
-                headless=True, args=["--disable-gpu", "--no-sandbox", "--disable-extensions", "--disable-dev-shm-usage"]
+                headless=True,
+                args=[
+                    "--disable-gpu",
+                    "--no-sandbox",
+                    "--disable-extensions",
+                    "--disable-dev-shm-usage",
+                    "--disable-background-timer-throttling",
+                    "--disable-backgrounding-occluded-windows",
+                    "--disable-renderer-backgrounding",
+                    "--blink-settings=imagesEnabled=false",
+                ]
             )
 
             context = await browser.new_context()
@@ -414,7 +434,17 @@ async def fetch_tokenomics_data(url: str) -> list:
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True, args=["--disable-gpu", "--no-sandbox", "--disable-extensions", "--disable-dev-shm-usage"]
+            headless=True,
+            args=[
+                "--disable-gpu",
+                "--no-sandbox",
+                "--disable-extensions",
+                "--disable-dev-shm-usage",
+                "--disable-background-timer-throttling",
+                "--disable-backgrounding-occluded-windows",
+                "--disable-renderer-backgrounding",
+                "--blink-settings=imagesEnabled=false",
+            ]
         )
 
         context = await browser.new_context()
