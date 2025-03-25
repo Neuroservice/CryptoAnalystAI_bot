@@ -355,3 +355,132 @@ async def check_redis_connection():
     except ConnectionError:
         logging.error("Не удалось подключиться к Redis!")
         raise Exception("Не удалось подключиться к Redis!")
+
+
+def is_float(value: str) -> bool:
+    try:
+        float(value.replace(",", "."))
+        return True
+    except ValueError:
+        return False
+
+
+def is_int(value: str) -> bool:
+    return value.isdigit()
+
+
+def normalize_float(value: str) -> float:
+    return float(value.replace(",", "."))
+
+
+def is_percentage(value: str) -> bool:
+    return bool(re.match(r"^\d+(\.\d+)?%?$", value.strip().replace(",", ".")))
+
+
+def is_valid_number_with_suffix(value: str) -> bool:
+    """
+    Проверяет, что строка:
+    1) Может содержать цифры, точки, запятые.
+    2) Опционально заканчивается на K, M или B (в любом регистре).
+    3) Не содержит других букв/символов.
+
+    Примеры валидных:
+      "123" -> True
+      "42.5" -> True
+      "10,500" -> True
+      "1.2M"  -> True
+      "950k"  -> True
+      "3,2B"  -> True (хотя 3,2 не совсем стандарт, но по условию допустим)
+    Примеры невалидных:
+      "abc", "12X", "??" -> False
+    """
+    s = value.strip()
+    if not s:
+        return False
+
+    s_upper = s.upper()
+
+    suffix = ""
+    if s_upper[-1] in ("K", "M", "B"):
+        suffix = s_upper[-1]
+        s_upper = s_upper[:-1]
+        if not s_upper:
+            return False
+
+    for ch in s_upper:
+        if ch not in "0123456789.,":
+            return False
+
+    digits_found = any(ch.isdigit() for ch in s_upper)
+    if not digits_found:
+        return False
+
+    return True
+
+
+def is_valid_investors_format(text: str) -> bool:
+    pattern = r"^[^()]+\(Tier: \d+\)(,\s*[^()]+\(Tier: \d+\))*$"
+    return re.match(pattern, text.strip()) is not None
+
+
+def is_valid_distribution_format(text: str) -> bool:
+    pattern = r"^([\w &]+\(\d+%\))(,\s*[\w &]+\(\d+%\))*$"
+    return re.match(pattern, text.strip()) is not None
+
+
+def parse_general_number(text: str) -> float:
+    """
+    Парсит строку вида:
+      - '930B' => 9.30e11
+      - '450M' => 4.50e8
+      - '63K'  => 6.30e4
+      - '10,534,000' => 10534000
+      - '4.2B' => 4.2e9
+      - '450' (обычное число)
+    Если строка невалидна, выкидывает ValueError.
+    """
+    # Убираем запятые и пробелы
+    s = text.strip().replace(",", "")
+    if not s:
+        raise ValueError("Пустая строка")
+
+    # Проверяем последний символ на K / M / B
+    suffix = s[-1].upper()  # последний символ в верхнем регистре
+    if suffix in ["K", "M", "B"]:
+        numeric_part = s[:-1]  # без последнего символа
+        val = float(numeric_part)
+        if suffix == "K":
+            return val * 1e3
+        elif suffix == "M":
+            return val * 1e6
+        else:  # suffix == "B"
+            return val * 1e9
+    else:
+        # Если никакой суффикс (или, например, число "1234.56"), просто парсим
+        return float(s)
+
+
+def is_general_number_or_dash(text: str) -> bool:
+    """
+    Проверяет, что text == '-' (нет данных)
+    ИЛИ корректно парсится функцией parse_general_number.
+    """
+    text = text.strip()
+    if text == "-":
+        return True
+    try:
+        parse_general_number(text)
+        return True
+    except ValueError:
+        return False
+
+
+def parse_general_number_or_none(text: str) -> float | None:
+    """
+    Если text == '-', возвращаем None.
+    Иначе парсим через parse_general_number.
+    """
+    text = text.strip()
+    if text == "-":
+        return None
+    return parse_general_number(text)

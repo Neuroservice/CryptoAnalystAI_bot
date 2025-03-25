@@ -6,12 +6,11 @@ from aiogram.types import BotCommand
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.client.session.aiohttp import AiohttpSession
 
-from bot.utils.browser import close_browser, init_browser
 from bot.utils.common.config import API_TOKEN
 from bot.data_processing.tasks import backup_database
 from bot.utils.middlewares import RestoreStateMiddleware
 from bot.utils.validations import check_redis_connection
-from bot.handlers import history, select_language, donate
+from bot.utils.browser import close_browser, init_browser
 from bot.data_processing.data_update import fetch_crypto_data
 from bot.utils.common.sessions import SessionLocal, redis_client
 from bot.data_processing.data_pipeline import parse_categories_weekly, parse_tokens_weekly
@@ -53,7 +52,7 @@ async def main():
                 ]
             )
 
-            from bot.handlers import start, help, calculate, analysis
+            from bot.handlers import start, help, calculate, analysis, create_or_update, donate, history, select_language
 
             dp.include_router(start.start_router)
             dp.include_router(analysis.analysis_router)
@@ -62,16 +61,17 @@ async def main():
             dp.include_router(history.history_router)
             dp.include_router(select_language.change_language_router)
             dp.include_router(donate.donate_router)
+            dp.include_router(create_or_update.create_or_update_router)
 
             dp.update.middleware(RestoreStateMiddleware(SessionLocal))
 
             await init_browser()
 
             logging.info("Запуск периодического обновления данных.")
-            asyncio.create_task(fetch_crypto_data())
-            asyncio.create_task(parse_categories_weekly())
-            asyncio.create_task(parse_tokens_weekly())
-            asyncio.create_task(backup_database())
+            # asyncio.create_task(fetch_crypto_data())
+            # asyncio.create_task(parse_categories_weekly())
+            # asyncio.create_task(parse_tokens_weekly())
+            # asyncio.create_task(backup_database())
 
             await dp.start_polling(bot)
 

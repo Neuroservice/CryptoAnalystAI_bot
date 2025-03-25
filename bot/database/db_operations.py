@@ -103,9 +103,7 @@ async def create(session: AsyncSession, model: Type[Any], **fields: Any) -> Any:
         raise DatabaseCreationError(str(e))
 
 
-@save_execute
 async def get_or_create(
-    session: AsyncSession,
     model: Type[Any],
     defaults: Optional[dict] = None,
     **filters: Any,

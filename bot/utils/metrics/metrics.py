@@ -115,7 +115,6 @@ async def update_network_metrics(
                 project_id=project_id,
                 defaults={
                     "tvl": last_tvl,
-                    "tvl_fdv": last_tvl / (price * total_supply) if price * total_supply else 0,
                 },
             )
 
@@ -137,7 +136,6 @@ async def update_manipulative_metrics(
             ManipulativeMetrics,
             project_id=project_id,
             defaults={
-                "fdv_fundraise": (price * total_supply) / fundraise if fundraise else None,
                 "top_100_wallet": top_100_wallets,
             },
         )
