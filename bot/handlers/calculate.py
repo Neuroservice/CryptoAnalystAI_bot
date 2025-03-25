@@ -6,13 +6,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, ReplyKeyboardRemove
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from bot.utils.common.params import get_header_params
-from bot.utils.metrics.metrics import process_metrics
-from bot.utils.resources.gpt.gpt import agent_handler
-from bot.utils.validations import validate_user_input
-from bot.utils.common.bot_states import CalculateProject
-from bot.utils.keyboards.calculate_keyboards import analysis_type_keyboard
-from bot.utils.create_report import create_pdf_report, create_basic_report
 from bot.database.db_operations import (
     get_one,
     update_or_create,
@@ -36,6 +29,7 @@ from bot.database.models import (
     project_category_association,
     Category,
 )
+from bot.utils.common.bot_states import CalculateProject, UpdateOrCreateProject
 from bot.utils.common.consts import (
     TICKERS,
     MODEL_MAPPING,
@@ -49,7 +43,13 @@ from bot.utils.common.consts import (
     LIST_OF_TEXT_FOR_ANALYSIS_BLOCK,
     START_TITLE_FOR_GARBAGE_CATEGORIES,
     END_TITLE_FOR_GARBAGE_CATEGORIES,
+    LIST_OF_PROJECT_UPDATE_OR_CREATE,
 )
+from bot.utils.common.params import get_header_params
+from bot.utils.create_report import create_pdf_report, create_basic_report
+from bot.utils.keyboards.calculate_keyboards import analysis_type_keyboard
+from bot.utils.keyboards.create_or_update_keyboards import create_or_update_keyboard
+from bot.utils.metrics.metrics import process_metrics
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
     fetch_coinmarketcap_data,
@@ -68,9 +68,9 @@ from bot.utils.resources.exceptions.exceptions import (
     ValueProcessingError,
     ExceptionError,
 )
-from bot.utils.resources.files_worker.google_doc import (
-    load_document_for_garbage_list,
-)
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
+from bot.utils.resources.gpt.gpt import agent_handler
+from bot.utils.validations import validate_user_input
 
 calculate_router = Router()
 logging.basicConfig(level=logging.INFO)
@@ -115,18 +115,26 @@ async def analysis_type_chosen(message: types.Message, state: FSMContext):
     """
     Функция, для обработки выбранного пользователем блока аналитики.
     Делает проверку выбранного пользователем пункта меню,
-    и предлагает ввести тикер токена, выставляя соответствующее состояние ожидания ввода данных.
+    далее переводит на необходимый блок (аналитика или редактирование данных проекта)
     """
 
     analysis_type = message.text.lower()
 
     if analysis_type in LIST_OF_TEXT_FOR_REBALANCING_BLOCK:
+        await state.update_data(mode="create")
         await message.answer(await phrase_by_user("rebalancing_input_token", message.from_user.id))
         await state.set_state(CalculateProject.waiting_for_basic_data)
 
     elif analysis_type in LIST_OF_TEXT_FOR_ANALYSIS_BLOCK:
         await message.answer(await phrase_by_user("analysis_input_token", message.from_user.id))
         await state.set_state(CalculateProject.waiting_for_data)
+    elif analysis_type in LIST_OF_PROJECT_UPDATE_OR_CREATE:
+        await state.update_data(mode="update")
+        await message.answer(
+            await phrase_by_user("update_or_create_choose", message.from_user.id),
+            reply_markup=await create_or_update_keyboard(message.from_user.id),
+        )
+        await state.set_state(UpdateOrCreateProject.update_or_create_state)
 
 
 @calculate_router.message(CalculateProject.waiting_for_basic_data)
@@ -140,7 +148,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     """
 
     user_coin_name = message.text.upper().replace(" ", "")
-    fundraise = None
     user_data = await get_user_from_redis_or_db(message.from_user.id)
     garbage_categories = load_document_for_garbage_list(
         START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES
@@ -331,7 +338,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                     project_id=new_project.id,
                     defaults={
                         "tvl": last_tvl if last_tvl else 0,
-                        "tvl_fdv": last_tvl / (price * total_supply) if last_tvl and total_supply and price else 0,
                     },
                 )
 
@@ -341,7 +347,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                 ManipulativeMetrics,
                 project_id=new_project.id,
                 defaults={
-                    "fdv_fundraise": (price * total_supply) / fundraise if fundraise else None,
                     "top_100_wallet": top_100_wallets,
                 },
             )
@@ -593,7 +598,6 @@ async def receive_data(message: types.Message, state: FSMContext):
                 project_id=base_project.id,
                 defaults={
                     "tvl": last_tvl if last_tvl else 0,
-                    "tvl_fdv": last_tvl / (price * total_supply) if last_tvl and total_supply and price else 0,
                 },
             )
 
@@ -603,7 +607,6 @@ async def receive_data(message: types.Message, state: FSMContext):
             ManipulativeMetrics,
             project_id=base_project.id,
             defaults={
-                "fdv_fundraise": (price * total_supply) / fundraise if fundraise else None,
                 "top_100_wallet": top_100_wallets,
             },
         )

@@ -24,6 +24,12 @@ BUCKET = "c462de58-1673afa0-028c-4482-9d49-87f46960a44f"
 PREFIX = "fasolka_backups/"
 
 
+# Список пользователей, которым доступна кнопка редактирования и создания нового проекта
+ALLOWED_USERS = {833825243, 7368886198, 467271496, 1627064538}
+
+
+PROJECT_UPDATE_OR_CREATE_RU = "Добавить или редактировать проект"
+PROJECT_UPDATE_OR_CREATE_ENG = "Add or edit a project"
 PROJECT_ANALYSIS_RU = "Анализ проектов"
 PROJECT_ANALYSIS_ENG = "Project analysis"
 NEW_PROJECT = "Пожалуйста, выберите новый проект для расчета."
@@ -33,6 +39,15 @@ LIST_OF_TEXT_FOR_REBALANCING_BLOCK = [
     "блок ребалансировки портфеля",
     "block of portfolio rebalancing",
 ]
+LIST_OF_TEXT_FOR_CREATE = [
+    "добавить новый проект",
+    "add a new project",
+]
+LIST_OF_TEXT_FOR_UPDATE = [
+    "обновить существующий проект",
+    "update an existing project",
+]
+LIST_OF_PROJECT_UPDATE_OR_CREATE = [PROJECT_UPDATE_OR_CREATE_RU.lower(), PROJECT_UPDATE_OR_CREATE_ENG.lower()]
 LIST_OF_TEXT_FOR_ANALYSIS_BLOCK = [
     "блок анализа и оценки проектов",
     "block of projects analysis and evaluation",

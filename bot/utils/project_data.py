@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from datetime import datetime
+
 import aiohttp
 import httpx
 import requests
@@ -22,6 +24,8 @@ from bot.database.db_operations import (
     get_or_create,
     update_or_create,
     get_user_from_redis_or_db,
+    create_association,
+    create,
 )
 from bot.database.models import (
     Project,
@@ -36,6 +40,7 @@ from bot.database.models import (
     NetworkMetrics,
     Category,
     project_category_association,
+    AgentAnswer,
 )
 from bot.utils.common.consts import (
     REPLACED_PROJECT_TWITTER,
@@ -441,9 +446,7 @@ async def fetch_tokenomics_data(url: str) -> list:
 
             try:
                 # 1. Ждём появления заголовка с текстом 'Token allocation'
-                token_allocation_header = await page.query_selector(
-                    "xpath=//h3[contains(text(), 'Token allocation')]"
-                )
+                token_allocation_header = await page.query_selector("xpath=//h3[contains(text(), 'Token allocation')]")
                 if not token_allocation_header:
                     print("❌ 'Token allocation' не найдено на странице.")
 
@@ -1550,3 +1553,32 @@ async def fetch_token_quote(token_symbol: str) -> dict:
         else:
             logging.error(f"Ошибка API CoinMarketCap для {token_symbol}: {response.status}")
             return {}
+
+
+async def save_or_update_full_project_data(project_data: dict):
+    """
+    Универсальная функция — создаёт или обновляет проект и все связанные метрики.
+    """
+
+    project, _ = await get_or_create(Project, coin_name=project_data["project_info"]["coin_name"])
+    project_id = project.id
+
+    await update_or_create(BasicMetrics, project_id=project_id, defaults=project_data.get("basic_metrics", {}))
+    await update_or_create(InvestingMetrics, project_id=project_id, defaults=project_data.get("investing_metrics", {}))
+    await update_or_create(SocialMetrics, project_id=project_id, defaults=project_data.get("social_metrics", {}))
+    await update_or_create(Tokenomics, project_id=project_id, defaults=project_data.get("tokenomics", {}))
+    await update_or_create(FundsProfit, project_id=project_id, defaults=project_data.get("funds_profit", {}))
+    await update_or_create(TopAndBottom, project_id=project_id, defaults=project_data.get("top_and_bottom", {}))
+    await update_or_create(MarketMetrics, project_id=project_id, defaults=project_data.get("market_metrics", {}))
+    await update_or_create(
+        ManipulativeMetrics, project_id=project_id, defaults=project_data.get("manipulative_metrics", {})
+    )
+    await update_or_create(NetworkMetrics, project_id=project_id, defaults=project_data.get("network_metrics", {}))
+    await update_or_create(AgentAnswer, project_id=project_id, defaults=project_data.get("agent_answer", {}))
+
+    categories = project_data.get("categories", [])
+    for cat_name in categories:
+        category, _ = await get_or_create(Category, category_name=cat_name)
+        await create_association(project_category_association, project_id=project_id, category_id=category.id)
+
+    return project

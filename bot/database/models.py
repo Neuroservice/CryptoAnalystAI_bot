@@ -196,8 +196,6 @@ class FundsProfit(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey("project.id"), nullable=False, unique=True)
     distribution = Column(Text, nullable=True)
-    average_price = Column(Float, nullable=True)
-    x_value = Column(Float, nullable=True)
 
     project = relationship("Project", back_populates="funds_profit")
 
@@ -206,8 +204,6 @@ class FundsProfit(Base):
             "id": self.id,
             "project_id": self.project_id,
             "distribution": self.distribution,
-            "average_price": self.average_price,
-            "x_value": self.x_value,
         }
 
 
@@ -254,7 +250,6 @@ class ManipulativeMetrics(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey("project.id"), nullable=False, unique=True)
-    fdv_fundraise = Column(Float, nullable=True)
     top_100_wallet = Column(Float, nullable=True)
 
     project = relationship("Project", back_populates="manipulative_metrics")
@@ -263,7 +258,6 @@ class ManipulativeMetrics(Base):
         return {
             "id": self.id,
             "project_id": self.project_id,
-            "fdv_fundraise": self.fdv_fundraise,
             "top_100_wallet": self.top_100_wallet,
         }
 
@@ -274,7 +268,6 @@ class NetworkMetrics(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     project_id = Column(Integer, ForeignKey("project.id"), nullable=False, unique=True)
     tvl = Column(Float, nullable=True)
-    tvl_fdv = Column(Float, nullable=True)
 
     project = relationship("Project", back_populates="network_metrics")
 
@@ -283,7 +276,6 @@ class NetworkMetrics(Base):
             "id": self.id,
             "project_id": self.project_id,
             "tvl": self.tvl,
-            "tvl_fdv": self.tvl_fdv,
         }
 
 

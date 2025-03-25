@@ -458,14 +458,7 @@ async def fetch_dynamic_data(symbol: str) -> bool:
             logging.error(f"Project not found for {symbol}")
             return False
 
-        # Получаем дополнительные данные о проекте
-        twitter_name, description, lower_name, categories = await get_twitter_link_by_symbol(symbol)
-        if not lower_name:
-            lower_name = await get_lower_name(symbol)
-
         # Подготавливаем параметры для API-запросов
-        cryptocompare_params = get_cryptocompare_params(symbol)
-        cryptocompare_params_with_full_coin_name = get_cryptocompare_params_with_full_name(lower_name.upper())
         header_params = get_header_params(symbol)
 
         # Получаем данные с CoinMarketCap или CoinGecko
@@ -491,15 +484,6 @@ async def fetch_dynamic_data(symbol: str) -> bool:
             project_id=project.id,
             defaults={"capitalization": capitalization, "fdv": fdv},
         )
-
-        # Обновление манипулятивных метрик
-        investing_metrics = await get_one(InvestingMetrics, project_id=project.id)
-        if investing_metrics and fdv and investing_metrics.fundraise:
-            await update_or_create(
-                ManipulativeMetrics,
-                project_id=project.id,
-                defaults={"fdv_fundraise": fdv / investing_metrics.fundraise},
-            )
 
         logging.info(f"Successfully updated project data for {symbol}")
         return True

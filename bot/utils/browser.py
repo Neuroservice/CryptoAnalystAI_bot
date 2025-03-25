@@ -23,7 +23,7 @@ async def init_browser():
             "--disable-backgrounding-occluded-windows",
             "--disable-renderer-backgrounding",
             "--blink-settings=imagesEnabled=false",
-        ]
+        ],
     )
     context = await browser.new_context()
     logging.info("✅ Браузер Playwright инициализирован.")
