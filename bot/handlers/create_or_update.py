@@ -3,26 +3,25 @@ import logging
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 
-from bot.database.db_operations import get_one
 from bot.database.models import Project
+from bot.database.db_operations import get_one
 from bot.utils.common.bot_states import UpdateOrCreateProject
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
+from bot.utils.project_data import save_or_update_full_project_data, fetch_token_quote, fetch_categories
+from bot.utils.validations import (
+    is_float,
+    is_valid_investors_format,
+    is_valid_distribution_format,
+    is_general_number_or_dash,
+    parse_general_number_or_none,
+    is_valid_number_with_suffix, parse_general_number, format_number,
+)
 from bot.utils.common.consts import (
     LIST_OF_TEXT_FOR_UPDATE,
     LIST_OF_TEXT_FOR_CREATE,
     START_TITLE_FOR_GARBAGE_CATEGORIES,
     END_TITLE_FOR_GARBAGE_CATEGORIES,
-)
-from bot.utils.project_data import save_or_update_full_project_data, fetch_token_quote, fetch_categories
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
-from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
-from bot.utils.validations import (
-    is_float,
-    is_percentage,
-    is_valid_investors_format,
-    is_valid_distribution_format,
-    is_general_number_or_dash,
-    parse_general_number_or_none,
-    is_valid_number_with_suffix,
 )
 
 create_or_update_router = Router()
@@ -36,17 +35,13 @@ async def update_or_create_chosen(message: types.Message, state: FSMContext):
     """
 
     analysis_type = message.text.lower()
-    print("analysis_type:", analysis_type)
 
     if analysis_type in LIST_OF_TEXT_FOR_CREATE:
-        print("тут 1")
-        # Вместо жёсткой строки — фраза из словаря
         await message.answer(await phrase_by_user("rebalancing_input_token", message.from_user.id))
         await state.update_data(mode="create")
         await state.set_state(UpdateOrCreateProject.wait_for_project_name)
 
     elif analysis_type in LIST_OF_TEXT_FOR_UPDATE:
-        print("тут 2")
         await message.answer(await phrase_by_user("rebalancing_input_token", message.from_user.id))
         await state.update_data(mode="update")
         await state.set_state(UpdateOrCreateProject.wait_for_project_name)
@@ -63,8 +58,6 @@ async def get_project_name(message: types.Message, state: FSMContext):
     project_name = message.text.strip().upper()
     data = await state.get_data()
     mode = data.get("mode", "create")
-
-    print("mode:", mode)
 
     await state.update_data(project_name=project_name)
     existing_project = await get_one(Project, coin_name=project_name)
@@ -92,7 +85,11 @@ async def get_categories(message: types.Message, state: FSMContext):
     if message.text.strip() == "-":
         await state.update_data(categories=[])
     else:
-        categories = message.text.split(", ")
+        if "," in message.text:
+            categories = message.text.split(", ")
+        else:
+            categories = message.text.split("\n")
+
         all_categories = await fetch_categories()
         garbage_categories = load_document_for_garbage_list(
             START_TITLE_FOR_GARBAGE_CATEGORIES,
@@ -107,9 +104,10 @@ async def get_categories(message: types.Message, state: FSMContext):
 
 @create_or_update_router.message(UpdateOrCreateProject.wait_for_market_price)
 async def get_market_price(message: types.Message, state: FSMContext):
-    text = message.text.strip()
+    text = message.text.strip().replace(",", ".")
+    text = text.strip("$")
+
     if text == "-":
-        # Нет данных
         await state.update_data(market_price=None)
     else:
         if not is_float(text):
@@ -122,12 +120,16 @@ async def get_market_price(message: types.Message, state: FSMContext):
 
 @create_or_update_router.message(UpdateOrCreateProject.wait_for_fundraise)
 async def get_fundraise(message: types.Message, state: FSMContext):
-    text = message.text.strip()
+    text = message.text.strip().replace(",", ".")
+    text = text.strip("$")
+
     if text == "-":
         await state.update_data(fundraise=None)
     else:
         if not is_float(text):
-            return await message.answer(await phrase_by_user("incorrect_fundraise", message.from_user.id))
+            text = parse_general_number(text)
+            if not text:
+                return await message.answer(await phrase_by_user("incorrect_fundraise", message.from_user.id))
         await state.update_data(fundraise=float(text))
 
     await message.answer(await phrase_by_user("input_investors", message.from_user.id))
@@ -159,7 +161,10 @@ async def get_twitter_followers(message: types.Message, state: FSMContext):
             if followers:
                 await state.update_data(twitter_followers=text)
             else:
-                await state.update_data(twitter_followers=None)
+                text = message.text.replace(",", ".")
+                market_price = float(text)
+                formatted_price = format_number(market_price)
+                await state.update_data(twitter_followers=formatted_price)
         except Exception:
             return await message.answer(await phrase_by_user("incorrect_twitter", message.from_user.id))
 
@@ -212,13 +217,12 @@ async def get_total_supply(message: types.Message, state: FSMContext):
 
 @create_or_update_router.message(UpdateOrCreateProject.wait_for_capitalization)
 async def get_capitalization(message: types.Message, state: FSMContext):
-    text = message.text.strip()
+    text = message.text.strip().replace(",", ".")
+    text = text.strip("$")
 
-    # Проверяем, что это '-' или валидный формат (K, M, B, запятые)
     if not is_general_number_or_dash(text):
         return await message.answer(await phrase_by_user("incorrect_capitalization", message.from_user.id))
 
-    # Парсим: либо float, либо None
     value = parse_general_number_or_none(text)
     await state.update_data(capitalization=value)
 
@@ -228,7 +232,8 @@ async def get_capitalization(message: types.Message, state: FSMContext):
 
 @create_or_update_router.message(UpdateOrCreateProject.wait_for_fdv)
 async def get_fdv(message: types.Message, state: FSMContext):
-    text = message.text.strip()
+    text = message.text.strip().replace(",", ".")
+    text = text.strip("$")
 
     # Аналогичная проверка
     if not is_general_number_or_dash(text):
@@ -271,7 +276,9 @@ async def get_max_price(message: types.Message, state: FSMContext):
 
 @create_or_update_router.message(UpdateOrCreateProject.wait_for_min_price)
 async def get_min_price(message: types.Message, state: FSMContext):
-    text = message.text.strip()
+    text = message.text.strip().replace(",", ".")
+    text = text.strip("$")
+
     if text == "-":
         await state.update_data(min_price=None)
     else:
@@ -285,11 +292,13 @@ async def get_min_price(message: types.Message, state: FSMContext):
 
 @create_or_update_router.message(UpdateOrCreateProject.wait_for_top100_holders)
 async def get_top100_holders(message: types.Message, state: FSMContext):
-    text = message.text.strip()
+    text = message.text.strip().replace(",", ".")
+    text = text.strip("%")
+
     if text == "-":
         await state.update_data(top100_holders=None)
     else:
-        if not is_percentage(text):
+        if not is_float(text):
             return await message.answer(await phrase_by_user("incorrect_top_100_wallets", message.from_user.id))
         await state.update_data(top100_holders=float(text[:-1]))
 
@@ -299,7 +308,9 @@ async def get_top100_holders(message: types.Message, state: FSMContext):
 
 @create_or_update_router.message(UpdateOrCreateProject.wait_for_tvl)
 async def get_tvl(message: types.Message, state: FSMContext):
-    text = message.text.strip()
+    text = message.text.strip().replace(",", ".")
+    text = text.strip("$")
+
     if text == "-":
         await state.update_data(tvl=None)
     else:
