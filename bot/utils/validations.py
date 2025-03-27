@@ -373,10 +373,6 @@ def normalize_float(value: str) -> float:
     return float(value.replace(",", "."))
 
 
-def is_percentage(value: str) -> bool:
-    return bool(re.match(r"^\d+(\.\d+)?%?$", value.strip().replace(",", ".")))
-
-
 def is_valid_number_with_suffix(value: str) -> bool:
     """
     Проверяет, что строка:
@@ -484,3 +480,14 @@ def parse_general_number_or_none(text: str) -> float | None:
     if text == "-":
         return None
     return parse_general_number(text)
+
+
+def format_number(value: float) -> str:
+    """Форматирует число в строку с суффиксами B, M, K"""
+    if value >= 1_000_000_000:
+        return f"{value / 1_000_000_000:.2f}B"
+    elif value >= 1_000_000:
+        return f"{value / 1_000_000:.2f}M"
+    elif value >= 1_000:
+        return f"{value / 1_000:.2f}K"
+    return str(value)
