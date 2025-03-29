@@ -4,6 +4,9 @@ import logging
 import datetime
 import traceback
 
+from tenacity import retry, stop_after_attempt, wait_fixed
+
+from bot.data_processing.tasks import periodically_update_answers
 from bot.utils.resources.files_worker.pdf_worker import generate_pdf
 from bot.utils.resources.gpt.gpt import agent_handler
 from bot.data_processing.data_pipeline import (
@@ -65,6 +68,7 @@ logging.basicConfig(level=logging.INFO)
 current_day = datetime.datetime.now(datetime.timezone.utc).day
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_crypto_data():
     """
     Асинхронный эндпоинт для получения данных о криптопроектах.
@@ -80,6 +84,7 @@ async def fetch_crypto_data():
         asyncio.create_task(update_static_data())
         asyncio.create_task(update_weekly_data())
         asyncio.create_task(update_dynamic_data())
+        asyncio.create_task(periodically_update_answers())
         asyncio.create_task(update_current_price())
 
         logging.info("All update tasks started successfully.")
@@ -91,6 +96,7 @@ async def fetch_crypto_data():
         logging.error(traceback.format_exc())
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_agent_answers():
     """
     Функция обновления ответов агентов по каждому токену:
