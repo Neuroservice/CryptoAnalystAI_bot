@@ -68,10 +68,10 @@ async def main():
             await init_browser()
 
             logging.info("Запуск периодического обновления данных.")
-            # asyncio.create_task(fetch_crypto_data())
-            # asyncio.create_task(parse_categories_weekly())
-            # asyncio.create_task(parse_tokens_weekly())
-            # asyncio.create_task(backup_database())
+            asyncio.create_task(fetch_crypto_data())
+            asyncio.create_task(parse_categories_weekly())
+            asyncio.create_task(parse_tokens_weekly())
+            asyncio.create_task(backup_database())
 
             await dp.start_polling(bot)
 
