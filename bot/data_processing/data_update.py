@@ -6,7 +6,6 @@ import traceback
 
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from bot.data_processing.tasks import periodically_update_answers
 from bot.utils.resources.files_worker.pdf_worker import generate_pdf
 from bot.utils.resources.gpt.gpt import agent_handler
 from bot.data_processing.data_pipeline import (
@@ -498,3 +497,17 @@ async def update_agent_answers():
         )
 
         await asyncio.sleep(10)
+
+
+async def periodically_update_answers():
+    """
+    Задача обновления ответов модели. Выполняется раз в 12 часов
+    """
+
+    while True:
+        try:
+            await update_agent_answers()
+        except Exception as e:
+            logging.error(f"Ошибка при обновлении ответов агентов: {e}")
+
+        await asyncio.sleep(60 * 60 * 12)
