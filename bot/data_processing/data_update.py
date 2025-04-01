@@ -95,6 +95,7 @@ async def fetch_crypto_data():
         logging.error(traceback.format_exc())
 
 
+
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_agent_answers():
     """
@@ -107,53 +108,84 @@ async def update_agent_answers():
     current_time = datetime.datetime.now(datetime.timezone.utc)
     one_days_ago = (current_time - datetime.timedelta(days=1)).replace(tzinfo=None)
     current_date = current_time.strftime("%d.%m.%Y")
+
+    # Начальные переменные
     comparison_results = ""
-    language = "ENG"
+    language = "ENG"  # По умолчанию берем ENG, если не распознаем RU
     agents_info = []
     data_for_tokenomics = []
+
+    logging.info("=== Начало update_agent_answers() ===")
+    logging.info(f"Текущая дата/время: {current_time.isoformat()}")
+    logging.info(f"Будем обновлять ответы, у которых updated_at <= {one_days_ago.isoformat()}")
+
+    # Загружаем мусорные категории
+    logging.info("Загружаем список категорий (garbage_categories)...")
     garbage_categories = load_document_for_garbage_list(
-        START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES
+        START_TITLE_FOR_GARBAGE_CATEGORIES,
+        END_TITLE_FOR_GARBAGE_CATEGORIES,
     )
-    outdated_answers = await get_all(AgentAnswer, updated_at=lambda col: col <= one_days_ago)
+    logging.info(f"garbage_categories загружено, размер: {len(garbage_categories)}")
+
+    logging.info("Получаем все устаревшие AgentAnswer (outdated_answers)...")
+    outdated_answers = await get_all(
+        AgentAnswer,
+        updated_at=lambda col: col <= one_days_ago
+    )
+    logging.info(f"Найдено {len(outdated_answers)} устаревших ответов для обновления")
 
     for agent_answer in outdated_answers:
-        project = await get_one(Project, id=agent_answer.project_id)
-        logging.info(f"Обновление ответа агента по проекту --- {project.coin_name}")
+        logging.info(f"--- Обработка agent_answer.id={agent_answer.id} / project_id={agent_answer.project_id} ---")
 
+        # 1. Ищем Project
+        project = await get_one(Project, id=agent_answer.project_id)
         if not project:
+            logging.warning(f"Project не найден для project_id={agent_answer.project_id}, пропускаем.")
             continue
 
-        first_phrase = agent_answer.answer.split(" ", 1)[0]
+        logging.info(f"Обновляем ответ агента по проекту: {project.coin_name}")
 
+        # 2. Определяем язык
+        first_phrase = agent_answer.answer.split(" ", 1)[0]
         if first_phrase.startswith("Анализ проектов"):
             language = "RU"
+        else:
+            language = "ENG"
 
-        (
-            twitter_name,
-            description,
-            lower_name,
-            categories,
-        ) = await get_twitter_link_by_symbol(project.coin_name)
+        logging.info(f"Определён язык: {language}")
+
+        # 3. Получаем твиттер и описание
+        twitter_name, description, lower_name, categories = await get_twitter_link_by_symbol(project.coin_name)
         coin_description = await get_coin_description(lower_name)
         if description:
             coin_description += description
 
+        logging.info(f"[{project.coin_name}] Длина coin_description: {len(coin_description)} символов")
+
+        # 4. Генерируем общее описание токена
         token_description = await agent_handler("description", topic=coin_description, language=language)
+        logging.info(f"[{project.coin_name}] token_description (AI) получен, длина={len(token_description)}")
 
         if not categories or len(categories) == 0:
+            logging.warning(f"[{project.coin_name}] Нет категорий у проекта, пропускаем.")
             continue
 
-        # Получаем или создаём категории в БД
+        # 5. Получаем или создаем категории (не входящие в мусорный список)
         category_instances = []
+        logging.info(f"[{project.coin_name}] Обрабатываем {len(categories)} категорий...")
         for category_name in categories:
             if category_name not in garbage_categories:
                 category_instance, _ = await get_or_create(Category, category_name=category_name)
                 category_instances.append(category_instance)
 
         if len(category_instances) == 0:
+            logging.warning(f"[{project.coin_name}] Все категории оказались в мусорном списке, пропускаем.")
             continue
 
+        # 6. Собираем данные проекта
         project_info = await get_user_project_info(project.coin_name)
+        logging.info(f"[{project.coin_name}] Получен project_info: {list(project_info.keys())}")
+
         twitter_link = await get_twitter_link_by_symbol(project.coin_name)
         tokenomics_data = project_info.get("tokenomics_data")
         basic_metrics = project_info.get("basic_metrics")
@@ -164,77 +196,90 @@ async def update_agent_answers():
         top_and_bottom = project_info.get("top_and_bottom")
         manipulative_metrics = project_info.get("manipulative_metrics")
         network_metrics = project_info.get("network_metrics")
-        _, tokenomics_data_list = await get_project_and_tokenomics(categories, project.tier)
 
+        # 7. Получаем список проектов с токеномикой
+        _, tokenomics_data_list = await get_project_and_tokenomics(categories, project.tier)
+        logging.info(f"[{project.coin_name}] Получено {len(tokenomics_data_list)} проектов c токеномикой.")
+
+        # Берём топ-5 проектов по капитализации
         top_projects = sorted(
             tokenomics_data_list,
             key=lambda item: item[1][0].capitalization if item[1][0].capitalization else 0,
             reverse=True,
         )[:5]
+        logging.info(f"[{project.coin_name}] Топ-5 проектов для сравнения, всего {len(top_projects)}.")
 
-        for index, (top_projects, tokenomics_data) in enumerate(top_projects, start=1):
-            project_coin = top_projects.coin_name
-            for tokenomics in tokenomics_data:
+        # 8. Генерируем текст сравнения
+        comparison_results = ""
+        for index, (top_proj, tok_data_list) in enumerate(top_projects, start=1):
+            logging.info(f"[{project.coin_name}] Сравнение с проектом {top_proj.coin_name} (index={index}).")
+            for tok_data in tok_data_list:
+                # Расчет expected_x
                 calculation_result = calculate_expected_x(
                     entry_price=basic_metrics.market_price,
-                    total_supply=tokenomics_data[0].total_supply,
-                    fdv=tokenomics.fdv,
+                    total_supply=tok_data_list[0].total_supply,  # проверяйте, нужно ли [0]
+                    fdv=tok_data.fdv,
                 )
-
                 fair_price = calculation_result["fair_price"]
-                fair_price = (
-                    f"{fair_price:.5f}"
-                    if isinstance(fair_price, (int, float))
-                    else phrase_by_language("comparisons_error", agent_answer.language)
-                )
+                if isinstance(fair_price, (int, float)):
+                    fair_price = f"{fair_price:.5f}"
+                else:
+                    fair_price = phrase_by_language("comparisons_error", agent_answer.language)
 
                 comparison_results += calculations_choices[agent_answer.language].format(
                     user_coin_name=project.coin_name,
-                    project_coin_name=project_coin,
+                    project_coin_name=top_proj.coin_name,
                     growth=(calculation_result["expected_x"] - 1.0) * 100,
                     fair_price=fair_price,
                 )
 
+        # 9. Определяем tier проекта
         tier_answer = determine_project_tier(
             capitalization=get_metric_value(tokenomics_data, "fdv"),
             fundraising=get_metric_value(investing_metrics, "fundraise"),
             twitter_followers=get_metric_value(social_metrics, "twitter"),
             twitter_score=get_metric_value(social_metrics, "twitterscore"),
             investors=get_metric_value(investing_metrics, "fund_level"),
-            language=language if language else "ENG",
+            language=language,
         )
+        logging.info(f"[{project.coin_name}] Tier: {tier_answer}")
 
-        for (
-            index,
-            coin_name,
-            project_coin,
-            expected_x,
-            fair_price,
-        ) in agents_info:
-            ticker = project_coin
-            growth_percent = expected_x
-            data_for_tokenomics.append({ticker: {"growth_percent": growth_percent}})
+        # 10. Запускаем токеномику
+        tokemonic_answer, tokemonic_score = calculate_tokenomics_score(
+            project.coin_name,
+            data_for_tokenomics
+        )
+        logging.info(f"[{project.coin_name}] токеномика: {tokemonic_answer} / score={tokemonic_score}")
 
-        tokemonic_answer, tokemonic_score = calculate_tokenomics_score(project.coin_name, data_for_tokenomics)
-
+        # 11. Запрашиваем у агента данные по фондам
         all_data_string_for_funds_agent = ALL_DATA_STRING_FUNDS_AGENT.format(
             funds_profit_distribution=get_metric_value(funds_profit, "distribution")
         )
         funds_agent_answer = await agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
+        logging.info(f"[{project.coin_name}] funds_agent_answer длина={len(funds_agent_answer)}")
 
+        # 12. Считаем FDV / fundraising_amount
         fdv = (
             float(tokenomics_data.fdv)
             if tokenomics_data and tokenomics_data.fdv
-            else (phrase_by_language("no_data", language))
+            else phrase_by_language("no_data", language)
         )
         fundraising_amount = (
             float(investing_metrics.fundraise)
             if investing_metrics and investing_metrics.fundraise
-            else (phrase_by_language("no_data", language))
+            else phrase_by_language("no_data", language)
         )
 
+        # Инвесторы (строка вида "30%"?) — парсим
         funds_agent_answer = await funds_agent_answer
-        investors_percent = float(funds_agent_answer.strip("%")) / 100
+        investors_percent_str = funds_agent_answer.strip("%")
+        try:
+            investors_percent = float(investors_percent_str) / 100
+        except ValueError:
+            logging.warning(f"[{project.coin_name}] Не удалось привести {investors_percent_str} к float, ставим 0.")
+            investors_percent = 0
+
+        logging.info(f"[{project.coin_name}] fdv={fdv}, fundraising={fundraising_amount}, investors_percent={investors_percent}")
 
         if isinstance(fdv, float) and isinstance(fundraising_amount, float):
             result_ratio = (fdv * investors_percent) / fundraising_amount
@@ -243,6 +288,9 @@ async def update_agent_answers():
             result_ratio = phrase_by_language("no_data", language)
             final_score = result_ratio
 
+        logging.info(f"[{project.coin_name}] result_ratio={result_ratio}, final_score={final_score}")
+
+        # analyze_project_metrics => funds_answer etc.
         (funds_answer, funds_scores, funds_score, growth_and_fall_score,) = analyze_project_metrics(
             final_score,
             get_metric_value(
@@ -269,14 +317,20 @@ async def update_agent_answers():
             ),
         )
 
+        # 13. Определяем уровень инвесторов
         if investing_metrics and investing_metrics.fund_level:
-            project_investors_level_result = project_investors_level(investors=investing_metrics.fund_level)
+            project_investors_level_result = project_investors_level(
+                investors=investing_metrics.fund_level
+            )
             investors_level = project_investors_level_result["level"]
             investors_level_score = project_investors_level_result["score"]
         else:
             investors_level = phrase_by_language("no_data", language)
             investors_level_score = 0
 
+        logging.info(f"[{project.coin_name}] investors_level={investors_level}, investors_level_score={investors_level_score}")
+
+        # 14. Считаем рейтинг проекта
         project_rating_result = calculate_project_score(
             get_metric_value(investing_metrics, "fundraise"),
             tier_answer,
@@ -285,9 +339,7 @@ async def update_agent_answers():
             get_metric_value(social_metrics, "twitter"),
             get_metric_value(social_metrics, "twitterscore"),
             int((network_metrics.tvl / tokenomics_data.capitalization) * 100)
-            if network_metrics
-            and network_metrics.tvl
-            and tokenomics_data
+            if network_metrics.tvl
             and tokenomics_data.total_supply
             and tokenomics_data.capitalization
             else 0,
@@ -299,6 +351,7 @@ async def update_agent_answers():
             funds_scores,
             language,
         )
+        logging.info(f"[{project.coin_name}] Итоги rating: {project_rating_result}")
 
         project_rating_answer = project_rating_result["calculations_summary"]
         fundraising_score = project_rating_result["fundraising_score"]
@@ -488,17 +541,20 @@ async def update_agent_answers():
             coin_name=project.coin_name.upper(),
         )
 
+        logging.info(f"[{project.coin_name}] Обновляем AgentAnswer.id={agent_answer.id}")
         await update_or_create(
             model=AgentAnswer,
             id=agent_answer.id,
             defaults={
-                "answer": extracted_text,
+                "answer": extracted_text,  # результат финального ответа
                 "updated_at": current_time,
             },
         )
 
+        logging.info(f"[{project.coin_name}] Успешно обновлён agent_answer, ждём 10 сек...")
         await asyncio.sleep(10)
 
+    logging.info("=== update_agent_answers() завершена ===")
 
 async def periodically_update_answers():
     """
