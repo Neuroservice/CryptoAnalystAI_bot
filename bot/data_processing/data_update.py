@@ -118,6 +118,7 @@ async def update_agent_answers():
 
     for agent_answer in outdated_answers:
         project = await get_one(Project, id=agent_answer.project_id)
+        logging.info("Обновление ответа агента по проекту ---", project.coin_name)
 
         if not project:
             continue
@@ -506,7 +507,9 @@ async def periodically_update_answers():
 
     while True:
         try:
+            logging.info("Обновление ответов")
             await update_agent_answers()
+            logging.info("Конец обновления")
         except Exception as e:
             logging.error(f"Ошибка при обновлении ответов агентов: {e}")
 
