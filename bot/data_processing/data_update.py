@@ -118,7 +118,7 @@ async def update_agent_answers():
 
     for agent_answer in outdated_answers:
         project = await get_one(Project, id=agent_answer.project_id)
-        logging.info("Обновление ответа агента по проекту ---", project.coin_name)
+        logging.info(f"Обновление ответа агента по проекту --- {project.coin_name}")
 
         if not project:
             continue
