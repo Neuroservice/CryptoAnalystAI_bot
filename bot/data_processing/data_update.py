@@ -251,8 +251,17 @@ async def update_agent_answers():
         all_data_string_for_funds_agent = ALL_DATA_STRING_FUNDS_AGENT.format(
             funds_profit_distribution=get_metric_value(funds_profit, "distribution")
         )
-        funds_agent_answer = await agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
-        logging.info(f"[{project.coin_name}] funds_agent_answer длина={len(funds_agent_answer)}")
+        try:
+            funds_agent_answer = await agent_handler("funds_agent", topic=all_data_string_for_funds_agent)
+            logging.info(
+                f"[{project.coin_name}] funds_agent_answer: '{funds_agent_answer}' (тип: {type(funds_agent_answer)}, длина: {len(str(funds_agent_answer)) if funds_agent_answer else 0})")
+
+            if not funds_agent_answer or not str(funds_agent_answer).strip() or str(funds_agent_answer).strip() == "0":
+                logging.warning(f"[{project.coin_name}] Пустой или нулевой ответ от funds_agent")
+                funds_agent_answer = "0%"
+        except Exception as e:
+            logging.error(f"[{project.coin_name}] Ошибка получения funds_agent_answer: {e}")
+            funds_agent_answer = "0%"
 
         # 12. Считаем FDV / fundraising_amount
         fdv = (
@@ -260,11 +269,17 @@ async def update_agent_answers():
             if tokenomics_data and tokenomics_data.fdv
             else phrase_by_language("no_data", language)
         )
-        fundraising_amount = (
-            float(investing_metrics.fundraise)
-            if investing_metrics and investing_metrics.fundraise
-            else phrase_by_language("no_data", language)
-        )
+        try:
+            fundraising_amount = (
+                float(investing_metrics.fundraise)
+                if (investing_metrics and
+                    hasattr(investing_metrics, 'fundraise') and
+                    str(investing_metrics.fundraise).strip().lower() not in ["", "none", "no data", "nan"])
+                else 0  # Используем 0 вместо строки для расчетов
+            )
+        except (ValueError, AttributeError) as e:
+            logging.error(f"[{project.coin_name}] Ошибка преобразования fundraising_amount: {e}")
+            fundraising_amount = 0
 
         # Инвесторы (строка вида "30%"?) — парсим
         investors_percent_str = funds_agent_answer.strip("%") if funds_agent_answer else "0"
@@ -276,18 +291,30 @@ async def update_agent_answers():
 
         logging.info(f"[{project.coin_name}] fdv={fdv}, fundraising={fundraising_amount}, investors_percent={investors_percent}")
 
-        if isinstance(fdv, (int, float)) and fundraising_amount not in [None, "No data"]:
+        try:
+            if not all([
+                isinstance(fdv, (int, float)),
+                isinstance(fundraising_amount, (int, float)) and fundraising_amount != 0,
+                isinstance(investors_percent, (int, float))
+            ]):
+                raise ValueError("Некорректные входные данные для расчета")
+
             result_ratio = (fdv * investors_percent) / fundraising_amount
             final_score = f"{result_ratio:.2%}"
-        else:
-            result_ratio = phrase_by_language("no_data", language)
-            final_score = result_ratio
+
+        except Exception as e:
+            logging.error(f"[{project.coin_name}] Ошибка расчета result_ratio. "
+                          f"fdv={fdv}({type(fdv)}), "
+                          f"fundraising={fundraising_amount}({type(fundraising_amount)}), "
+                          f"investors={investors_percent}({type(investors_percent)}). Ошибка: {e}")
+            result_ratio = 0
+            final_score = "0%"
 
         logging.info(f"[{project.coin_name}] result_ratio={result_ratio}, final_score={final_score}")
 
         # analyze_project_metrics => funds_answer etc.
         (funds_answer, funds_scores, funds_score, growth_and_fall_score,) = analyze_project_metrics(
-            final_score,
+            float(final_score),
             get_metric_value(
                 market_metrics,
                 "growth_low",
@@ -550,6 +577,7 @@ async def update_agent_answers():
         await asyncio.sleep(10)
 
     logging.info("=== update_agent_answers() завершена ===")
+
 
 async def periodically_update_answers():
     """
