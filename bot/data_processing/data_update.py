@@ -267,7 +267,7 @@ async def update_agent_answers():
         )
 
         # Инвесторы (строка вида "30%"?) — парсим
-        investors_percent_str = funds_agent_answer.strip("%")
+        investors_percent_str = funds_agent_answer.strip("%") if funds_agent_answer else "0"
         try:
             investors_percent = float(investors_percent_str) / 100
         except ValueError:
@@ -276,7 +276,7 @@ async def update_agent_answers():
 
         logging.info(f"[{project.coin_name}] fdv={fdv}, fundraising={fundraising_amount}, investors_percent={investors_percent}")
 
-        if isinstance(fdv, float) and isinstance(fundraising_amount, float):
+        if isinstance(fdv, (int, float)) and fundraising_amount not in [None, "No data"]:
             result_ratio = (fdv * investors_percent) / fundraising_amount
             final_score = f"{result_ratio:.2%}"
         else:
