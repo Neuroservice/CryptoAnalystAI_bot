@@ -95,7 +95,6 @@ async def fetch_crypto_data():
         logging.error(traceback.format_exc())
 
 
-
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_agent_answers():
     """
@@ -110,9 +109,6 @@ async def update_agent_answers():
     current_date = current_time.strftime("%d.%m.%Y")
 
     # Начальные переменные
-    comparison_results = ""
-    language = "ENG"  # По умолчанию берем ENG, если не распознаем RU
-    agents_info = []
     data_for_tokenomics = []
 
     logging.info("=== Начало update_agent_answers() ===")
@@ -271,7 +267,6 @@ async def update_agent_answers():
         )
 
         # Инвесторы (строка вида "30%"?) — парсим
-        funds_agent_answer = await funds_agent_answer
         investors_percent_str = funds_agent_answer.strip("%")
         try:
             investors_percent = float(investors_percent_str) / 100
