@@ -297,7 +297,7 @@ async def update_agent_answers():
                 isinstance(fundraising_amount, (int, float)) and fundraising_amount != 0,
                 isinstance(investors_percent, (int, float))
             ]):
-                raise ValueError("Некорректные входные данные для расчета")
+                continue
 
             result_ratio = (fdv * investors_percent) / fundraising_amount
             final_score = f"{result_ratio:.2%}"
