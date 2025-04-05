@@ -271,13 +271,15 @@ async def update_agent_answers():
             if tokenomics_data and tokenomics_data.fdv
             else phrase_by_language("no_data", language)
         )
+
+        logging.info(f"investing_metrics.fundraise -------------- {investing_metrics.fundraise}")
         try:
             fundraising_amount = (
                 float(investing_metrics.fundraise)
                 if (investing_metrics and
                     hasattr(investing_metrics, 'fundraise') and
                     str(investing_metrics.fundraise).strip().lower() not in ["", "none", "no data", "nan"])
-                else 0  # Используем 0 вместо строки для расчетов
+                else 0
             )
         except (ValueError, AttributeError) as e:
             logging.error(f"[{project.coin_name}] Ошибка преобразования fundraising_amount: {e}")
