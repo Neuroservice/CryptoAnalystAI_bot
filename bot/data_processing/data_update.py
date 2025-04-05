@@ -105,6 +105,7 @@ async def update_agent_answers():
     """
 
     current_time = datetime.datetime.now(datetime.timezone.utc)
+    current_time_naive = current_time.replace(tzinfo=None)
     one_days_ago = (current_time - datetime.timedelta(days=1)).replace(tzinfo=None)
     current_date = current_time.strftime("%d.%m.%Y")
 
@@ -143,7 +144,8 @@ async def update_agent_answers():
 
         # 2. Определяем язык
         first_phrase = agent_answer.answer.split(" ", 1)[0]
-        if first_phrase.startswith("Анализ проектов"):
+
+        if first_phrase.startswith("Анализ"):
             language = "RU"
         else:
             language = "ENG"
@@ -213,7 +215,7 @@ async def update_agent_answers():
                 # Расчет expected_x
                 calculation_result = calculate_expected_x(
                     entry_price=basic_metrics.market_price,
-                    total_supply=tok_data_list[0].total_supply,  # проверяйте, нужно ли [0]
+                    total_supply=tok_data.total_supply,
                     fdv=tok_data.fdv,
                 )
                 fair_price = calculation_result["fair_price"]
@@ -312,9 +314,14 @@ async def update_agent_answers():
 
         logging.info(f"[{project.coin_name}] result_ratio={result_ratio}, final_score={final_score}")
 
+        if isinstance(final_score, str) and '%' in final_score:
+            final_score = float(final_score.strip('%')) / 100
+        else:
+            final_score = float(final_score)
+
         # analyze_project_metrics => funds_answer etc.
         (funds_answer, funds_scores, funds_score, growth_and_fall_score,) = analyze_project_metrics(
-            float(final_score),
+            final_score,
             get_metric_value(
                 market_metrics,
                 "growth_low",
@@ -383,6 +390,8 @@ async def update_agent_answers():
         tokenomics_score = project_rating_result["tokenomics_score"]
         project_rating_text = project_rating_result["project_rating"]
 
+        logging.info(f"[{project.coin_name}] project_rating_answer: {project_rating_answer, project_rating_text}")
+
         all_data_string_for_flags_agent = ALL_DATA_STRING_FLAGS_AGENT.format(
             project_coin_name=project.coin_name,
             project_categories=categories,
@@ -394,6 +403,8 @@ async def update_agent_answers():
             twitter_link=twitter_link,
             social_metrics_twitterscore=social_metrics.twitterscore,
         )
+
+        logging.info(f"[{project.coin_name}] all_data_string_for_flags_agent: {all_data_string_for_flags_agent}")
 
         flags_answer = await generate_flags_answer(
             all_data_string_for_flags_agent=all_data_string_for_flags_agent,
@@ -414,6 +425,8 @@ async def update_agent_answers():
             language=agent_answer.language,
         )
 
+        logging.info(f"[{project.coin_name}] flags_answer: {flags_answer}")
+
         answer = re.sub(
             r"\n\s*\n",
             "\n",
@@ -423,6 +436,8 @@ async def update_agent_answers():
         red_green_flags = extract_red_green_flags(answer, language)
         calculations = extract_calculations(answer, language)
 
+        logging.info(f"[{project.coin_name}] red_green_flags: {red_green_flags, calculations}")
+
         top_and_bottom_answer = phrase_by_language(
             "top_bottom_values",
             language,
@@ -430,6 +445,8 @@ async def update_agent_answers():
             min_value=phrase_by_language("no_data", language),
             max_value=phrase_by_language("no_data", language),
         )
+
+        logging.info(f"[{project.coin_name}] top_and_bottom_answer (1): {top_and_bottom_answer}")
 
         if top_and_bottom and top_and_bottom.lower_threshold and top_and_bottom.upper_threshold:
             top_and_bottom_answer = phrase_by_language(
@@ -439,6 +456,8 @@ async def update_agent_answers():
                 min_value=round(top_and_bottom.lower_threshold, 4),
                 max_value=round(top_and_bottom.upper_threshold, 4),
             )
+
+            logging.info(f"[{project.coin_name}] top_and_bottom_answer (2): {top_and_bottom_answer}")
 
         profit_text = phrase_by_language(
             "investor_profit_text",
@@ -452,11 +471,15 @@ async def update_agent_answers():
             final_score=final_score,
         )
 
+        logging.info(f"profit_text: --- {profit_text}")
+
         if funds_profit and funds_profit.distribution:
             distribution_items = funds_profit.distribution.split("\n")
             formatted_distribution = "\n".join([f"- {item}" for item in distribution_items])
         else:
             formatted_distribution = phrase_by_language("no_token_distribution", language)
+
+        logging.info(f"formatted_distribution: --- {formatted_distribution}")
 
         formatted_metrics = [
             format_metric(
@@ -544,6 +567,8 @@ async def update_agent_answers():
             else 0,
         )
 
+        logging.info(f"project_evaluation ------------ {project_evaluation}")
+
         pdf_output, extracted_text = await generate_pdf(
             funds_profit=formatted_distribution,
             tier_answer=tier_answer,
@@ -568,8 +593,8 @@ async def update_agent_answers():
             model=AgentAnswer,
             id=agent_answer.id,
             defaults={
-                "answer": extracted_text,  # результат финального ответа
-                "updated_at": current_time,
+                "answer": extracted_text,
+                "updated_at": current_time_naive,
             },
         )
 
