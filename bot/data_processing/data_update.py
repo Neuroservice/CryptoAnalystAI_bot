@@ -213,6 +213,8 @@ async def update_agent_answers():
             logging.info(f"[{project.coin_name}] Сравнение с проектом {top_proj.coin_name} (index={index}).")
             for tok_data in tok_data_list:
                 # Расчет expected_x
+
+                logging.info(f"entry_price={basic_metrics.market_price}, total_supply={tok_data.total_supply}, fdv={tok_data.fdv}")
                 calculation_result = calculate_expected_x(
                     entry_price=basic_metrics.market_price,
                     total_supply=tok_data.total_supply,
