@@ -212,20 +212,40 @@ async def update_agent_answers():
         for index, (top_proj, tok_data_list) in enumerate(top_projects, start=1):
             logging.info(f"[{project.coin_name}] Сравнение с проектом {top_proj.coin_name} (index={index}).")
             for tok_data in tok_data_list:
-                # Расчет expected_x
+                # Собираем данные
+                entry_price = basic_metrics.market_price
+                total_supply = tok_data.total_supply
+                fdv = tok_data.fdv
 
-                logging.info(f"entry_price={basic_metrics.market_price}, total_supply={tok_data.total_supply}, fdv={tok_data.fdv}")
-                calculation_result = calculate_expected_x(
-                    entry_price=basic_metrics.market_price,
-                    total_supply=tok_data.total_supply,
-                    fdv=tok_data.fdv,
+                # Логируем текущие значения
+                logging.info(
+                    f"[{project.coin_name}] entry_price={entry_price}, "
+                    f"total_supply={total_supply}, fdv={fdv} "
+                    f"(для проекта {top_proj.coin_name})"
                 )
+
+                # Общая проверка: если что-то из нужных полей отсутствует — пропускаем
+                if entry_price is None or total_supply is None or fdv is None:
+                    logging.warning(
+                        f"[{project.coin_name}] Недостаточно данных (entry_price or total_supply or fdv == None), "
+                        f"пропускаем расчёт для {top_proj.coin_name}."
+                    )
+                    continue
+
+                # Если дошли сюда, значит все три значения не None
+                calculation_result = calculate_expected_x(
+                    entry_price=entry_price,
+                    total_supply=total_supply,
+                    fdv=fdv,
+                )
+
                 fair_price = calculation_result["fair_price"]
                 if isinstance(fair_price, (int, float)):
                     fair_price = f"{fair_price:.5f}"
                 else:
                     fair_price = phrase_by_language("comparisons_error", agent_answer.language)
 
+                # Формируем итоговое сообщение о сравнении
                 comparison_results += calculations_choices[agent_answer.language].format(
                     user_coin_name=project.coin_name,
                     project_coin_name=top_proj.coin_name,
