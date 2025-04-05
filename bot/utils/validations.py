@@ -13,8 +13,6 @@ from bot.utils.common.consts import (
     PROJECT_DESCRIPTION_PATTERN,
     POSITIVE_PATTERN_RU,
     NEGATIVE_PATTERN_RU,
-    POSITIVE_PATTERN_ENG,
-    NEGATIVE_PATTERN_ENG,
     TOKENOMICS_PATTERN_ENG,
     TOKENOMICS_PATTERN_RU,
     COMPARISON_PATTERN_ENG,
@@ -30,6 +28,8 @@ from bot.utils.common.consts import (
     START_TITLE_FOR_SCAM_TOKENS,
     START_TITLE_FOR_FUNDAMENTAL,
     END_TITLE_FOR_FUNDAMENTAL,
+    POSITIVE_PATTERN_EN,
+    NEGATIVE_PATTERN_EN,
 )
 from bot.utils.resources.exceptions.exceptions import (
     ExceptionError,
@@ -88,28 +88,53 @@ def extract_description(topic: str, language: str) -> str:
     return match.group(1) if match else phrase_by_language("no_green_flags", language)
 
 
-def extract_red_green_flags(answer: str, language: str) -> str:
+def extract_red_green_flags(text: str, language: str) -> str:
+    """Извлекает и форматирует позитивные (зелёные) и негативные (красные) флаги из текста.
+
+    Возвращает отформатированную строку с разделением на зелёные и красные флаги.
+    Поддерживает русский и английский языки.
     """
-    Функция для извлечения ред и грин флагов на русском и английском языках.
-    """
+    try:
+        if language == "RU":
+            positive_pattern = POSITIVE_PATTERN_RU
+            negative_pattern = NEGATIVE_PATTERN_RU
+        else:
+            positive_pattern = POSITIVE_PATTERN_EN
+            negative_pattern = NEGATIVE_PATTERN_EN
 
-    positive_pattern = POSITIVE_PATTERN_ENG
-    negative_pattern = NEGATIVE_PATTERN_ENG
+        green_flags = ""
+        red_flags = ""
 
-    if language == "RU":
-        positive_pattern = POSITIVE_PATTERN_RU
-        negative_pattern = NEGATIVE_PATTERN_RU
+        # Поиск позитивных характеристик
+        positive_match = re.search(positive_pattern, text, re.DOTALL)
 
-    # Извлекаем положительные характеристики
-    positive_match = re.search(positive_pattern, answer, re.S)
-    positive_text = positive_match.group(1) if positive_match else phrase_by_language("no_green_flags", language)
+        print(positive_pattern, negative_pattern, positive_match)
 
-    # Извлекаем отрицательные характеристики
-    negative_match = re.search(negative_pattern, answer, re.S)
-    negative_text = negative_match.group(1) if negative_match else phrase_by_language("no_red_flags", language)
+        if positive_match:
+            green_flags = positive_match.group(1).strip()
+            green_flags = re.sub(r'^Положительные характеристики:\s*', '', green_flags)
+            green_flags = re.sub(r'^Positive characteristics:\s*', '', green_flags)
 
-    # Возвращаем объединенные результаты
-    return f"{positive_text}\n{negative_text}"
+        # Поиск негативных характеристик
+        negative_match = re.search(negative_pattern, text, re.DOTALL)
+        if negative_match:
+            red_flags = negative_match.group(1).strip()
+            red_flags = re.sub(r'^Отрицательные характеристики:\s*', '', red_flags)
+            red_flags = re.sub(r'^Negative characteristics:\s*', '', red_flags)
+
+        # Форматирование результата
+        if language == "RU":
+            green_result = "Зеленые флаги:\n" + green_flags if green_flags else "Зелёных флагов нет"
+            red_result = "Красные флаги:\n" + red_flags if red_flags else "Красных флагов нет"
+        else:
+            green_result = "Green flags:\n" + green_flags if green_flags else "No 'green' flags"
+            red_result = "Red flags:\n" + red_flags if red_flags else "No 'red' flags"
+
+        return f"{green_result}\n\n{red_result}"
+
+    except Exception as e:
+        logging.error(f"Ошибка при извлечении флагов: {e}")
+        return "Зеленые флаги:\nНет\n\nКрасные флаги:\nНет" if language == "RU" else "Green flags:\nNone\n\nRed flags:\nNone"
 
 
 def extract_calculations(answer: str, language: str):

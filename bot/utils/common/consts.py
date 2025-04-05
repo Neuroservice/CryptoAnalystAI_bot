@@ -107,10 +107,10 @@ REVISION_PATTERN = re.compile(r"Revision ID: (\w+)")
 REVISES_PATTERN = re.compile(r"Revises: (\w+|None)")
 OVERALL_PROJECT_CATEGORY_PATTERN = r'Общая категория проекта:\s*"([^"]+)"'
 PROJECT_DESCRIPTION_PATTERN = r"Описание проекта:\s*(.+?)(?=\n\s*\n|$)"
-POSITIVE_PATTERN_RU = r"(Положительные характеристики:.*?)(?=\s*Отрицательные характеристики|$)"
-NEGATIVE_PATTERN_RU = r"(Отрицательные характеристики:.*?)(?=\s*Данные для анализа|$)"
-POSITIVE_PATTERN_ENG = r"(?i)(Positive Characteristics:.*?)(?=\s*Negative Characteristics|$)"
-NEGATIVE_PATTERN_ENG = r"(?i)(Negative Characteristics:.*?)(?=\s*Data to analyze|$)"
+POSITIVE_PATTERN_RU = r"(Положительные характеристики:[\s\S]*?)(?=Отрицательные характеристики|Данные для анализа|$)"
+NEGATIVE_PATTERN_RU = r"(Отрицательные характеристики:[\s\S]*?)(?=Данные для анализа|$)"
+POSITIVE_PATTERN_EN = r"(Positive characteristics:[\s\S]*?)(?=Negative characteristics|Analysis data|$)"
+NEGATIVE_PATTERN_EN = r"(Negative characteristics:[\s\S]*?)(?=Analysis data|$)"
 TOKENOMICS_PATTERN_RU = r"Данные для анализа токеномики:\s*"
 TOKENOMICS_PATTERN_ENG = r"Data for tokenomic analysis:\s*"
 CALCULATIONS_PATTERN_RU = r"(Результаты расчета для.*?)$"

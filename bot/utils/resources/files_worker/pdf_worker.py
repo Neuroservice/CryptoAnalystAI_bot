@@ -1,3 +1,4 @@
+import logging
 import re
 import fitz
 
@@ -65,7 +66,7 @@ async def generate_pdf(
     profit_text: str,
     red_green_flags: str,
     top_and_bottom_answer: str,
-    calculations: List[Dict[str, str]],
+    calculations: str,
     project_evaluation: str,
     overal_final_score: float,
     project_rating_text: str,
@@ -107,12 +108,7 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.multi_cell(
-        0,
-        6,
-        phrase_by_language("project_metrics", language, tier=tier_answer),
-        0,
-    )
+    pdf.multi_cell(0, 6, phrase_by_language("project_metrics", language, tier=tier_answer), 0)
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
     pdf.multi_cell(0, 6, formatted_metrics_text, 0)
@@ -147,14 +143,7 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.cell(
-        0,
-        6,
-        f"{phrase_by_language('overall_evaluation', language)}",
-        0,
-        0,
-        "L",
-    )
+    pdf.cell(0, 6, f"{phrase_by_language('overall_evaluation', language)}", 0, 0, "L")
     # pdf.cell(0, 6, f"{f'Оценка проекта:' if language == 'RU' else f'Overall evaluation:'}", 0, 0, 'L')
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)

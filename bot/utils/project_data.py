@@ -1377,8 +1377,8 @@ async def generate_flags_answer(
     Функция генерации ответа анализа метрик проекта
     """
     flags_answer = None
-    user_data = await get_user_from_redis_or_db(user_id)
-    user_language = user_data.get("language", "ENG")
+    user_data = await get_user_from_redis_or_db(user_id) if user_id else None
+    user_language = user_data.get("language", "ENG") if user_data and user_data.get("language") else language
 
     print("all_data_string_for_flags_agent: ---", all_data_string_for_flags_agent)
 
