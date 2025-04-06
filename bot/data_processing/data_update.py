@@ -46,6 +46,7 @@ from bot.utils.project_data import (
     calculate_expected_x,
     generate_flags_answer,
     get_coin_description,
+    get_top_projects_by_capitalization_and_category,
 )
 from bot.utils.resources.bot_phrases.bot_phrase_handler import (
     phrase_by_language,
@@ -200,58 +201,55 @@ async def update_agent_answers():
         logging.info(f"[{project.coin_name}] Получено {len(tokenomics_data_list)} проектов c токеномикой.")
 
         # Берём топ-5 проектов по капитализации
-        top_projects = sorted(
-            tokenomics_data_list,
-            key=lambda item: item[1][0].capitalization if item[1][0].capitalization else 0,
-            reverse=True,
-        )[:5]
+        top_projects = get_top_projects_by_capitalization_and_category(tokenomics_data_list)
         logging.info(f"[{project.coin_name}] Топ-5 проектов для сравнения, всего {len(top_projects)}.")
 
         # 8. Генерируем текст сравнения
         comparison_results = ""
         for index, (top_proj, tok_data_list) in enumerate(top_projects, start=1):
-            logging.info(f"[{project.coin_name}] Сравнение с проектом {top_proj.coin_name} (index={index}).")
-            for tok_data in tok_data_list:
-                # Собираем данные
-                entry_price = basic_metrics.market_price
-                total_supply = tok_data.total_supply
-                fdv = tok_data.fdv
+            if tok_data_list:
+                logging.info(f"[{project.coin_name}] Сравнение с проектом {top_proj.coin_name} (index={index}).")
+                for tok_data in tok_data_list:
+                    # Собираем данные
+                    entry_price = basic_metrics.market_price
+                    total_supply = tok_data.total_supply
+                    fdv = tok_data.fdv
 
-                # Логируем текущие значения
-                logging.info(
-                    f"[{project.coin_name}] entry_price={entry_price}, "
-                    f"total_supply={total_supply}, fdv={fdv} "
-                    f"(для проекта {top_proj.coin_name})"
-                )
-
-                # Общая проверка: если что-то из нужных полей отсутствует — пропускаем
-                if entry_price is None or total_supply is None or fdv is None:
-                    logging.warning(
-                        f"[{project.coin_name}] Недостаточно данных (entry_price or total_supply or fdv == None), "
-                        f"пропускаем расчёт для {top_proj.coin_name}."
+                    # Логируем текущие значения
+                    logging.info(
+                        f"[{project.coin_name}] entry_price={entry_price}, "
+                        f"total_supply={total_supply}, fdv={fdv} "
+                        f"(для проекта {top_proj.coin_name})"
                     )
-                    continue
 
-                # Если дошли сюда, значит все три значения не None
-                calculation_result = calculate_expected_x(
-                    entry_price=entry_price,
-                    total_supply=total_supply,
-                    fdv=fdv,
-                )
+                    # Общая проверка: если что-то из нужных полей отсутствует — пропускаем
+                    if entry_price is None or total_supply is None or fdv is None:
+                        logging.warning(
+                            f"[{project.coin_name}] Недостаточно данных (entry_price or total_supply or fdv == None), "
+                            f"пропускаем расчёт для {top_proj.coin_name}."
+                        )
+                        continue
 
-                fair_price = calculation_result["fair_price"]
-                if isinstance(fair_price, (int, float)):
-                    fair_price = f"{fair_price:.5f}"
-                else:
-                    fair_price = phrase_by_language("comparisons_error", agent_answer.language)
+                    # Если дошли сюда, значит все три значения не None
+                    calculation_result = calculate_expected_x(
+                        entry_price=entry_price,
+                        total_supply=total_supply,
+                        fdv=fdv,
+                    )
 
-                # Формируем итоговое сообщение о сравнении
-                comparison_results += calculations_choices[agent_answer.language].format(
-                    user_coin_name=project.coin_name,
-                    project_coin_name=top_proj.coin_name,
-                    growth=(calculation_result["expected_x"] - 1.0) * 100,
-                    fair_price=fair_price,
-                )
+                    fair_price = calculation_result["fair_price"]
+                    if isinstance(fair_price, (int, float)):
+                        fair_price = f"{fair_price:.5f}"
+                    else:
+                        fair_price = phrase_by_language("comparisons_error", agent_answer.language)
+
+                    # Формируем итоговое сообщение о сравнении
+                    comparison_results += calculations_choices[agent_answer.language].format(
+                        user_coin_name=project.coin_name,
+                        project_coin_name=top_proj.coin_name,
+                        growth=(calculation_result["expected_x"] - 1.0) * 100,
+                        fair_price=fair_price,
+                    )
 
         # 9. Определяем tier проекта
         tier_answer = determine_project_tier(
@@ -303,6 +301,7 @@ async def update_agent_answers():
                     str(investing_metrics.fundraise).strip().lower() not in ["", "none", "no data", "nan"])
                 else 0
             )
+            logging.info(f"fundraising_amount --- {fundraising_amount}")
         except (ValueError, AttributeError) as e:
             logging.error(f"[{project.coin_name}] Ошибка преобразования fundraising_amount: {e}")
             fundraising_amount = 0
@@ -317,31 +316,35 @@ async def update_agent_answers():
 
         logging.info(f"[{project.coin_name}] fdv={fdv}, fundraising={fundraising_amount}, investors_percent={investors_percent}")
 
+        result_ratio = phrase_by_language("no_data", language)
+        final_score = result_ratio
+
         try:
-            if not all([
+            if all([
                 isinstance(fdv, (int, float)),
                 isinstance(fundraising_amount, (int, float)) and fundraising_amount != 0,
                 isinstance(investors_percent, (int, float))
             ]):
-                continue
-
-            result_ratio = (fdv * investors_percent) / fundraising_amount
-            final_score = f"{result_ratio:.2%}"
+                result_ratio = (fdv * investors_percent) / fundraising_amount
+                final_score = f"{result_ratio:.2%}"
 
         except Exception as e:
             logging.error(f"[{project.coin_name}] Ошибка расчета result_ratio. "
                           f"fdv={fdv}({type(fdv)}), "
                           f"fundraising={fundraising_amount}({type(fundraising_amount)}), "
                           f"investors={investors_percent}({type(investors_percent)}). Ошибка: {e}")
-            result_ratio = 0
-            final_score = "0%"
 
         logging.info(f"[{project.coin_name}] result_ratio={result_ratio}, final_score={final_score}")
 
-        if isinstance(final_score, str) and '%' in final_score:
-            final_score = float(final_score.strip('%')) / 100
+        if isinstance(final_score, str):
+            if '%' in final_score:
+                final_score = float(final_score.strip('%')) / 100
+            else:
+                final_score = final_score
         else:
             final_score = float(final_score)
+
+        logging.info(f"final score {final_score}")
 
         # analyze_project_metrics => funds_answer etc.
         (funds_answer, funds_scores, funds_score, growth_and_fall_score,) = analyze_project_metrics(
