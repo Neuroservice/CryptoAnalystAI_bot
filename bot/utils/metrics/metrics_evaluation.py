@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from bot.utils.project_data import get_project_rating
@@ -273,6 +274,8 @@ def calculate_project_score(
     """
     Функция расчета баллов по метрикам проекта.
     """
+
+    logging.info(f"----- project {fundraising} {tier} {investors_tier} {twitter_followers} {twitter_followers} {twitter_score} {tokenomics_score} {tvl} {top_100_wallet} {growth_and_fall_score} {profitability_score} {language}")
 
     # Обработка значений с использованием process_metric
     fundraising = process_metric(fundraising)

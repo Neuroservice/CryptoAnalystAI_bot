@@ -395,9 +395,11 @@ async def update_agent_answers():
             get_metric_value(social_metrics, "twitter"),
             get_metric_value(social_metrics, "twitterscore"),
             int((network_metrics.tvl / tokenomics_data.capitalization) * 100)
-            if network_metrics.tvl
-            and tokenomics_data.total_supply
-            and tokenomics_data.capitalization
+            if network_metrics
+               and network_metrics.tvl
+               and tokenomics_data
+               and tokenomics_data.total_supply
+               and tokenomics_data.capitalization
             else 0,
             round(manipulative_metrics.top_100_wallet * 100, 2)
             if manipulative_metrics and manipulative_metrics.top_100_wallet
@@ -500,79 +502,60 @@ async def update_agent_answers():
 
         logging.info(f"profit_text: --- {profit_text}")
 
+        # Безопасный парсинг distribution
         if funds_profit and funds_profit.distribution:
-            distribution_items = funds_profit.distribution.split("\n")
-            formatted_distribution = "\n".join([f"- {item}" for item in distribution_items])
+            try:
+                distribution_items = funds_profit.distribution.split("\n")
+                formatted_distribution = "\n".join([f"- {item}" for item in distribution_items])
+            except Exception as e:
+                logging.error(f"Ошибка при парсинге distribution: {e}")
+                formatted_distribution = phrase_by_language("no_token_distribution", language)
         else:
             formatted_distribution = phrase_by_language("no_token_distribution", language)
 
         logging.info(f"formatted_distribution: --- {formatted_distribution}")
 
+        cap = get_metric_value(tokenomics_data, 'capitalization', 0)
+        fdv = get_metric_value(tokenomics_data, 'fdv', 0)
+        supply = get_metric_value(tokenomics_data, 'total_supply', 0)
+        fundraise = get_metric_value(investing_metrics, 'fundraise', 0)
+        twitter_value = get_metric_value(social_metrics, 'twitter')
+        twitter_score = get_metric_value(social_metrics, 'twitterscore')
+        tvl = get_metric_value(network_metrics, 'tvl', 0)
+        top100 = get_metric_value(manipulative_metrics, 'top_100_wallet', 0)
+        investors = get_metric_value(investing_metrics, 'fund_level')
+
+        twitter_url = twitter_link[0] if twitter_link and isinstance(twitter_link, (list, tuple)) and twitter_link[0] else "N/A"
+
+        logging.info(f"cap: {cap}")
+        logging.info(f"fdv: {fdv}")
+        logging.info(f"supply: {supply}")
+        logging.info(f"fundraise: {fundraise}")
+        logging.info(f"twitter_value: {twitter_value}")
+        logging.info(f"twitter_score: {twitter_score}")
+        logging.info(f"tvl: {tvl}")
+        logging.info(f"top100: {top100}")
+        logging.info(f"investors: {investors}")
+        logging.info(f"twitter_url: {twitter_url}")
+
         formatted_metrics = [
-            format_metric(
-                "capitalization",
-                f"${round(get_metric_value(tokenomics_data, 'capitalization', 0), 0)}"
-                if get_metric_value(tokenomics_data, "capitalization")
-                else None,
-                language,
-            ),
-            format_metric(
-                "fdv",
-                f"${round(get_metric_value(tokenomics_data, 'fdv', 0), 0)}"
-                if get_metric_value(tokenomics_data, "fdv")
-                else None,
-                language,
-            ),
-            format_metric(
-                "total_supply",
-                f"{round(get_metric_value(tokenomics_data, 'total_supply', 0), 0)}"
-                if get_metric_value(tokenomics_data, "total_supply")
-                else None,
-                language,
-            ),
-            format_metric(
-                "fundraising",
-                f"${round(get_metric_value(investing_metrics, 'fundraise', 0), 0)}"
-                if get_metric_value(investing_metrics, "fundraise")
-                else None,
-                language,
-            ),
-            format_metric(
-                "twitter_followers",
-                f"{get_metric_value(social_metrics, 'twitter')} ({twitter_link[0]})"
-                if get_metric_value(social_metrics, "twitter")
-                else None,
-                language,
-            ),
-            format_metric(
-                "twitter_score",
-                f"{get_metric_value(social_metrics, 'twitterscore')}"
-                if get_metric_value(social_metrics, "twitterscore")
-                else None,
-                language,
-            ),
-            format_metric(
-                "tvl",
-                f"${round(get_metric_value(network_metrics, 'tvl', 0), 0)}"
-                if get_metric_value(network_metrics, "tvl")
-                else None,
-                language,
-            ),
-            format_metric(
-                "top_100_wallet",
-                f"{round(get_metric_value(manipulative_metrics, 'top_100_wallet', 0) * 100, 2)}%"
-                if get_metric_value(manipulative_metrics, "top_100_wallet")
-                else None,
-                language,
-            ),
-            format_metric(
-                "investors",
-                f"{get_metric_value(investing_metrics, 'fund_level')}"
-                if get_metric_value(investing_metrics, "fund_level")
-                else None,
-                language,
-            ),
+            format_metric("capitalization", f"${round(cap, 0)}" if cap else None, language),
+            format_metric("fdv", f"${round(fdv, 0)}" if fdv else None, language),
+            format_metric("total_supply", f"{round(supply, 0)}" if supply else None, language),
+            format_metric("fundraising", f"${round(fundraise, 0)}" if fundraise else None, language),
+            format_metric("twitter_followers", f"{twitter_value} ({twitter_url})" if twitter_value else None, language),
+            format_metric("twitter_score", f"{twitter_score}" if twitter_score else None, language),
+            format_metric("tvl", f"${round(tvl, 0)}" if tvl else None, language),
+            format_metric("top_100_wallet", f"{round(top100 * 100, 2)}%" if top100 else None, language),
+            format_metric("investors", investors if investors and investors != "-" else None, language),
         ]
+
+        logging.info(f"--- formatted_metrics {formatted_metrics} \n-----------------------")
+        top_100_percent = round(top100 * 100, 2) if manipulative_metrics and top100 != 0 else 0
+        tvl_percent = int((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and hasattr(
+            network_metrics, 'tvl') and tokenomics_data and hasattr(tokenomics_data, 'capitalization') else 0
+
+        logging.info(f"+++ formatted_metrics {formatted_metrics} \n+++++++++++++++++++++++++++")
 
         formatted_metrics_text = "\n".join(formatted_metrics)
         project_evaluation = phrase_by_language(
@@ -586,12 +569,8 @@ async def update_agent_answers():
             tokenomics_score=tokenomics_score,
             profitability_score=round(funds_score, 2),
             preliminary_score=int(growth_and_fall_score),
-            top_100_percent=round(manipulative_metrics.top_100_wallet * 100, 2)
-            if manipulative_metrics and manipulative_metrics.top_100_wallet
-            else 0,
-            tvl_percent=int((network_metrics.tvl / tokenomics_data.capitalization) * 100)
-            if network_metrics.tvl and tokenomics_data.total_supply
-            else 0,
+            top_100_percent=top_100_percent,
+            tvl_percent=tvl_percent,
         )
 
         logging.info(f"project_evaluation ------------ {project_evaluation}")
