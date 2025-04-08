@@ -98,11 +98,22 @@ async def parse_periodically(session: AsyncSession):
                 await asyncio.gather(
                     fetch_crypto_data(session),
                     update_agent_answers(),
-                    create_backup(),
                 )
                 logging.info("Все задачи выполнены успешно.")
             except Exception as e:
                 logging.error(f"Ошибка при выполнении обновления: {e}")
+
+
+async def backup_database():
+    """Создаёт бэкап базы данных каждый день."""
+    while True:
+        try:
+            await create_backup()
+            logging.info(f"Бэкап создан")
+        except Exception as e:
+            logging.error(f"Ошибка при создании бэкапа: {e}")
+
+        await asyncio.sleep(60 * 60 * 24)
 
 
 async def main():
@@ -147,6 +158,7 @@ async def main():
             # Логируем старт таски перед ее запуском
             logging.info("Запуск периодического обновления данных.")
             asyncio.create_task(parse_periodically(session_local))
+            asyncio.create_task(backup_database())
 
             await dp.start_polling(bot)
 
