@@ -386,6 +386,8 @@ async def update_agent_answers():
 
         logging.info(f"[{project.coin_name}] investors_level={investors_level}, investors_level_score={investors_level_score}")
 
+        logging.info(f"[{project.coin_name}] manipulative_metrics.top_100_wallet={manipulative_metrics.top_100_wallet}")
+
         # 14. Считаем рейтинг проекта
         project_rating_result = calculate_project_score(
             get_metric_value(investing_metrics, "fundraise"),
@@ -394,6 +396,7 @@ async def update_agent_answers():
             investors_level_score,
             get_metric_value(social_metrics, "twitter"),
             get_metric_value(social_metrics, "twitterscore"),
+            tokemonic_score,
             int((network_metrics.tvl / tokenomics_data.capitalization) * 100)
             if network_metrics
                and network_metrics.tvl
@@ -405,7 +408,6 @@ async def update_agent_answers():
             if manipulative_metrics and manipulative_metrics.top_100_wallet
             else 0,
             int(growth_and_fall_score),
-            tokemonic_score,
             funds_scores,
             language,
         )
@@ -551,9 +553,9 @@ async def update_agent_answers():
         ]
 
         logging.info(f"--- formatted_metrics {formatted_metrics} \n-----------------------")
-        top_100_percent = round(top100 * 100, 2) if manipulative_metrics and top100 != 0 else 0
+        top_100_percent = round(top100 * 100, 2) if top100 and top100 != 0 else 0
         tvl_percent = int((network_metrics.tvl / tokenomics_data.capitalization) * 100) if network_metrics and hasattr(
-            network_metrics, 'tvl') and tokenomics_data and hasattr(tokenomics_data, 'capitalization') else 0
+            network_metrics, 'tvl') and network_metrics.tvl and tokenomics_data and hasattr(tokenomics_data, 'capitalization') and tokenomics_data.capitalization else 0
 
         logging.info(f"+++ formatted_metrics {formatted_metrics} \n+++++++++++++++++++++++++++")
 
