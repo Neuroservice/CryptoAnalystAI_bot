@@ -1332,7 +1332,7 @@ def calculate_expected_x(entry_price: float, total_supply: float, fdv: float):
     """
 
     try:
-        expected_x = fdv / (entry_price * total_supply)
+        expected_x = fdv / (entry_price * total_supply) if entry_price and total_supply else 0
         fair_price = entry_price * expected_x if total_supply else 0
 
         return {
