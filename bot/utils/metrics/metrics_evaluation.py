@@ -25,7 +25,6 @@ def determine_project_tier(
     fundraising: float,
     twitter_followers: str,
     twitter_score: int,
-    category: str,
     investors: str,
     language: str,
 ):
@@ -43,7 +42,6 @@ def determine_project_tier(
             fundraising,
             twitter_followers,
             twitter_score,
-            category,
             investors,
         ]
     ):
@@ -56,9 +54,7 @@ def determine_project_tier(
     for investor in investors:
         if "(" in investor and ")" in investor:
             name, tier = investor.rsplit("(", 1)
-            tier = (
-                tier.strip(")").replace("+", "").strip()
-            )  # Убираем "+" и пробелы
+            tier = tier.strip(")").replace("+", "").strip()  # Убираем "+" и пробелы
 
             # Приводим к формату "Tier: {цифра}"
             if tier.upper().startswith("TIER"):
@@ -83,8 +79,7 @@ def determine_project_tier(
             and fundraising != "N/A"
             and int(fundraising) >= int(criteria["fundraising"])
             and twitter_followers != "N/A"
-            and int(clean_twitter_subs(twitter_followers))
-            >= int(clean_twitter_subs(criteria["twitter_followers"]))
+            and int(clean_twitter_subs(twitter_followers)) >= int(clean_twitter_subs(criteria["twitter_followers"]))
             and twitter_score != "N/A"
             and int(twitter_score) >= int(criteria["twitter_score"])
         )
@@ -93,23 +88,20 @@ def determine_project_tier(
             print(f"Metrics do not fit for {tier}, moving to the next tier.")
             continue
 
-        print("investor_counts:", investor_counts)
-        if investor_counts.get("Tier: 1", 0) > 0:
+        if "Tier: 1" in parsed_investors:
             return "Tier 1"
-        elif investor_counts.get("Tier: 2", 0) > 0:
+        elif "Tier: 2" in investor_counts:
             return "Tier 2"
-        elif investor_counts.get("Tier: 3", 0) > 0:
+        elif "Tier: 3" in investor_counts:
             return "Tier 3"
-        elif investor_counts.get("Tier: 4", 0) > 0:
+        elif "Tier: 4" in investor_counts:
             return "Tier 4"
 
     print("Project does not fit into any tier, assigning TIER 5.")
     return "Tier 5"
 
 
-def calculate_tokenomics_score(
-    project_name: str, comparisons: list[dict[str, dict[str, Any]]]
-):
+def calculate_tokenomics_score(project_name: str, comparisons: list[dict[str, dict[str, Any]]]):
     """
     Функция расчета баллов по оценке токеномики проекта.
     """
@@ -160,6 +152,8 @@ def analyze_project_metrics(
     growth_and_fall_result = ""
     detailed_report = ""
 
+    print("final_score: ", final_score)
+
     if type(final_score) is not float and final_score != "Нет данных":
         final_score = float(final_score[:-1])
 
@@ -169,21 +163,14 @@ def analyze_project_metrics(
             detailed_report += f"  Баллы доходности фондов = Процент доходности фондов / 20 = {funds_score}\n"
         elif 201 <= final_score <= 1000:
             funds_score = (200 / 20) + ((final_score - 200) / 100) * (-0.5)
-            detailed_report += f"  Баллы доходности фондов = (200 / 20) + (({final_score} - 200) / 100) * (-0.5) = {funds_score}\n"
-        elif 1001 <= final_score <= 3000:
-            funds_score = (
-                (200 / 20)
-                + (800 / 100) * (-0.5)
-                + ((final_score - 1000) / 100) * (-1)
+            detailed_report += (
+                f"  Баллы доходности фондов = (200 / 20) + (({final_score} - 200) / 100) * (-0.5) = {funds_score}\n"
             )
+        elif 1001 <= final_score <= 3000:
+            funds_score = (200 / 20) + (800 / 100) * (-0.5) + ((final_score - 1000) / 100) * (-1)
             detailed_report += f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (({final_score} - 1000) / 100) * (-1) = {funds_score}\n"
         elif 3001 <= final_score <= 5000:
-            funds_score = (
-                (200 / 20)
-                + (800 / 100) * (-0.5)
-                + (2000 / 100) * (-1)
-                + ((final_score - 3000) / 100) * (-1.5)
-            )
+            funds_score = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + ((final_score - 3000) / 100) * (-1.5)
             detailed_report += f"  Баллы доходности фондов = (200 / 20) + (800 / 100) * (-0.5) + (2000 / 100) * (-1) + (({final_score} - 3000) / 100) * (-1.5) = {funds_score}\n"
         elif final_score > 5000:
             funds_score = (
@@ -224,9 +211,7 @@ def analyze_project_metrics(
 
             growth_and_fall_result = f"Проект {'потерял' if growth_and_fall_score < 0 else 'получил'} {round(abs(growth_and_fall_score), 2)} баллов по показателю роста от минимальных значений и падения от максимальных значений.\n"
     else:
-        growth_and_fall_result = (
-            "Данные для расчета роста и падения отсутствуют. 0 баллов.\n"
-        )
+        growth_and_fall_result = "Данные для расчета роста и падения отсутствуют. 0 баллов.\n"
 
     # Логика расчета топ-100 кошельков
     if top_100_percentage != "N/A":
@@ -257,14 +242,10 @@ def analyze_project_metrics(
         tvl_result = "Данные для расчета процента заблокированных монет отсутствуют. 0 баллов.\n"
 
     # Общий отчет
-    report = (
-        funds_result + growth_and_fall_result + top_100_result + tvl_result
-    )
+    report = funds_result + growth_and_fall_result + top_100_result + tvl_result
     detailed_report += report
 
-    total_score = (
-        tvl_score + top_100_score + growth_and_fall_score + funds_score
-    )
+    total_score = tvl_score + top_100_score + growth_and_fall_score + funds_score
     detailed_report += f"\n[Total Score]: {total_score}\n"
 
     return detailed_report, total_score, funds_score, growth_and_fall_score
@@ -341,11 +322,9 @@ def calculate_project_score(
 
     fundraising_score = round(fundraising / FUNDRAISING_DIVISOR, 2)
     followers_score = round(twitter_followers / FOLLOWERS_DIVISOR, 2)
-    twitter_engagement_score = round(
-        twitter_score * TWITTER_SCORE_MULTIPLIER, 2
-    )
+    twitter_engagement_score = round(twitter_score * TWITTER_SCORE_MULTIPLIER, 2)
 
-    preliminary_score = (
+    preliminary_score = round(
         fundraising_score
         + investors_level_score
         + followers_score
@@ -354,16 +333,8 @@ def calculate_project_score(
         + tvl
         + top_100_wallet
         + growth_and_fall_score
-        + profitability_score
-    )
-
-    tier_coefficient = TIER_COEFFICIENTS.get(
-        tier, NO_COEFFICIENT[0] if language == "RU" else NO_COEFFICIENT[1]
-    )
-    final_score = (
-        round(preliminary_score * tier_coefficient, 2)
-        if tier_coefficient not in NO_COEFFICIENT
-        else round(preliminary_score, 2)
+        + profitability_score,
+        2,
     )
 
     calculations_summary = CALCULATIONS_SUMMARY_STR.format(
@@ -373,12 +344,10 @@ def calculate_project_score(
         twitter_engagement_score=twitter_engagement_score,
         tokenomics_score=tokenomics_score,
         profitability_score=profitability_score,
-        preliminary_score=preliminary_score,
-        tier_coefficient=tier_coefficient,
-        final_score=final_score,
+        final_score=preliminary_score,
     )
 
-    project_rating = get_project_rating(final_score, language)
+    project_rating = get_project_rating(preliminary_score, language)
 
     return {
         "fundraising_score": fundraising_score,
@@ -388,8 +357,6 @@ def calculate_project_score(
         "tokenomics_score": tokenomics_score,
         "profitability_score": profitability_score,
         "preliminary_score": preliminary_score,
-        "tier_coefficient": tier_coefficient,
-        "final_score": final_score,
         "project_rating": project_rating,
         "calculations_summary": calculations_summary,
     }

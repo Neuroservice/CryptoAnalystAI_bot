@@ -21,6 +21,7 @@ phrase_dict = {
         "calculations_end": "Завершение расчетов. Чтобы начать снова пользоваться ботом, введите команду /start.",
         "stablecoins_answer": "Вы выбрали стейблкоин. Он плохо подходит для инвестирования, так как его стоимость фиксирована. Попробуйте другой токен.",
         "fundamental_tokens_answer": "Вы выбрали фундаментальный токен. Он подходит для долгосрочных инвестиций на 5 лет и более.",
+        "scam_tokens_answer": "Данный проект определен командой к категории 'Повышенные риски, возможный скам'",
         "input_next_token_for_analysis": "Введите тикер следующего токена (например STRK, SUI) или введите /exit для завершения:",
         "input_next_token_for_basic_report": "Введите тикер следующего токена (например APT, ZK) или введите /exit для завершения:",
         "overal_project_rating": "Общая оценка проекта:",
@@ -64,6 +65,8 @@ phrase_dict = {
         "comparisons_error": "Ошибка в расчетах",
         "no_data": "Нет данных",
         "no_token_distribution": "Нет данных по распределению токенов",
+        "category_in_garbage_list": "Категория проекта относиться к списку категорий, которые нуждаются в дополнительной проверке... Попробуйте другой токен.",
+        "not_in_top_cmc": "Вы ввели неправильный тикер токена, либо токен не находится в списке топ 1000 платформы Coin Market Cap и представляет высокие риски для инвестирования",
         "calculation_type_choice": """
 Если вы хотите просто рассчитать цену токена, на основании похожих проектов, выберите кнопку 'Блок ребалансировки портфеля'.\n\n
 Если хотите полную сравнительную характеристику по токенам и ребалансировку портфеля, выберите кнопку 'Блок анализа и оценки проектов'.
@@ -81,7 +84,7 @@ phrase_dict = {
 Также вы можете сменить язык бота, используя команду '/language'.\n
 """,
         "investor_profit_text": (
-            "($ {capitalization} (Капитализация проекта) * {investors_percent} "
+            "($ {fdv} (FDV) * {investors_percent} "
             "(Investors)) / $ {fundraising_amount} (Сумма сбора средств от инвесторов (Fundraising))"
             "= {result_ratio} == {final_score}"
         ),
@@ -95,7 +98,6 @@ Twitter Score = {twitter_engagement_score}
 Рост с минимальных значений и падение с максимальных значений = {preliminary_score}
 Процент нахождения токенов на топ 100 кошельков блокчейна = {top_100_percent}
 Процент общих заблокированных активов (TVL) = {tvl_percent}
-Понижающий коэффициент: {tier_coefficient}
 """,
     },
     "ENG": {
@@ -108,6 +110,7 @@ Twitter Score = {twitter_engagement_score}
         "calculations_end": "Completing the calculations. To start using the bot again, enter the /start command.",
         "stablecoins_answer": "You have chosen a stablecoin. It is not good for investing because its value is fixed. Try another token.",
         "fundamental_tokens_answer": "You have chosen a fundamental token. It is suitable for long-term investments for 5 years or more.",
+        "scam_tokens_answer": "This project was categorized by the team as 'Increased risks, possible scam'",
         "input_next_token_for_analysis": "Enter the ticker of the next token (e.g. STRK, SUI) or enter /exit to complete:",
         "input_next_token_for_basic_report": "Enter the ticker of the next token (e.g. APT, ZK) or type /exit to complete:",
         "overal_project_rating": "Overall project evaluation:",
@@ -151,6 +154,8 @@ Twitter Score = {twitter_engagement_score}
         "comparisons_error": "Error on comparisons",
         "no_data": "No data",
         "no_token_distribution": "No token distribution data",
+        "category_in_garbage_list": "Project category refers to the list of categories that need additional verification... Try a different token.",
+        "not_in_top_cmc": "You entered the wrong token ticker, or the token is not in the top 1000 list of the Coin Market Cap platform and poses high risks for investment",
         "calculation_type_choice": """
 If you want to simply calculate the token price based on similar projects, choose the 'Block of portfolio rebalancing' button.\n\n
 If you want a full comparison of token characteristics, choose the 'Block of projects analysis and evaluation' button.
@@ -168,7 +173,7 @@ Project evaluation system: (in development)\n\n\n
 You can also change the bot's language by using the '/language' command.\n
 """,
         "investor_profit_text": (
-            "($ {capitalization} (Project capitalization) * {investors_percent} "
+            "($ {fdv} (FDV) * {investors_percent} "
             "(Investors)) / $ {fundraising_amount} (Total fundraising amount)"
             "= {result_ratio} == {final_score}"
         ),
@@ -182,7 +187,6 @@ Investor profitability = {profitability_score}
 Growth from minimum values and decline from maximum values = {preliminary_score}
 Percentage of tokens on the top 100 blockchain wallets = {top_100_percent}
 Percentage of total blocked assets (TVL) = {tvl_percent}
-Decreasing coefficient: {tier_coefficient}
 """,
     },
 }

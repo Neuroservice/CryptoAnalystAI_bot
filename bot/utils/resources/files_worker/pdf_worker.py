@@ -1,4 +1,6 @@
 import re
+from typing import List, Dict
+
 import fitz
 
 from io import BytesIO
@@ -59,22 +61,22 @@ class PDF(FPDF):
 
 
 async def generate_pdf(
-    funds_profit,
-    tier_answer,
-    language,
-    formatted_metrics_text,
-    profit_text,
-    red_green_flags,
-    top_and_bottom_answer,
-    calculations,
-    project_evaluation,
-    overal_final_score,
-    project_rating_text,
-    current_date,
-    token_description,
-    chosen_project,
-    lower_name,
-    coin_name,
+    funds_profit: str,
+    tier_answer: str,
+    language: str,
+    formatted_metrics_text: str,
+    profit_text: str,
+    red_green_flags: str,
+    top_and_bottom_answer: str,
+    calculations: List[Dict[str, str]],
+    project_evaluation: str,
+    overal_final_score: float,
+    project_rating_text: str,
+    current_date: str,
+    token_description: str,
+    categories: List[str],
+    lower_name: str,
+    coin_name: str,
 ):
     """
     Генерация PDF файла с проектными данными и метриками.
@@ -105,9 +107,7 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.cell(
-        0, 6, phrase_by_language("project_description", language), 0, 1, "L"
-    )
+    pdf.cell(0, 6, phrase_by_language("project_description", language), 0, 1, "L")
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
     pdf.multi_cell(0, 6, token_description, 0)
@@ -117,7 +117,8 @@ async def generate_pdf(
     pdf.cell(0, 6, phrase_by_language("project_category", language), 0, 1, "L")
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
-    pdf.multi_cell(0, 6, chosen_project, 0)
+    categories_str = ", ".join(categories)
+    pdf.multi_cell(0, 6, categories_str, 0)
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
@@ -140,9 +141,7 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.multi_cell(
-        0, 6, phrase_by_language("funds_profit_scores", language), 0
-    )
+    pdf.multi_cell(0, 6, phrase_by_language("funds_profit_scores", language), 0)
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
     pdf.multi_cell(0, 6, profit_text, 0)
@@ -156,9 +155,7 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.multi_cell(
-        0, 6, phrase_by_language("comparing_calculations", language), 0
-    )
+    pdf.multi_cell(0, 6, phrase_by_language("comparing_calculations", language), 0)
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
     pdf.multi_cell(0, 6, calculations, 0)
@@ -213,9 +210,7 @@ async def generate_pdf(
     pdf.ln(0.1)
 
     pdf.set_font("TimesNewRoman", style="I", size=12)
-    pdf.multi_cell(
-        0, 6, f"\n{phrase_by_language('ai_answer_caution', language)}", 0
-    )
+    pdf.multi_cell(0, 6, f"\n{phrase_by_language('ai_answer_caution', language)}", 0)
     pdf.ln(0.1)
 
     pdf_output = BytesIO()
@@ -244,9 +239,7 @@ def create_pdf_file(calc: Calculation, language: str, answer: str = None):
     pdf.add_font("TimesNewRoman", "B", TIMES_NEW_ROMAN_BOLD_PATH, uni=True)
     pdf.add_font("TimesNewRoman", "I", TIMES_NEW_ROMAN_ITALIC_PATH, uni=True)
 
-    agent_answer = (
-        calc.agent_answer if calc.agent_answer else "Ответ модели отсутствует"
-    )
+    agent_answer = calc.agent_answer if calc.agent_answer else "Ответ модели отсутствует"
     pdf.set_font("TimesNewRoman", size=12)
 
     selected_patterns = PATTERNS["RU"] if language == "RU" else PATTERNS["EN"]
@@ -275,17 +268,11 @@ def create_pdf_file(calc: Calculation, language: str, answer: str = None):
             content_start = end
             next_header_match = None
             for next_pattern in selected_patterns:
-                next_header_match = re.search(
-                    next_pattern, text_to_parse[end:], re.IGNORECASE
-                )
+                next_header_match = re.search(next_pattern, text_to_parse[end:], re.IGNORECASE)
                 if next_header_match:
                     break
 
-            content_end = (
-                next_header_match.start() + end
-                if next_header_match
-                else len(text_to_parse)
-            )
+            content_end = next_header_match.start() + end if next_header_match else len(text_to_parse)
             content = text_to_parse[content_start:content_end].strip()
 
             if re.search(AI_HELP_RU, content, re.DOTALL):
@@ -305,9 +292,7 @@ def create_pdf_file(calc: Calculation, language: str, answer: str = None):
                         stripped_line = " ".join(line.split())
                         if stripped_line.startswith("-"):
                             cleaned_lines.append(stripped_line)
-                        elif cleaned_lines and not cleaned_lines[-1].endswith(
-                            ":"
-                        ):
+                        elif cleaned_lines and not cleaned_lines[-1].endswith(":"):
                             cleaned_lines[-1] += f" {stripped_line}"
                         else:
                             cleaned_lines.append(stripped_line)
@@ -324,9 +309,7 @@ def create_pdf_file(calc: Calculation, language: str, answer: str = None):
                 pdf.ln(0.1)
 
                 pdf.set_font("TimesNewRoman", style="I", size=12)
-                pdf.multi_cell(
-                    0, 6, f"\n\n{phrase_by_language('ai_help', language)}", 0
-                )
+                pdf.multi_cell(0, 6, f"\n\n{phrase_by_language('ai_help', language)}", 0)
 
                 pdf.ln(0.1)
 
@@ -362,9 +345,7 @@ def create_pdf_file(calc: Calculation, language: str, answer: str = None):
                         stripped_line = " ".join(line.split())
                         if stripped_line.startswith("-"):
                             cleaned_lines.append(stripped_line)
-                        elif cleaned_lines and not cleaned_lines[-1].endswith(
-                            ":"
-                        ):
+                        elif cleaned_lines and not cleaned_lines[-1].endswith(":"):
                             cleaned_lines[-1] += f" {stripped_line}"
                         else:
                             cleaned_lines.append(stripped_line)
@@ -383,9 +364,7 @@ def create_pdf_file(calc: Calculation, language: str, answer: str = None):
                 # Текст с курсивом (фраза и ссылка)
                 pdf.set_font("TimesNewRoman", style="I", size=12)
                 # Сначала выводим обычный текст
-                pdf.multi_cell(
-                    0, 6, f"\n\n{phrase_by_language('ai_help', language)}", 0
-                )
+                pdf.multi_cell(0, 6, f"\n\n{phrase_by_language('ai_help', language)}", 0)
                 pdf.ln(0.1)
                 # Устанавливаем цвет для ссылки (синий)
                 pdf.set_text_color(0, 0, 255)
@@ -421,9 +400,7 @@ def create_pdf_file(calc: Calculation, language: str, answer: str = None):
                 ]:
                     content_cleaned = " ".join(content.split())
 
-                content_cleaned = extract_old_calculations(
-                    content_cleaned, language
-                )
+                content_cleaned = extract_old_calculations(content_cleaned, language)
                 pdf.multi_cell(0, 6, content_cleaned, 0)
 
                 pdf.ln(6)

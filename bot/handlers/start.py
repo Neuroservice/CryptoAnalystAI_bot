@@ -22,6 +22,7 @@ async def start_command(message: types.Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
 
+    # Получаем пользователя из Redis или базы данных
     user, created = await get_or_create(
         User,
         defaults={"telegram_id": user_id, "language": "ENG"},
@@ -33,9 +34,7 @@ async def start_command(message: types.Message, state: FSMContext):
 
         if language:
             await message.answer(
-                await phrase_by_user(
-                    "hello_phrase", user_id, session_local, language
-                ),
+                await phrase_by_user("hello_phrase", user_id, language),
                 reply_markup=await main_menu_keyboard(user_id=user_id),
             )
         else:
@@ -44,9 +43,7 @@ async def start_command(message: types.Message, state: FSMContext):
                 reply_markup=language_keyboard(),
             )
     else:
-        await message.answer(
-            "Ошибка при работе с базой данных. Попробуйте позже."
-        )
+        await message.answer("Ошибка при работе с базой данных. Попробуйте позже.")
 
 
 @start_router.message(lambda message: message.text in ["Русский", "English"])
@@ -70,10 +67,8 @@ async def language_choice(message: types.Message):
             await session.commit()
 
         await message.answer(
-            await phrase_by_user("hello_phrase", user_id, session_local),
+            await phrase_by_user("hello_phrase", user_id),
             reply_markup=await main_menu_keyboard(user_id=user_id),
         )
     else:
-        await message.answer(
-            "Ошибка при работе с базой данных. Попробуйте позже."
-        )
+        await message.answer("Ошибка при работе с базой данных. Попробуйте позже.")

@@ -1,3 +1,5 @@
+import logging
+
 from typing import Any
 
 from bot.utils.common.sessions import SessionLocal
@@ -5,16 +7,19 @@ from bot.utils.common.sessions import SessionLocal
 
 def save_execute(f: Any):
     """
-    Декоратор для управления сессией БД.
-    Создает новую сессию, передает её в функцию и автоматически выполняет commit/rollback.
+    Декоратор для оборачивания функций, работающих с базой данных.
+    Автоматически управляет сессией и передаёт её в функцию.
     """
 
     async def wrapper(*args, **kwargs):
-        # Создаем новую сессию для каждого вызова функции
         async with SessionLocal() as session:
-            # Используем транзакционный контекст, чтобы автоматически выполнить commit/rollback
-            async with session.begin():
+            try:
                 result = await f(session, *args, **kwargs)
+                await session.commit()
                 return result
+            except Exception as e:
+                await session.rollback()
+                logging.error(f"Ошибка в {f.__name__}: {e}")
+                raise e
 
     return wrapper
