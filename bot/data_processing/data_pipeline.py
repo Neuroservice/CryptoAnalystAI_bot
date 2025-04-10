@@ -1,7 +1,11 @@
 import asyncio
 import logging
 
+from tenacity import retry, stop_after_attempt, wait_fixed
+
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
 from bot.database.db_operations import get_one, update_or_create, get_or_create, update_or_create_token, get_all
+from bot.utils.common.params import get_header_params, get_cryptocompare_params_with_full_name, get_cryptocompare_params
 from bot.database.models import (
     Project,
     InvestingMetrics,
@@ -17,17 +21,15 @@ from bot.database.models import (
 )
 from bot.utils.common.consts import (
     EXPECTED_KEYS,
-    TICKERS,
-    PROJECT_TYPES,
     START_TITLE_FOR_GARBAGE_CATEGORIES,
     END_TITLE_FOR_GARBAGE_CATEGORIES,
     START_TITLE_FOR_STABLECOINS,
     START_TITLE_FOR_FUNDAMENTAL,
     START_TITLE_FOR_SCAM_TOKENS,
     END_TITLE_FOR_STABLECOINS,
-    END_TITLE_FOR_FUNDAMENTAL, REPLACED_PROJECT_TWITTER,
+    END_TITLE_FOR_FUNDAMENTAL,
+    REPLACED_PROJECT_TWITTER,
 )
-from bot.utils.common.params import get_header_params, get_cryptocompare_params_with_full_name, get_cryptocompare_params
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
     get_lower_name,
@@ -39,13 +41,12 @@ from bot.utils.project_data import (
     fetch_top_100_wallets,
     fetch_tvl_data,
     fetch_cryptocompare_data,
-    get_top_projects_by_capitalization,
     fetch_categories,
     fetch_top_tokens,
 )
-from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_static_data():
     """
     Обновление данных, которые меняются редко (раз в 3 месяца).
@@ -75,10 +76,11 @@ async def update_static_data():
 
             for project in top_1000_projects:
                 success = await fetch_static_data(project.coin_name)
+
+                await asyncio.sleep(20)
+
                 if not success:
                     logging.error(f"Skipping {project.coin_name} due to static data fetch error")
-
-                await asyncio.sleep(1)  # Минимальная задержка между запросами
 
             logging.info("Обновление статических данных завершено. Ожидание 3 месяца...")
         except Exception as e:
@@ -87,6 +89,7 @@ async def update_static_data():
         await asyncio.sleep(60 * 60 * 24 * 30 * 3)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_weekly_data():
     """
     Обновление данных, которые меняются раз в неделю.
@@ -102,9 +105,6 @@ async def update_weekly_data():
             fundamental = set(load_document_for_garbage_list(START_TITLE_FOR_FUNDAMENTAL, END_TITLE_FOR_FUNDAMENTAL))
             scam_tokens = set(load_document_for_garbage_list(START_TITLE_FOR_SCAM_TOKENS))
 
-            tokens_task = asyncio.create_task(parse_tokens_weekly())
-            categories_task = asyncio.create_task(parse_categories_weekly())
-
             # Фильтруем токены
             valid_projects = [
                 project
@@ -119,12 +119,11 @@ async def update_weekly_data():
 
             for project in top_1000_projects:
                 success = await fetch_weekly_data(project.coin_name)
+
+                await asyncio.sleep(20)
+
                 if not success:
                     logging.error(f"Skipping {project.coin_name} due to weekly data fetch error")
-
-                await asyncio.sleep(1)
-
-            await asyncio.gather(tokens_task, categories_task)
 
             logging.info("Обновление недельных данных завершено. Ожидание 7 дней...")
         except Exception as e:
@@ -134,6 +133,7 @@ async def update_weekly_data():
         await asyncio.sleep(60 * 60 * 24 * 7)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_dynamic_data():
     """
     Обновление динамических данных (ежедневно).
@@ -165,11 +165,10 @@ async def update_dynamic_data():
                 try:
                     success = await fetch_dynamic_data(project.coin_name)
 
+                    await asyncio.sleep(20)
+
                     if not success:
                         logging.error(f"Skipping {project.coin_name} due to data fetch error")
-                        continue
-
-                    await asyncio.sleep(1)
 
                 except Exception as error:
                     logging.error(f"Error processing dynamic data for {project.coin_name}: {error}")
@@ -182,6 +181,7 @@ async def update_dynamic_data():
         await asyncio.sleep(60 * 60 * 24)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def update_current_price():
     """
     Обновление текущей и максимальной цен раз в 6 часов.
@@ -213,11 +213,11 @@ async def update_current_price():
                 try:
                     success = await fetch_current_price(project.coin_name)
 
+                    await asyncio.sleep(20)
+
                     if not success:
                         logging.error(f"Skipping {project.coin_name} due to data fetch error")
                         continue
-
-                    await asyncio.sleep(1)
 
                 except Exception as error:
                     logging.error(f"Error processing dynamic data for {project.coin_name}: {error}")
@@ -230,6 +230,7 @@ async def update_current_price():
         await asyncio.sleep(60 * 60 * 12)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_static_data(symbol: str) -> bool:
     """
     Получает и обновляет статические данные (раз в 3 месяца).
@@ -290,6 +291,7 @@ async def fetch_static_data(symbol: str) -> bool:
         return False
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_weekly_data(symbol: str) -> bool:
     """
     Получает и обновляет еженедельные данные.
@@ -369,6 +371,7 @@ async def fetch_weekly_data(symbol: str) -> bool:
         return False
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_current_price(symbol: str):
     """
     Получает/обновляет текущую и максимальную цены для указанного токена.
@@ -439,6 +442,7 @@ async def fetch_current_price(symbol: str):
         logging.error(f"Ошибка при получении цены {symbol}: {e}")
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_dynamic_data(symbol: str) -> bool:
     """
     Получает и обновляет данные о проекте.
@@ -454,14 +458,7 @@ async def fetch_dynamic_data(symbol: str) -> bool:
             logging.error(f"Project not found for {symbol}")
             return False
 
-        # Получаем дополнительные данные о проекте
-        twitter_name, description, lower_name, categories = await get_twitter_link_by_symbol(symbol)
-        if not lower_name:
-            lower_name = await get_lower_name(symbol)
-
         # Подготавливаем параметры для API-запросов
-        cryptocompare_params = get_cryptocompare_params(symbol)
-        cryptocompare_params_with_full_coin_name = get_cryptocompare_params_with_full_name(lower_name.upper())
         header_params = get_header_params(symbol)
 
         # Получаем данные с CoinMarketCap или CoinGecko
@@ -488,15 +485,6 @@ async def fetch_dynamic_data(symbol: str) -> bool:
             defaults={"capitalization": capitalization, "fdv": fdv},
         )
 
-        # Обновление манипулятивных метрик
-        investing_metrics = await get_one(InvestingMetrics, project_id=project.id)
-        if investing_metrics and fdv and investing_metrics.fundraise:
-            await update_or_create(
-                ManipulativeMetrics,
-                project_id=project.id,
-                defaults={"fdv_fundraise": fdv / investing_metrics.fundraise},
-            )
-
         logging.info(f"Successfully updated project data for {symbol}")
         return True
 
@@ -505,6 +493,7 @@ async def fetch_dynamic_data(symbol: str) -> bool:
         return False
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def parse_categories_weekly():
     """
     Еженедельно парсит категории криптовалют и сохраняет только не-мусорные категории.
@@ -531,6 +520,7 @@ async def parse_categories_weekly():
         await asyncio.sleep(7 * 24 * 60 * 60)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def parse_tokens_weekly():
     """
     Еженедельно парсит топ-1000 токенов CoinMarketCap, исключая стейблкоины и скам-токены.
@@ -580,7 +570,7 @@ async def parse_tokens_weekly():
                     if not weekly_data_success:
                         logging.error(f"Weekly data fetch failed for {token}")
 
-                await asyncio.sleep(1)
+                    await asyncio.sleep(15)
 
             logging.info("Обновление списка токенов завершено. В базе 1000 отфильтрованных токенов.")
         except Exception as e:

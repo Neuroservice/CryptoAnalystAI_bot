@@ -1,17 +1,15 @@
+import logging
 import re
-from typing import List, Dict
-
 import fitz
 
-from io import BytesIO
-from PIL import Image, ImageDraw
 from fpdf import FPDF
+from io import BytesIO
+from typing import List, Dict
+from PIL import Image, ImageDraw
 
 from bot.database.models import Calculation
-from bot.utils.resources.bot_phrases.bot_phrase_handler import (
-    phrase_by_language,
-)
 from bot.utils.validations import extract_old_calculations
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_language
 from bot.utils.common.consts import (
     TIMES_NEW_ROMAN_PATH,
     TIMES_NEW_ROMAN_BOLD_PATH,
@@ -68,7 +66,7 @@ async def generate_pdf(
     profit_text: str,
     red_green_flags: str,
     top_and_bottom_answer: str,
-    calculations: List[Dict[str, str]],
+    calculations: str,
     project_evaluation: str,
     overal_final_score: float,
     project_rating_text: str,
@@ -90,19 +88,7 @@ async def generate_pdf(
     pdf.add_font("TimesNewRoman", "I", TIMES_NEW_ROMAN_ITALIC_PATH, uni=True)
     pdf.set_font("TimesNewRoman", size=12)
 
-    pdf.cell(
-        0,
-        6,
-        phrase_by_language(
-            "project_analysis",
-            language,
-            lower_name=lower_name,
-            ticker=coin_name,
-        ),
-        0,
-        1,
-        "L",
-    )
+    pdf.cell(0, 6, phrase_by_language("project_analysis", language, lower_name=lower_name, ticker=coin_name), 0, 1, "L")
     pdf.cell(0, 6, current_date, 0, 1, "L")
     pdf.ln(6)
 
@@ -122,12 +108,7 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.multi_cell(
-        0,
-        6,
-        phrase_by_language("project_metrics", language, tier=tier_answer),
-        0,
-    )
+    pdf.multi_cell(0, 6, phrase_by_language("project_metrics", language, tier=tier_answer), 0)
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)
     pdf.multi_cell(0, 6, formatted_metrics_text, 0)
@@ -162,14 +143,7 @@ async def generate_pdf(
     pdf.ln(6)
 
     pdf.set_font("TimesNewRoman", style="B", size=12)
-    pdf.cell(
-        0,
-        6,
-        f"{phrase_by_language('overall_evaluation', language)}",
-        0,
-        0,
-        "L",
-    )
+    pdf.cell(0, 6, f"{phrase_by_language('overall_evaluation', language)}", 0, 0, "L")
     # pdf.cell(0, 6, f"{f'Оценка проекта:' if language == 'RU' else f'Overall evaluation:'}", 0, 0, 'L')
     pdf.set_font("TimesNewRoman", size=12)
     pdf.ln(0.1)

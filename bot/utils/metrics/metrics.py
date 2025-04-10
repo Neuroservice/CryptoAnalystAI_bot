@@ -1,16 +1,13 @@
 import logging
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from bot.utils.common.consts import TICKERS
+from bot.utils.resources.exceptions.exceptions import ExceptionError
 from bot.database.db_operations import (
     get_one,
     update_or_create,
     get_or_create,
     create_association,
 )
-from bot.utils.common.consts import TICKERS
-from bot.utils.resources.exceptions.exceptions import ExceptionError
-from bot.utils.common.decorators import save_execute
 from bot.database.models import (
     BasicMetrics,
     TopAndBottom,
@@ -118,7 +115,6 @@ async def update_network_metrics(
                 project_id=project_id,
                 defaults={
                     "tvl": last_tvl,
-                    "tvl_fdv": last_tvl / (price * total_supply) if price * total_supply else 0,
                 },
             )
 
@@ -140,7 +136,6 @@ async def update_manipulative_metrics(
             ManipulativeMetrics,
             project_id=project_id,
             defaults={
-                "fdv_fundraise": (price * total_supply) / fundraise if fundraise else None,
                 "top_100_wallet": top_100_wallets,
             },
         )
@@ -167,8 +162,8 @@ async def update_market_metrics(project_id: int, market_metrics: dict, top_and_b
 
     try:
         if market_metrics:
-            fail_high, growth_low = market_metrics[0]
-            max_price, min_price = top_and_bottom[0]
+            fail_high, growth_low, _, _ = market_metrics[0]
+            _, _, max_price, min_price = top_and_bottom[0]
             if fail_high and growth_low:
                 await update_or_create(
                     MarketMetrics,
@@ -253,6 +248,8 @@ async def process_metrics(
     # Обновление рыночных метрик, проверка на None
     market_metrics = results.get("market_metrics")
     top_and_bottom = results.get("top_and_bottom")
+
+    print("market_metrics, top_and_bottom: ", market_metrics, top_and_bottom)
     # Проверка на None и наличие значений
     if market_metrics and all(metric is not None for metric in market_metrics):
         await update_market_metrics(new_project.id, market_metrics, top_and_bottom)

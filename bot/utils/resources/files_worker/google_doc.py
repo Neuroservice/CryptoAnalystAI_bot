@@ -39,6 +39,7 @@ def load_document_for_garbage_list(start_title: str = None, end_title: str = Non
 
         # Формирование списка категорий (по строкам)
         categories = [line.strip() for line in extracted_text.split("\n") if line.strip()]
+        print(categories)
         return categories
 
     except requests.RequestException as e:

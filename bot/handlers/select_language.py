@@ -3,17 +3,17 @@ import logging
 from aiogram import Router, types
 from aiogram.filters import Command
 
+from bot.database.models import User
+from bot.utils.common.sessions import redis_client
+from bot.utils.keyboards.start_keyboards import main_menu_keyboard
+from bot.utils.resources.exceptions.exceptions import ExceptionError
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
 from bot.database.db_operations import (
     get_user_from_redis_or_db,
     update_or_create,
     create,
     get_one,
 )
-from bot.database.models import User
-from bot.utils.keyboards.start_keyboards import main_menu_keyboard
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
-from bot.utils.resources.exceptions.exceptions import ExceptionError
-from bot.utils.common.sessions import session_local, redis_client
 
 change_language_router = Router()
 logging.basicConfig(level=logging.INFO)

@@ -1,23 +1,31 @@
 import asyncio
 import logging
-from typing import Any, Dict, Optional
-from urllib.parse import urljoin
+from datetime import datetime
 
 import aiohttp
 import httpx
 import requests
-from aiogram.types import Message
-from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
+from bs4 import BeautifulSoup
+from aiogram.types import Message
+from typing import Any, Dict, Optional
+from sqlalchemy.orm import selectinload
+from tenacity import retry, stop_after_attempt, wait_fixed
+
+from bot.utils.browser import context
+from bot.utils.common.sessions import client_session
+from bot.utils.resources.gpt.gpt import agent_handler
+from bot.utils.common.config import CRYPTORANK_API_KEY, API_KEY
+from bot.utils.validations import clean_fundraise_data, extract_tokenomics
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
 from bot.database.db_operations import (
     get_one,
     get_all,
     get_or_create,
     update_or_create,
     get_user_from_redis_or_db,
+    create_association,
+    create,
 )
 from bot.database.models import (
     Project,
@@ -32,10 +40,9 @@ from bot.database.models import (
     NetworkMetrics,
     Category,
     project_category_association,
+    AgentAnswer,
 )
-from bot.utils.common.config import CRYPTORANK_API_KEY, API_KEY
 from bot.utils.common.consts import (
-    TICKERS,
     REPLACED_PROJECT_TWITTER,
     COINMARKETCUP_API,
     COINCARP_API,
@@ -51,31 +58,28 @@ from bot.utils.common.consts import (
     SELECTOR_TWITTERSCORE,
     RATING_LABELS,
     CRYPTORANK_API_URL,
-    EXPECTED_KEYS,
+    START_TITLE_FOR_GARBAGE_CATEGORIES,
+    END_TITLE_FOR_GARBAGE_CATEGORIES,
 )
-from bot.utils.common.decorators import save_execute
 from bot.utils.common.params import (
     get_header_params,
     get_cryptocompare_params,
     get_cryptocompare_params_with_full_name,
 )
-from bot.utils.common.sessions import client_session
 from bot.utils.resources.exceptions.exceptions import (
     DataTypeError,
     MissingKeyError,
     AttributeAccessError,
     ValueProcessingError,
     ExceptionError,
-    TimeOutError,
     DatabaseFetchError,
 )
-from bot.utils.resources.gpt.gpt import agent_handler
-from bot.utils.validations import clean_fundraise_data, extract_tokenomics
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 def get_crypto_key(symbol: str) -> str:
     """
     Получает `key` для токена по его символу (тикеру) через API CryptoRank
@@ -84,8 +88,6 @@ def get_crypto_key(symbol: str) -> str:
     headers = {"X-Api-Key": CRYPTORANK_API_KEY, "Accept": "application/json"}
     response = requests.get(CRYPTORANK_API_URL, params=params, headers=headers)
 
-    print(f"response in get_crypto_key {response}")
-
     if response.status_code == 200:
         data = response.json()
         print(f"data in get_crypto_key: {data}")
@@ -93,6 +95,7 @@ def get_crypto_key(symbol: str) -> str:
             return data["data"][0]["key"]
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def get_user_project_info(user_coin_name: str):
     """
     Получает информацию о проекте и связанных метриках по имени монеты пользователя.
@@ -138,16 +141,17 @@ async def get_user_project_info(user_coin_name: str):
         raise ExceptionError(str(e))
 
 
-async def get_project_and_tokenomics(project_names: list, user_coin_name: str, project_tier: str = None):
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
+async def get_project_and_tokenomics(project_names: list, project_tier: str = None):
     """
     Получает информацию о проекте и связанных метриках по категории и токену пользователя.
+    Берёт только уникальные проекты (не повторяя coin_name).
     """
-
-    user_coin_added = False  # Флаг для отслеживания добавленного токена
 
     try:
         tokenomics_data_list = []
         projects = []
+        seen_coin_names = set()  # множество для отслеживания уже добавленных coin_name
 
         for project_name in project_names:
             project_name = project_name.strip()
@@ -162,7 +166,7 @@ async def get_project_and_tokenomics(project_names: list, user_coin_name: str, p
                 ),
             )
 
-            if project_tier:
+            if project_tier and project_tier != "Нет данных":
                 projects_data = await get_all(
                     Project,
                     join_model=lambda q: q.join(project_category_association)
@@ -177,27 +181,38 @@ async def get_project_and_tokenomics(project_names: list, user_coin_name: str, p
                 logger.warning(f"Проект с именем {project_name} не найден.")
                 continue
 
-            projects.append(projects_data)
+            # Добавим все подходящие проекты в общий список (но без повторения coin_name)
+            filtered_projects = []
+            for p in projects_data:
+                if p.coin_name not in seen_coin_names:
+                    seen_coin_names.add(p.coin_name)
+                    filtered_projects.append(p)
+                else:
+                    logger.info(f"Пропущен дубликат coin_name: {p.coin_name}")
 
-            if user_coin_name and user_coin_name not in TICKERS:
-                logger.info(f"Добавление монеты {user_coin_name} в список тикеров.")
-                TICKERS.insert(0, user_coin_name)
-                user_coin_added = True  # Запоминаем, что токен был добавлен
+            if not filtered_projects:
+                logger.info(f"Все проекты для {project_name} оказались дубликатами, пропускаем.")
+                continue
 
-            for project in projects_data:
-                tokenomics_data = None
-                if project.coin_name in TICKERS:
-                    logger.info(f"Получение данных токеномики для проекта: {project.coin_name}")
+            # Сохраняем итоговые отфильтрованные проекты
+            projects.append(filtered_projects)
 
-                    tokenomics_data, _ = await get_or_create(
-                        Tokenomics,
-                        defaults={"project_id": project.id},
-                        project_id=project.id,
-                    )
-                    tokenomics_data = [tokenomics_data]
+            # Для каждого проекта получаем токеномику
+            for project in filtered_projects:
+                logger.info(f"Получение данных токеномики для проекта: {project.coin_name}")
+
+                tokenomics_data, _ = await get_or_create(
+                    Tokenomics,
+                    defaults={"project_id": project.id},
+                    project_id=project.id,
+                )
+                # Оборачиваем в список, как у вас в исходном коде
+                tokenomics_data = [tokenomics_data]
 
                 tokenomics_data_list.append((project, tokenomics_data))
 
+                # Если (на всякий случай) tokenomics_data_list пуст (хотя только что добавили),
+                # проверим логику
                 if not tokenomics_data_list and tokenomics_data:
                     logger.warning("Нет доступных проектов для сравнения.")
 
@@ -221,26 +236,24 @@ async def get_project_and_tokenomics(project_names: list, user_coin_name: str, p
     except Exception as e:
         raise ExceptionError(str(e))
 
-    finally:
-        # Удаляем пользовательский токен из TICKERS, если он был добавлен
-        if user_coin_added and user_coin_name in TICKERS:
-            logger.info(f"Удаление монеты {user_coin_name} из списка тикеров.")
-            TICKERS.remove(user_coin_name)
 
-
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def get_twitter_link_by_symbol(symbol: str):
     """
     Получает ссылку на твиттер по символу токена.
     """
 
     url = f"{COINMARKETCUP_API}info?symbol={symbol}"
-
     header_params = get_header_params(coin_name=symbol)
+    garbage_categories = load_document_for_garbage_list(
+        START_TITLE_FOR_GARBAGE_CATEGORIES,
+        END_TITLE_FOR_GARBAGE_CATEGORIES,
+    )
 
     async with client_session().get(url, headers=header_params["headers"]) as response:
         if response.status == 200:
             data = await response.json()
-            print(data)
+            print("CoinMarketCup data: ---", data)
             if symbol in data["data"]:
                 project_data = data["data"][symbol]
 
@@ -259,8 +272,11 @@ async def get_twitter_link_by_symbol(symbol: str):
                 if tag_names is None or tag_groups is None:
                     categories = []
                 else:
-                    # Фильтруем только категории (CATEGORY)
-                    categories = [tag for tag, group in zip(tag_names, tag_groups) if group == "CATEGORY"]
+                    categories = [
+                        tag
+                        for tag, group in zip(tag_names, tag_groups)
+                        if group == "CATEGORY" and tag not in garbage_categories
+                    ]
 
                 if twitter_links and description and categories:
                     twitter_link = twitter_links[0].lower()
@@ -281,96 +297,99 @@ async def get_twitter_link_by_symbol(symbol: str):
             return None, None, None, []
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def get_twitter(name: str):
     """
     Получает информацию о твиттере и твиттерскоре по токену.
     """
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+    if context is None:
+        raise RuntimeError("❌ Ошибка: контекст браузера не инициализирован!")
 
-        if type(name) is str:
-            coin_name = name
-        else:
-            coin_name, about, lower_name, categories = name
+    page = await context.new_page()
+    if type(name) is str:
+        coin_name = name
+    else:
+        coin_name, about, lower_name, categories = name
 
-        await page.route(
-            "**/*",
-            lambda route: route.continue_() if "image" not in route.request.resource_type else route.abort(),
-        )
-        coin = coin_name.split("/")[-1]
+    await page.route(
+        "**/*",
+        lambda route: route.continue_() if "image" not in route.request.resource_type else route.abort(),
+    )
+    coin = coin_name.split("/")[-1]
 
-        try:
-            await page.goto(f"{TWITTERSCORE_API}twitter/{coin}/overview/?i=16846")
-            await asyncio.sleep(15)
-        except Exception as e:
-            await browser.close()
-            return None
+    try:
+        await page.goto(f"{TWITTERSCORE_API}twitter/{coin}/overview/?i=16846")
+        await asyncio.sleep(15)
+    except Exception as e:
+        await page.close()
+        return None
 
-        try:
-            await page.wait_for_selector(SELECTOR_TWITTERSCORE, timeout=25000)
-            twitter = await page.locator(SELECTOR_TWITTERSCORE).first.inner_text()
-            print("twitter: ", twitter)
-        except:
-            twitter = None
+    try:
+        await page.wait_for_selector(SELECTOR_TWITTERSCORE, timeout=30000)
+        twitter = await page.locator(SELECTOR_TWITTERSCORE).first.inner_text()
+        print("twitter: ", twitter)
+    except:
+        twitter = None
 
-        try:
-            twitterscore = await page.locator("#insideChartCount").inner_text()
-        except:
-            twitterscore = None
+    try:
+        twitterscore = await page.locator("#insideChartCount").inner_text()
+    except:
+        twitterscore = None
 
-        await browser.close()
+    await page.close()
 
-        return {"twitter": twitter, "twitterscore": twitterscore} if twitter or twitterscore else None
+    return {"twitter": twitter, "twitterscore": twitterscore} if twitter or twitterscore else None
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def get_top_100_wallets(user_coin_name: str):
     """
     Получает процент токенов на топ 100 кошельках блокчейна.
     """
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            coin = user_coin_name.split("/")[-1]
-            logging.info(f"Запрашиваем данные для {coin}")
+        if context is None:
+            raise RuntimeError("❌ Ошибка: контекст браузера не инициализирован!")
 
+        page = await context.new_page()
+        coin = user_coin_name.split("/")[-1]
+        logging.info(f"Запрашиваем данные для {coin}")
+
+        try:
+            # Переход на страницу richlist
+            await page.goto(f"{COINCARP_API}{coin}/richlist/", timeout=120000)
+
+            # Даем время для загрузки JS
+            await page.wait_for_load_state("networkidle")
+            await asyncio.sleep(5)  # Подстраховка
+
+            # Проверяем наличие элемента
+            element = await page.query_selector(SELECTOR_TOP_100_WALLETS)
+
+            if not element:
+                logging.warning(f"Элемент {SELECTOR_TOP_100_WALLETS} не найден для {coin}")
+                return None  # Возвращаем None, если элемент не найден
+
+            top_100_text = await element.inner_text()
+
+            logging.info(f"Текст топ-100: {top_100_text}")
+
+            # Преобразуем в число
             try:
-                # Переход на страницу richlist
-                await page.goto(f"{COINCARP_API}{coin}/richlist/", timeout=120000)
+                top_100_percentage = float(top_100_text.replace("%", "").strip())
+                return round(top_100_percentage / 100, 2)
+            except ValueError:
+                return None
 
-                # Даем время для загрузки JS
-                await page.wait_for_load_state("networkidle")
-                await asyncio.sleep(5)  # Подстраховка
+        except TimeoutError as time_error:
+            logging.info(f"Таймаут ожидания страницы: {time_error}")
+        except ValueError as value_error:
+            logging.info(f"Ошибка обработки данных: {value_error}")
+        except Exception as e:
+            logging.info(f"Непредвиденная ошибка: {e}")
 
-                # Проверяем наличие элемента
-                element = await page.query_selector(SELECTOR_TOP_100_WALLETS)
-
-                if not element:
-                    logging.warning(f"Элемент {SELECTOR_TOP_100_WALLETS} не найден для {coin}")
-                    return None  # Возвращаем None, если элемент не найден
-
-                top_100_text = await element.inner_text()
-
-                logging.info(f"Текст топ-100: {top_100_text}")
-
-                # Преобразуем в число
-                try:
-                    top_100_percentage = float(top_100_text.replace("%", "").strip())
-                    return round(top_100_percentage / 100, 2)
-                except ValueError:
-                    return None
-
-            except TimeoutError as time_error:
-                raise TimeOutError(f"Таймаут ожидания страницы: {time_error}")
-            except ValueError as value_error:
-                raise ValueProcessingError(f"Ошибка обработки данных: {value_error}")
-            except Exception as e:
-                raise ExceptionError(f"Непредвиденная ошибка: {e}")
-
-            finally:
-                await browser.close()
+        finally:
+            await page.close()
 
     except AttributeError as attr_error:
         raise AttributeAccessError(f"Ошибка доступа к атрибуту: {attr_error}")
@@ -382,106 +401,127 @@ async def get_top_100_wallets(user_coin_name: str):
         raise ExceptionError(f"Общая ошибка: {e}")
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_tokenomics_data(url: str) -> list:
     """
     Загружает данные о распределении токенов с указанного URL.
     """
     tokenomics_data = []
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+    if context is None:
+        raise RuntimeError("❌ Ошибка: контекст браузера не инициализирован!")
 
-        try:
+    page = await context.new_page()
 
-            # Поиск таблицы на Cryptorank (для 'vesting' запросов)
-            if "vesting" in url:
-                try:
-                    await page.goto(url, wait_until="networkidle")
+    try:
 
-                    # Ждем появление контента с увеличенным таймаутом
-                    await page.wait_for_selector("table", timeout=5000)
-                    content = await page.content()
-                    soup = BeautifulSoup(content, "html.parser")
-
-                    table = soup.find("table")
-                    if table:
-                        rows = table.find_all("tr")[1:]
-                        for row in rows:
-                            columns = row.find_all("td")
-                            if len(columns) >= 2:
-                                name = columns[0].get_text(strip=True)
-                                percentage = columns[1].get_text(strip=True)
-                                tokenomics_data.append(f"{name} ({percentage})")
-                except Exception as e:
-                    print(f"❌ Ошибка при поиске таблицы: {e}")
-
-            # Парсим ICO-токеномику (Cryptorank API - ico)
-            elif "ico" in url:
+        # Поиск таблицы на Cryptorank (для 'vesting' запросов)
+        if "vesting" in url:
+            try:
                 await page.goto(url, wait_until="networkidle")
 
-                # Ждем появления списка <ul>, иначе пробуем через XPath
-                try:
-                    await page.wait_for_selector("ul.sc-3c81cf8-0.ffoUXx > li", timeout=5000)
-                except Exception:
-                    print("⚠️ Элемент не найден, пробуем XPath...")
-                    await page.wait_for_timeout(3000)
+                # Ждем появление контента с увеличенным таймаутом
+                await page.wait_for_selector("table", timeout=5000)
+                content = await page.content()
+                soup = BeautifulSoup(content, "html.parser")
 
-                # Пробуем сначала CSS, затем XPath
-                token_list = await page.query_selector_all("ul.sc-3c81cf8-0.ffoUXx > li")
-                if not token_list:
-                    token_list = await page.query_selector_all(
-                        "xpath=//ul[contains(@class, 'sc-') and contains(@class, 'ffoUXx')]/li"
-                    )
+                table = soup.find("table")
+                if table:
+                    rows = table.find_all("tr")[1:]
+                    for row in rows:
+                        columns = row.find_all("td")
+                        if len(columns) >= 2:
+                            name = columns[0].get_text(strip=True)
+                            percentage = columns[1].get_text(strip=True)
+                            tokenomics_data.append(f"{name} ({percentage})")
+            except Exception as e:
+                print(f"❌ Ошибка при поиске таблицы: {e}")
 
-                if not token_list:
-                    print("❌ Токеномика не найдена!")
-                else:
-                    print(f"✅ Найдено {len(token_list)} элементов")
+        # Парсим ICO-токеномику (Cryptorank API - ico)
+        elif "ico" in url:
+            await page.goto(url, wait_until="networkidle")
 
-                for item in token_list:
-                    print(f"Обрабатываем элемент: {await item.inner_html()}")
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(2000)
 
+            try:
+                # 1. Ждём появления заголовка с текстом 'Token allocation'
+                token_allocation_header = await page.query_selector("xpath=//h3[contains(text(), 'Token allocation')]")
+                if not token_allocation_header:
+                    print("❌ 'Token allocation' не найдено на странице.")
+
+                # 2. Поднимаемся к родительскому контейнеру.
+                tokenomics_container = await token_allocation_header.query_selector(
+                    "xpath=ancestor::div[contains(@class, 'sc-c6d4550b-0')]"
+                )
+                if not tokenomics_container:
+                    print("❌ Не удалось найти контейнер с классом 'sc-c6d4550b-0'.")
+
+                # 3. Внутри контейнера ищем список <ul>
+                ul_element = await tokenomics_container.query_selector("ul")
+                if not ul_element:
+                    print("❌ Не найден тег <ul> в блоке tokenomics.")
+
+                # 4. Собираем все элементы <li> внутри <ul>
+                li_elements = await ul_element.query_selector_all("li")
+                if not li_elements:
+                    print("❌ Нет элементов <li> внутри <ul>.")
+
+                print(f"✅ Найдено {len(li_elements)} элементов <li> с распределением.")
+
+                for li in li_elements:
                     try:
-                        name_tag = await item.query_selector("p.sc-3c81cf8-3.dISENB")
+                        print("li: ------", li)
+                        # Ищем название (p, например 'Allocated After 2030')
+                        name_tag = await li.query_selector("p")
                         name = await name_tag.inner_text() if name_tag else "Не найдено"
 
-                        percentage_tag = await item.query_selector("div.sc-3c81cf8-4.iugGsJ > span")
-                        percentage = await percentage_tag.inner_text() if percentage_tag else "Не найдено"
+                        # Ищем процент (span, например '52.172%')
+                        span_tags = await li.query_selector_all("span")
+                        if len(span_tags) > 1:
+                            percentage = await span_tags[1].inner_text()
 
-                        tokenomics_data.append(f"{name} ({percentage})")
-
-                    except Exception as e:
-                        print(f"❌ Ошибка при обработке элемента: {e}")
-                        print(f"🚨 Проблемный элемент: {await item.inner_html()}")
-
-            # Для Tokenomist API
-            else:
-                try:
-                    await page.wait_for_selector("div.tokenomics-container > div", timeout=5000)
-                    content = await page.content()
-                    soup = BeautifulSoup(content, "html.parser")
-
-                    allocation_divs = soup.select("div.tokenomics-container > div")
-                    for div in allocation_divs:
-                        try:
-                            name = div.select_one("p").get_text(strip=True)
-                            percentage = div.select_one("span").get_text(strip=True)
+                        if name != "Не найдено" and percentage != "Не найдено":
                             tokenomics_data.append(f"{name} ({percentage})")
-                        except AttributeError:
-                            continue
-                except Exception as e:
-                    print(f"❌ Ошибка при поиске данных Tokenomist: {e}")
+                        else:
+                            print(f"⚠️ Пропущен элемент (нет данных): {await li.inner_html()}")
+                    except Exception as e:
+                        print(f"❌ Ошибка при обработке <li>: {e}")
+                        print(f"🚨 Проблемный элемент: {await li.inner_html()}")
 
-        except Exception as e:
-            logging.error(f"🚨 Ошибка при получении данных: {e}")
+            except Exception as exc:
+                print(f"❌ Сбой при поиске 'Token allocation': {exc}")
 
-        finally:
-            await browser.close()
+        # Для Tokenomist API
+        else:
+            try:
+                await page.goto(url, wait_until="networkidle")
+
+                await page.wait_for_selector("div.tokenomics-container > div", timeout=5000)
+                content = await page.content()
+                soup = BeautifulSoup(content, "html.parser")
+
+                allocation_divs = soup.select("div.tokenomics-container > div")
+                for div in allocation_divs:
+                    try:
+                        name = div.select_one("p").get_text(strip=True)
+                        percentage = div.select_one("span").get_text(strip=True)
+                        tokenomics_data.append(f"{name} ({percentage})")
+                    except AttributeError:
+                        continue
+            except Exception as e:
+                print(f"❌ Ошибка при поиске данных Tokenomist: {e}")
+
+    except Exception as e:
+        logging.error(f"🚨 Ошибка при получении данных: {e}")
+
+    finally:
+        await page.close()
 
     return tokenomics_data
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def get_percentage_data(lower_name: str, user_coin_name: str):
     """
     Получает данные о распределении токенов в проекте.
@@ -498,13 +538,22 @@ async def get_percentage_data(lower_name: str, user_coin_name: str):
             ):
                 return extract_tokenomics(user_tokenomics.distribution)
 
-        # Запрос к Cryptorank
-        tokenomics_data = await fetch_tokenomics_data(f"{CRYPTORANK_WEBSITE}price/{lower_name}/vesting")
+        cryptorank_coin_key = get_crypto_key(user_coin_name)
 
-        # Если не удалось получить данные с Cryptorank, пробуем Tokenomist.ai
+        # Запрос к Cryptorank
+        vesting_url = f"{CRYPTORANK_WEBSITE}price/{lower_name}/vesting"
+        if cryptorank_coin_key:
+            vesting_url = f"{CRYPTORANK_WEBSITE}price/{cryptorank_coin_key}/vesting"
+
+        tokenomics_data = await fetch_tokenomics_data(vesting_url)
+
         if not tokenomics_data:
             logging.warning("Не удалось найти таблицу на Cryptorank. Пробуем из ico...")
-            tokenomics_data = await fetch_tokenomics_data(f"{CRYPTORANK_WEBSITE}ico/{lower_name}")
+            ico_url = f"{CRYPTORANK_WEBSITE}ico/{lower_name}"
+            if cryptorank_coin_key:
+                ico_url = f"{CRYPTORANK_WEBSITE}ico/{cryptorank_coin_key}"
+
+            tokenomics_data = await fetch_tokenomics_data(ico_url)
 
         if not tokenomics_data:
             logging.warning("Не удалось найти таблицу с заданными заголовками на Cryptorank. Пробуем Tokenomist.ai...")
@@ -518,6 +567,7 @@ async def get_percentage_data(lower_name: str, user_coin_name: str):
         raise ExceptionError(str(e))
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def get_coin_description(coin_name: str):
     """
     Получение описания проекта на CoinGecko
@@ -545,7 +595,8 @@ async def get_coin_description(coin_name: str):
     return description
 
 
-async def get_fundraise(user_coin_name: str, message: Message = None):
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
+async def get_fundraise(user_coin_name: str, lower_name: str = None):
     """
     Получение информации о фандрейзе проекта на Cryptorank
     """
@@ -554,12 +605,15 @@ async def get_fundraise(user_coin_name: str, message: Message = None):
         print(f"get_fundraise {user_coin_name}")
         user_coin_key = get_crypto_key(user_coin_name)
         if not user_coin_key:
-            if message:
-                await message.answer(f"Токен '{user_coin_name}' не найден в CryptoRank API")
+            logging.info(f"Токен '{user_coin_name}' не найден в CryptoRank API")
             return None, "-"
 
         url = f"{CRYPTORANK_WEBSITE}ico/{user_coin_key}"
         response = requests.get(url)
+
+        if response.status_code != 200:
+            url = f"{CRYPTORANK_WEBSITE}ico/{lower_name}"
+            response = requests.get(url)
 
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
@@ -578,6 +632,7 @@ async def get_fundraise(user_coin_name: str, message: Message = None):
             print("Total Raised:", clean_data)
 
             investors_data = ""
+            investors_data_list = []  # Храним инвесторов в списке
 
             # Ищем абзац <p> или заголовок <h2>, <h3>, содержащий "Investors and Backers"
             investor_heading = soup.find(
@@ -606,19 +661,18 @@ async def get_fundraise(user_coin_name: str, message: Message = None):
                             tier_tag = investor.select_one("td.sc-7338db8c-0.hakNfu p.sc-dec2158d-0.jYFsAb")
                             tier = tier_tag.get_text(strip=True) if tier_tag else "Не найдено"
 
-                            # Сохраняем данные в неизменном формате
-                            investors_data += f"{name} (Tier: {tier}), "
+                            investors_data_list.append(f"{name} (Tier: {tier})")
 
                         except AttributeError as e:
                             print(f"❌ Ошибка при обработке инвестора: {e}")
                             continue
 
+            investors_data = ", ".join(investors_data_list)
+
             logging.info(f"Инвесторы, fundraise: {investors_data, clean_data}")
             return clean_data, investors_data
 
         else:
-            if message:
-                await message.answer(f"Ошибка получения данных для монеты '{user_coin_name}'")
             logging.error(f"Ошибка при получении данных: {response.status_code}")
             return None, "-"
 
@@ -632,6 +686,7 @@ async def get_fundraise(user_coin_name: str, message: Message = None):
         raise ExceptionError(str(e))
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_coingecko_data(user_coin_name: str = None):
     """
     Получение основных данных о токене из CoinGecko
@@ -666,6 +721,7 @@ async def fetch_coingecko_data(user_coin_name: str = None):
         raise ExceptionError(str(e))
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_coinmarketcap_data(
     message: Message = None,
     user_coin_name: str = None,
@@ -739,6 +795,7 @@ async def fetch_coinmarketcap_data(
         raise ExceptionError(str(e))
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 def fetch_binance_data(symbol: str):
     """
     Получение макс/мин цены токена с Binance API
@@ -769,6 +826,7 @@ def fetch_binance_data(symbol: str):
         return None, None
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 def get_coingecko_id_by_symbol(symbol: str):
     """
     Получение ID-токена из CoinGecko по тикеру
@@ -783,6 +841,7 @@ def get_coingecko_id_by_symbol(symbol: str):
     return None
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_cryptocompare_data(
     cryptocompare_params: dict,
     cryptocompare_params_with_full_coin_name: dict,
@@ -865,6 +924,7 @@ async def fetch_cryptocompare_data(
         return None  # Возвращаем None в случае ошибки
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 def fetch_coingecko_max_min_data(fsym: str, tsym: str):
     """
     Получение макс/мин цены токена с CoinGecko API.
@@ -929,13 +989,13 @@ async def fetch_top_100_wallets(coin_name: str):
         raise ExceptionError(str(e))
 
 
-async def fetch_fundraise_data(user_coin_name: str):
+async def fetch_fundraise_data(user_coin_name: str, lower_name: str = None):
     """
     Получение данных о фандрейзе токена.
     """
 
     try:
-        clean_data, investors = await get_fundraise(user_coin_name)
+        clean_data, investors = await get_fundraise(user_coin_name, lower_name)
         return clean_data, investors
     except AttributeError as e:
         raise AttributeAccessError(str(e))
@@ -949,6 +1009,7 @@ async def fetch_fundraise_data(user_coin_name: str):
         raise ExceptionError(str(e))
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_tvl_data(coin_name: str):
     """
     Получение текущего TVL блокчейна, или токенов в стейкинге, если TVL недоступен.
@@ -963,7 +1024,7 @@ async def fetch_tvl_data(coin_name: str):
                     data = await response.json()
                     if isinstance(data, list) and data:
                         last_entry = data[-1]
-                        print('last_entry: ', last_entry)
+                        print("last_entry: ", last_entry)
                         last_tvl = last_entry.get("tvl", 0)
                         return float(last_tvl)
                     else:
@@ -1004,6 +1065,7 @@ async def fetch_tvl_data(coin_name: str):
             raise ExceptionError(str(e))
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def get_lower_name(user_coin_name: str):
     """
     Получение полного названия криптовалюты в нижнем регистре по тикеру.
@@ -1030,12 +1092,8 @@ def get_top_projects_by_capitalization_and_category(
     Получение топ-проектов по капитализации и категории для определенных тикеров.
     """
 
-    filtered_projects = [
-        (project, tokenomics_data) for project, tokenomics_data in tokenomics_data_list if project.coin_name in TICKERS
-    ]
-
     top_projects = sorted(
-        filtered_projects,
+        tokenomics_data_list,
         key=lambda item: item[1][0].capitalization if item[1][0].capitalization else 0,
         reverse=True,
     )[:5]
@@ -1043,6 +1101,7 @@ def get_top_projects_by_capitalization_and_category(
     return top_projects
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def get_top_projects_by_capitalization(
     project_type: str,
     tickers: list,
@@ -1123,6 +1182,7 @@ async def get_top_projects_by_capitalization(
         raise ExceptionError(f"Критическая ошибка в get_top_projects_by_capitalization: {e}")
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def check_and_run_tasks(
     project: Project,
     price: float,
@@ -1159,7 +1219,7 @@ async def check_and_run_tasks(
             ]
         )
     ) or not investing_metrics:
-        tasks.append((fetch_fundraise_data(project.coin_name), "investing_metrics"))
+        tasks.append((fetch_fundraise_data(project.coin_name, lower_name), "investing_metrics"))
 
     if (
         social_metrics
@@ -1232,26 +1292,19 @@ async def check_and_run_tasks(
 
     # Выполняем задачи
     if tasks:
-        print("tasks: ", tasks)
-
-        # Запускаем задачи и выводим название каждой задачи перед выполнением
         task_results = []
         for task, (model_name) in tasks:
-            print(f"Запуск задачи для модели: {model_name}")  # Выводим название текущей задачи
+            print(f"Запуск задачи для модели: {model_name}")
             task_results.append(task)
 
-        # Ожидаем выполнения всех задач
         task_results = await asyncio.gather(*task_results)
 
-        # Выводим результаты выполнения задач
-        print("task_results: ", task_results)
         logging.info(f"Результаты выполнения задач: {task_results}")
         for (result, (_, model_name)) in zip(task_results, tasks):
             if model_name not in results:
                 results[model_name] = []
             results[model_name].append(result)
 
-    # Сохранение результатов в базу данных
     if results:
         for model_name, data_list in results.items():
             model = model_mapping.get(model_name)
@@ -1260,16 +1313,15 @@ async def check_and_run_tasks(
                 continue
 
             for data in data_list:
-                # Преобразуем данные в формат для модели
                 data_dict = map_data_to_model_fields(model_name, data)
-                print("data_dict: ", data_dict)
-                if not data_dict or "N/A" in data_dict.values() or data_dict is None:
-                    logging.warning(f"Данные содержат N/A или равны None, пропускаем сохранение: {data}")
+                filtered_data_dict = {k: v for k, v in data_dict.items() if v is not None and v != "N/A"}
+
+                if not filtered_data_dict:
+                    logging.warning(f"Данные после фильтрации пустые, пропускаем сохранение: {data}")
                     continue
 
                 # Сохраняем в базу данных
-                await update_or_create(model, project_id=project.id, defaults=data_dict)
-
+                await update_or_create(model, project_id=project.id, defaults=filtered_data_dict)
     logging.info(f"Результаты сохранены: {results}")
     return results
 
@@ -1280,7 +1332,7 @@ def calculate_expected_x(entry_price: float, total_supply: float, fdv: float):
     """
 
     try:
-        expected_x = fdv / (entry_price * total_supply)
+        expected_x = fdv / (entry_price * total_supply) if entry_price and total_supply else 0
         fair_price = entry_price * expected_x if total_supply else 0
 
         return {
@@ -1300,6 +1352,7 @@ def calculate_expected_x(entry_price: float, total_supply: float, fdv: float):
         raise ExceptionError(str(e))
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def generate_flags_answer(
     user_id: Optional[int] = None,
     all_data_string_for_flags_agent: Optional[str | tuple[str, ...]] = None,
@@ -1313,6 +1366,7 @@ async def generate_flags_answer(
     network_metrics: Optional[NetworkMetrics] = None,
     tier: Optional[str] = None,
     funds_answer: Optional[str] = None,
+    investors_tier: Optional[str] = None,
     tokenomic_answer: Optional[str] = None,
     categories: Optional[str] = None,
     twitter_link: Optional[list[str]] = None,
@@ -1323,8 +1377,10 @@ async def generate_flags_answer(
     Функция генерации ответа анализа метрик проекта
     """
     flags_answer = None
-    user_data = await get_user_from_redis_or_db(user_id)
-    user_language = user_data.get("language", "ENG")
+    user_data = await get_user_from_redis_or_db(user_id) if user_id else None
+    user_language = user_data.get("language", "ENG") if user_data and user_data.get("language") else language
+
+    print("all_data_string_for_flags_agent: ---", all_data_string_for_flags_agent)
 
     if (user_id and user_language == "RU") or (language and language == "RU"):
         language = "RU"
@@ -1338,7 +1394,8 @@ async def generate_flags_answer(
             f"- Фандрейз: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
             f"- Количество подписчиков: {social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A'} (Twitter: {REPLACED_PROJECT_TWITTER.get(twitter_link[0], twitter_link[0])})\n"
             f"- Twitter Score: {social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A'}\n"
-            f"- Тир фондов: {investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A'}\n"
+            f"- Инвесторы: {investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A'}\n"
+            f"- Общий уровень инвесторов: {investors_tier}\n"
             f"- Распределение токенов: {funds_profit.distribution if funds_profit and funds_profit.distribution else 'N/A'}\n"
             f"- Минимальная цена токена: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom and top_and_bottom.lower_threshold else 'N/A'}\n"
             f"- Максимальная цена токена: ${round(top_and_bottom.upper_threshold, 2) if top_and_bottom and top_and_bottom.upper_threshold else 'N/A'}\n"
@@ -1360,7 +1417,8 @@ async def generate_flags_answer(
             f"- Fundraise: ${round(investing_metrics.fundraise) if investing_metrics and investing_metrics.fundraise else 'N/A'}\n"
             f"- Number of Twitter subscribers: {social_metrics.twitter if social_metrics and social_metrics.twitter else 'N/A'} (Twitter: {REPLACED_PROJECT_TWITTER.get(twitter_link[0], twitter_link[0])})\n"
             f"- Twitter Score: {social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 'N/A'}\n"
-            f"- Funds tier: {investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A'}\n"
+            f"- Investors: {investing_metrics.fund_level if investing_metrics and investing_metrics.fund_level else 'N/A'}\n"
+            f"- Investors tier: {investors_tier}\n"
             f"- Token allocation: {funds_profit.distribution if funds_profit and funds_profit.distribution else 'N/A'}\n"
             f"- Minimum token price: ${round(top_and_bottom.lower_threshold, 2) if top_and_bottom and top_and_bottom.lower_threshold else 'N/A'}\n"
             f"- Maximum token price: ${round(top_and_bottom.upper_threshold, 2) if top_and_bottom and top_and_bottom.upper_threshold else 'N/A'}\n"
@@ -1434,6 +1492,7 @@ def get_project_rating(final_score: int, language: str = "RU") -> str:
         return labels["excellent"]
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_categories():
     """
     Получает список категорий криптовалют с CoinMarketCap API.
@@ -1450,6 +1509,7 @@ async def fetch_categories():
             return []
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_top_tokens(limit: int):
     """
     Получает список топ-токенов CoinMarketCap с опциональным лимитом.
@@ -1466,6 +1526,7 @@ async def fetch_top_tokens(limit: int):
             return []
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def fetch_token_quote(token_symbol: str) -> dict:
     """
     Получает подробную информацию для конкретного токена по его символу,
@@ -1492,3 +1553,32 @@ async def fetch_token_quote(token_symbol: str) -> dict:
         else:
             logging.error(f"Ошибка API CoinMarketCap для {token_symbol}: {response.status}")
             return {}
+
+
+async def save_or_update_full_project_data(project_data: dict):
+    """
+    Универсальная функция — создаёт или обновляет проект и все связанные метрики.
+    """
+
+    project, _ = await get_or_create(Project, coin_name=project_data["project_info"]["coin_name"])
+    project_id = project.id
+
+    await update_or_create(BasicMetrics, project_id=project_id, defaults=project_data.get("basic_metrics", {}))
+    await update_or_create(InvestingMetrics, project_id=project_id, defaults=project_data.get("investing_metrics", {}))
+    await update_or_create(SocialMetrics, project_id=project_id, defaults=project_data.get("social_metrics", {}))
+    await update_or_create(Tokenomics, project_id=project_id, defaults=project_data.get("tokenomics", {}))
+    await update_or_create(FundsProfit, project_id=project_id, defaults=project_data.get("funds_profit", {}))
+    await update_or_create(TopAndBottom, project_id=project_id, defaults=project_data.get("top_and_bottom", {}))
+    await update_or_create(MarketMetrics, project_id=project_id, defaults=project_data.get("market_metrics", {}))
+    await update_or_create(
+        ManipulativeMetrics, project_id=project_id, defaults=project_data.get("manipulative_metrics", {})
+    )
+    await update_or_create(NetworkMetrics, project_id=project_id, defaults=project_data.get("network_metrics", {}))
+    await update_or_create(AgentAnswer, project_id=project_id, defaults=project_data.get("agent_answer", {}))
+
+    categories = project_data.get("categories", [])
+    for cat_name in categories:
+        category, _ = await get_or_create(Category, category_name=cat_name)
+        await create_association(project_category_association, project_id=project_id, category_id=category.id)
+
+    return project

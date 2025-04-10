@@ -1,30 +1,18 @@
-import logging
 import re
+import logging
 
 from aiogram import types
 from typing import Any, Optional, Callable
 from aiogram.fsm.context import FSMContext
 
-from bot.utils.common.sessions import session_local, redis_client
-from bot.utils.resources.bot_phrases.bot_phrase_handler import (
-    phrase_by_user,
-    phrase_by_language,
-)
-from bot.utils.resources.exceptions.exceptions import (
-    ExceptionError,
-    ValueProcessingError,
-    MissingKeyError,
-    AttributeAccessError,
-)
+from bot.utils.common.sessions import redis_client
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user, phrase_by_language
 from bot.utils.common.consts import (
-    STABLECOINS,
-    FUNDAMENTAL_TOKENS,
     OVERALL_PROJECT_CATEGORY_PATTERN,
     PROJECT_DESCRIPTION_PATTERN,
     POSITIVE_PATTERN_RU,
     NEGATIVE_PATTERN_RU,
-    POSITIVE_PATTERN_ENG,
-    NEGATIVE_PATTERN_ENG,
     TOKENOMICS_PATTERN_ENG,
     TOKENOMICS_PATTERN_RU,
     COMPARISON_PATTERN_ENG,
@@ -40,9 +28,14 @@ from bot.utils.common.consts import (
     START_TITLE_FOR_SCAM_TOKENS,
     START_TITLE_FOR_FUNDAMENTAL,
     END_TITLE_FOR_FUNDAMENTAL,
+    POSITIVE_PATTERN_EN,
+    NEGATIVE_PATTERN_EN,
 )
-from bot.utils.resources.files_worker.google_doc import (
-    load_document_for_garbage_list,
+from bot.utils.resources.exceptions.exceptions import (
+    ExceptionError,
+    ValueProcessingError,
+    MissingKeyError,
+    AttributeAccessError,
 )
 
 
@@ -95,28 +88,53 @@ def extract_description(topic: str, language: str) -> str:
     return match.group(1) if match else phrase_by_language("no_green_flags", language)
 
 
-def extract_red_green_flags(answer: str, language: str) -> str:
+def extract_red_green_flags(text: str, language: str) -> str:
+    """Извлекает и форматирует позитивные (зелёные) и негативные (красные) флаги из текста.
+
+    Возвращает отформатированную строку с разделением на зелёные и красные флаги.
+    Поддерживает русский и английский языки.
     """
-    Функция для извлечения ред и грин флагов на русском и английском языках.
-    """
+    try:
+        if language == "RU":
+            positive_pattern = POSITIVE_PATTERN_RU
+            negative_pattern = NEGATIVE_PATTERN_RU
+        else:
+            positive_pattern = POSITIVE_PATTERN_EN
+            negative_pattern = NEGATIVE_PATTERN_EN
 
-    positive_pattern = POSITIVE_PATTERN_ENG
-    negative_pattern = NEGATIVE_PATTERN_ENG
+        green_flags = ""
+        red_flags = ""
 
-    if language == "RU":
-        positive_pattern = POSITIVE_PATTERN_RU
-        negative_pattern = NEGATIVE_PATTERN_RU
+        # Поиск позитивных характеристик
+        positive_match = re.search(positive_pattern, text, re.DOTALL)
 
-    # Извлекаем положительные характеристики
-    positive_match = re.search(positive_pattern, answer, re.S)
-    positive_text = positive_match.group(1) if positive_match else phrase_by_language("no_green_flags", language)
+        print(positive_pattern, negative_pattern, positive_match)
 
-    # Извлекаем отрицательные характеристики
-    negative_match = re.search(negative_pattern, answer, re.S)
-    negative_text = negative_match.group(1) if negative_match else phrase_by_language("no_red_flags", language)
+        if positive_match:
+            green_flags = positive_match.group(1).strip()
+            green_flags = re.sub(r'^Положительные характеристики:\s*', '', green_flags)
+            green_flags = re.sub(r'^Positive characteristics:\s*', '', green_flags)
 
-    # Возвращаем объединенные результаты
-    return f"{positive_text}\n{negative_text}"
+        # Поиск негативных характеристик
+        negative_match = re.search(negative_pattern, text, re.DOTALL)
+        if negative_match:
+            red_flags = negative_match.group(1).strip()
+            red_flags = re.sub(r'^Отрицательные характеристики:\s*', '', red_flags)
+            red_flags = re.sub(r'^Negative characteristics:\s*', '', red_flags)
+
+        # Форматирование результата
+        if language == "RU":
+            green_result = "Зеленые флаги:\n" + green_flags if green_flags else "Зелёных флагов нет"
+            red_result = "Красные флаги:\n" + red_flags if red_flags else "Красных флагов нет"
+        else:
+            green_result = "Green flags:\n" + green_flags if green_flags else "No 'green' flags"
+            red_result = "Red flags:\n" + red_flags if red_flags else "No 'red' flags"
+
+        return f"{green_result}\n\n{red_result}"
+
+    except Exception as e:
+        logging.error(f"Ошибка при извлечении флагов: {e}")
+        return "Зеленые флаги:\nНет\n\nКрасные флаги:\nНет" if language == "RU" else "Green flags:\nNone\n\nRed flags:\nNone"
 
 
 def extract_calculations(answer: str, language: str):
@@ -362,3 +380,139 @@ async def check_redis_connection():
     except ConnectionError:
         logging.error("Не удалось подключиться к Redis!")
         raise Exception("Не удалось подключиться к Redis!")
+
+
+def is_float(value: str) -> bool:
+    try:
+        float(value.replace(",", "."))
+        return True
+    except ValueError:
+        return False
+
+
+def is_int(value: str) -> bool:
+    return value.isdigit()
+
+
+def normalize_float(value: str) -> float:
+    return float(value.replace(",", "."))
+
+
+def is_valid_number_with_suffix(value: str) -> bool:
+    """
+    Проверяет, что строка:
+    1) Может содержать цифры, точки, запятые.
+    2) Опционально заканчивается на K, M или B (в любом регистре).
+    3) Не содержит других букв/символов.
+
+    Примеры валидных:
+      "123" -> True
+      "42.5" -> True
+      "10,500" -> True
+      "1.2M"  -> True
+      "950k"  -> True
+      "3,2B"  -> True (хотя 3,2 не совсем стандарт, но по условию допустим)
+    Примеры невалидных:
+      "abc", "12X", "??" -> False
+    """
+    s = value.strip()
+    if not s:
+        return False
+
+    s_upper = s.upper()
+
+    suffix = ""
+    if s_upper[-1] in ("K", "M", "B"):
+        suffix = s_upper[-1]
+        s_upper = s_upper[:-1]
+        if not s_upper:
+            return False
+
+    for ch in s_upper:
+        if ch not in "0123456789.,":
+            return False
+
+    digits_found = any(ch.isdigit() for ch in s_upper)
+    if not digits_found:
+        return False
+
+    return True
+
+
+def is_valid_investors_format(text: str) -> bool:
+    pattern = r"^[^()]+\(Tier: \d+\)(,\s*[^()]+\(Tier: \d+\))*$"
+    return re.match(pattern, text.strip()) is not None
+
+
+def is_valid_distribution_format(text: str) -> bool:
+    pattern = r"^([\w &]+\(\d+%\))(,\s*[\w &]+\(\d+%\))*$"
+    return re.match(pattern, text.strip()) is not None
+
+
+def parse_general_number(text: str) -> float:
+    """
+    Парсит строку вида:
+      - '930B' => 9.30e11
+      - '450M' => 4.50e8
+      - '63K'  => 6.30e4
+      - '10,534,000' => 10534000
+      - '4.2B' => 4.2e9
+      - '450' (обычное число)
+    Если строка невалидна, выкидывает ValueError.
+    """
+    # Убираем запятые и пробелы
+    s = text.strip().replace(",", "")
+    if not s:
+        raise ValueError("Пустая строка")
+
+    # Проверяем последний символ на K / M / B
+    suffix = s[-1].upper()  # последний символ в верхнем регистре
+    if suffix in ["K", "M", "B"]:
+        numeric_part = s[:-1]  # без последнего символа
+        val = float(numeric_part)
+        if suffix == "K":
+            return val * 1e3
+        elif suffix == "M":
+            return val * 1e6
+        else:  # suffix == "B"
+            return val * 1e9
+    else:
+        # Если никакой суффикс (или, например, число "1234.56"), просто парсим
+        return float(s)
+
+
+def is_general_number_or_dash(text: str) -> bool:
+    """
+    Проверяет, что text == '-' (нет данных)
+    ИЛИ корректно парсится функцией parse_general_number.
+    """
+    text = text.strip()
+    if text == "-":
+        return True
+    try:
+        parse_general_number(text)
+        return True
+    except ValueError:
+        return False
+
+
+def parse_general_number_or_none(text: str) -> float | None:
+    """
+    Если text == '-', возвращаем None.
+    Иначе парсим через parse_general_number.
+    """
+    text = text.strip()
+    if text == "-":
+        return None
+    return parse_general_number(text)
+
+
+def format_number(value: float) -> str:
+    """Форматирует число в строку с суффиксами B, M, K"""
+    if value >= 1_000_000_000:
+        return f"{value / 1_000_000_000:.2f}B"
+    elif value >= 1_000_000:
+        return f"{value / 1_000_000:.2f}M"
+    elif value >= 1_000:
+        return f"{value / 1_000:.2f}K"
+    return str(value)

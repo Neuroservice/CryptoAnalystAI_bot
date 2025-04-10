@@ -1,20 +1,26 @@
-import logging
 import re
+import logging
 import traceback
+
 from datetime import datetime
 from typing import Optional, Union
-
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
+from tenacity import retry, stop_after_attempt, wait_fixed
 
+from bot.utils.common.decorators import save_execute
+from bot.utils.common.bot_states import CalculateProject
+from bot.database.models import Calculation, AgentAnswer, Project
+from bot.utils.resources.exceptions.exceptions import ValueProcessingError
+from bot.utils.resources.bot_phrases.bot_phrase_strings import calculations_choices
+from bot.utils.resources.files_worker.pdf_worker import generate_pdf, create_pdf_file
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user, phrase_by_language
 from bot.database.db_operations import (
     get_one,
     get_user_from_redis_or_db,
     update_or_create,
 )
-from bot.database.models import Calculation, AgentAnswer, Project
-from bot.utils.common.bot_states import CalculateProject
 from bot.utils.common.consts import (
     PROJECT_POINTS_ENG,
     PROJECT_POINTS_RU,
@@ -22,9 +28,7 @@ from bot.utils.common.consts import (
     DATA_FOR_ANALYSIS_TEXT,
     ALL_DATA_STRING_FLAGS_AGENT,
     ALL_DATA_STRING_FUNDS_AGENT,
-    REPLACED_PROJECT_TWITTER,
 )
-from bot.utils.common.decorators import save_execute
 from bot.utils.metrics.metrics_evaluation import (
     calculate_tokenomics_score,
     calculate_project_score,
@@ -39,18 +43,6 @@ from bot.utils.project_data import (
     get_project_and_tokenomics,
     get_top_projects_by_capitalization_and_category,
 )
-from bot.utils.resources.bot_phrases.bot_phrase_handler import (
-    phrase_by_user,
-    phrase_by_language,
-)
-from bot.utils.resources.bot_phrases.bot_phrase_strings import (
-    calculations_choices,
-)
-from bot.utils.resources.exceptions.exceptions import ValueProcessingError
-from bot.utils.resources.files_worker.pdf_worker import (
-    generate_pdf,
-    create_pdf_file,
-)
 from bot.utils.resources.gpt.gpt import agent_handler
 from bot.utils.validations import (
     format_metric,
@@ -60,6 +52,7 @@ from bot.utils.validations import (
 )
 
 
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def create_basic_report(
     state: FSMContext,
     message: Message = None,
@@ -81,7 +74,7 @@ async def create_basic_report(
         project = project_info.get("project")
         basic_metrics = project_info.get("basic_metrics")
 
-        projects, tokenomics_data_list = await get_project_and_tokenomics(categories, user_coin_name, project.tier)
+        projects, tokenomics_data_list = await get_project_and_tokenomics(categories, project.tier)
         top_projects = get_top_projects_by_capitalization_and_category(tokenomics_data_list)
 
         for index, (project, tokenomics_data) in enumerate(top_projects, start=1):
@@ -103,19 +96,18 @@ async def create_basic_report(
                     else phrase_by_language("comparisons_error", language)
                 )
 
-                if project.coin_name in TICKERS:
-                    agents_info.append(
-                        [
-                            index,
-                            user_coin_name,
-                            project.coin_name,
-                            round(
-                                (float(calculation_result["expected_x"]) - 1.0) * 100,
-                                2,
-                            ),
-                            fair_price,
-                        ]
-                    )
+                agents_info.append(
+                    [
+                        index,
+                        user_coin_name,
+                        project.coin_name,
+                        round(
+                            (float(calculation_result["expected_x"]) - 1.0) * 100,
+                            2,
+                        ),
+                        fair_price,
+                    ]
+                )
 
         comparison_results = ""
         result_index = 1
@@ -166,9 +158,8 @@ async def create_basic_report(
         return f"{await phrase_by_user('error_not_valid_input_data', user_id)}\n{error_message}"
 
 
-@save_execute
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def create_pdf_report(
-    session: AsyncSession,
     state: FSMContext,
     message: Optional[Union[Message, str]] = None,
     user_id: Optional[int] = None,
@@ -197,12 +188,11 @@ async def create_pdf_report(
     try:
         result = await get_project_and_tokenomics(
             project_names=categories,
-            user_coin_name=coin_name,
             project_tier=new_project["tier"],
         )
 
         if not isinstance(result, tuple) or len(result) != 2:
-            raise ValueProcessingError("Unexpected result format from get_project_and_tokenomics.")
+            raise ValueProcessingError("Функция get_project_and_tokenomics вернула количество больше 2 элементов.")
 
         projects, tokenomics_data_list = result
         top_projects = get_top_projects_by_capitalization_and_category(tokenomics_data_list)
@@ -260,40 +250,39 @@ async def create_pdf_report(
 
         for index, coin_name, project_coin, expected_x, fair_price in row_data:
             if project_coin != coin_name:
-                if project_coin in TICKERS:
-                    try:
-                        # Проверка fair_price, чтобы убедиться, что это строка или число
-                        if not isinstance(fair_price, (str, int, float)):
-                            raise ValueProcessingError(f"Unexpected type for fair_price: {type(fair_price)}")
+                try:
+                    # Проверка fair_price, чтобы убедиться, что это строка или число
+                    if not isinstance(fair_price, (str, int, float)):
+                        raise ValueProcessingError(f"Unexpected type for fair_price: {type(fair_price)}")
 
-                        # Проверяем типы других переменных
-                        if not isinstance(index, int):
-                            raise ValueProcessingError(f"Unexpected type for index: {type(index)}")
-                        if not isinstance(coin_name, str):
-                            raise ValueProcessingError(f"Unexpected type for user_coin_name: {type(coin_name)}")
-                        if not isinstance(project_coin, str):
-                            raise ValueProcessingError(f"Unexpected type for project_coin_name: {type(project_coin)}")
+                    # Проверяем типы других переменных
+                    if not isinstance(index, int):
+                        raise ValueProcessingError(f"Unexpected type for index: {type(index)}")
+                    if not isinstance(coin_name, str):
+                        raise ValueProcessingError(f"Unexpected type for user_coin_name: {type(coin_name)}")
+                    if not isinstance(project_coin, str):
+                        raise ValueProcessingError(f"Unexpected type for project_coin_name: {type(project_coin)}")
 
-                        comparison_results += calculations_choices[language].format(
-                            index=index,
-                            user_coin_name=coin_name,
-                            project_coin_name=project_coin,
-                            growth=expected_x,
-                            fair_price=fair_price,
-                        )
-                        result_index += 1
+                    comparison_results += calculations_choices[language].format(
+                        index=index,
+                        user_coin_name=coin_name,
+                        project_coin_name=project_coin,
+                        growth=expected_x,
+                        fair_price=fair_price,
+                    )
+                    result_index += 1
 
-                    except ValueProcessingError as e:
-                        # Логируем и обрабатываем ошибку
-                        error_message = (
-                            f"Value processing error: {e}\n"
-                            f"index: {index}, type: {type(index)}\n"
-                            f"user_coin_name: {coin_name}, type: {type(coin_name)}\n"
-                            f"project_coin: {project_coin}, type: {type(project_coin)}\n"
-                            f"growth: {expected_x}, type: {type(expected_x)}\n"
-                            f"fair_price: {fair_price}, type: {type(fair_price)}"
-                        )
-                        raise ValueProcessingError(error_message)
+                except ValueProcessingError as e:
+                    # Логируем и обрабатываем ошибку
+                    error_message = (
+                        f"Value processing error: {e}\n"
+                        f"index: {index}, type: {type(index)}\n"
+                        f"user_coin_name: {coin_name}, type: {type(coin_name)}\n"
+                        f"project_coin: {project_coin}, type: {type(project_coin)}\n"
+                        f"growth: {expected_x}, type: {type(expected_x)}\n"
+                        f"fair_price: {fair_price}, type: {type(fair_price)}"
+                    )
+                    raise ValueProcessingError(error_message)
 
         all_data_string_for_funds_agent = ALL_DATA_STRING_FUNDS_AGENT.format(
             funds_profit_distribution=get_metric_value(funds_profit, "distribution")
@@ -381,6 +370,7 @@ async def create_pdf_report(
             project_rating_result = calculate_project_score(
                 investing_metrics.fundraise if investing_metrics and investing_metrics.fundraise else 0.0,
                 f"{tier_answer}",
+                investors_level,
                 investors_level_score,
                 social_metrics.twitter if social_metrics and social_metrics.twitter else 0,
                 social_metrics.twitterscore if social_metrics and social_metrics.twitterscore else 0.0,
@@ -433,6 +423,7 @@ async def create_pdf_report(
                 network_metrics,
                 tier_answer,
                 funds_answer,
+                investors_level,
                 tokemonic_answer,
                 categories,
                 coin_twitter,

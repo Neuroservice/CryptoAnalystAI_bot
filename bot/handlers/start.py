@@ -3,13 +3,13 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 
 from bot.database.models import User
+from bot.utils.common.sessions import session_local, redis_client
+from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
+from bot.database.db_operations import get_user_from_redis_or_db, get_or_create
 from bot.utils.keyboards.start_keyboards import (
     main_menu_keyboard,
     language_keyboard,
 )
-from bot.utils.resources.bot_phrases.bot_phrase_handler import phrase_by_user
-from bot.database.db_operations import get_user_from_redis_or_db, get_or_create
-from bot.utils.common.sessions import session_local, redis_client
 
 start_router = Router()
 

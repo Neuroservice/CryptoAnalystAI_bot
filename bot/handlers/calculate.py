@@ -4,6 +4,7 @@ from datetime import datetime
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, ReplyKeyboardRemove
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from bot.database.db_operations import (
     get_one,
@@ -28,7 +29,7 @@ from bot.database.models import (
     project_category_association,
     Category,
 )
-from bot.utils.common.bot_states import CalculateProject
+from bot.utils.common.bot_states import CalculateProject, UpdateOrCreateProject
 from bot.utils.common.consts import (
     TICKERS,
     MODEL_MAPPING,
@@ -42,11 +43,12 @@ from bot.utils.common.consts import (
     LIST_OF_TEXT_FOR_ANALYSIS_BLOCK,
     START_TITLE_FOR_GARBAGE_CATEGORIES,
     END_TITLE_FOR_GARBAGE_CATEGORIES,
+    LIST_OF_PROJECT_UPDATE_OR_CREATE,
 )
 from bot.utils.common.params import get_header_params
-from bot.utils.common.sessions import session_local
 from bot.utils.create_report import create_pdf_report, create_basic_report
 from bot.utils.keyboards.calculate_keyboards import analysis_type_keyboard
+from bot.utils.keyboards.create_or_update_keyboards import create_or_update_keyboard
 from bot.utils.metrics.metrics import process_metrics
 from bot.utils.project_data import (
     get_twitter_link_by_symbol,
@@ -66,9 +68,7 @@ from bot.utils.resources.exceptions.exceptions import (
     ValueProcessingError,
     ExceptionError,
 )
-from bot.utils.resources.files_worker.google_doc import (
-    load_document_for_garbage_list,
-)
+from bot.utils.resources.files_worker.google_doc import load_document_for_garbage_list
 from bot.utils.resources.gpt.gpt import agent_handler
 from bot.utils.validations import validate_user_input
 
@@ -115,21 +115,30 @@ async def analysis_type_chosen(message: types.Message, state: FSMContext):
     """
     Функция, для обработки выбранного пользователем блока аналитики.
     Делает проверку выбранного пользователем пункта меню,
-    и предлагает ввести тикер токена, выставляя соответствующее состояние ожидания ввода данных.
+    далее переводит на необходимый блок (аналитика или редактирование данных проекта)
     """
 
     analysis_type = message.text.lower()
 
     if analysis_type in LIST_OF_TEXT_FOR_REBALANCING_BLOCK:
+        await state.update_data(mode="create")
         await message.answer(await phrase_by_user("rebalancing_input_token", message.from_user.id))
         await state.set_state(CalculateProject.waiting_for_basic_data)
 
     elif analysis_type in LIST_OF_TEXT_FOR_ANALYSIS_BLOCK:
         await message.answer(await phrase_by_user("analysis_input_token", message.from_user.id))
         await state.set_state(CalculateProject.waiting_for_data)
+    elif analysis_type in LIST_OF_PROJECT_UPDATE_OR_CREATE:
+        await state.update_data(mode="update")
+        await message.answer(
+            await phrase_by_user("update_or_create_choose", message.from_user.id),
+            reply_markup=await create_or_update_keyboard(message.from_user.id),
+        )
+        await state.set_state(UpdateOrCreateProject.update_or_create_state)
 
 
 @calculate_router.message(CalculateProject.waiting_for_basic_data)
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def receive_basic_data(message: types.Message, state: FSMContext):
     """
     Функция, для обработки выбранного пользователем пункта 'Блок ребалансировки портфеля'.
@@ -139,15 +148,15 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     """
 
     user_coin_name = message.text.upper().replace(" ", "")
-    fundraise = None
     user_data = await get_user_from_redis_or_db(message.from_user.id)
     garbage_categories = load_document_for_garbage_list(
         START_TITLE_FOR_GARBAGE_CATEGORIES, END_TITLE_FOR_GARBAGE_CATEGORIES
     )
     language = user_data.get("language", "ENG")
 
-    if await validate_user_input(user_coin_name, message, state):
-        return
+    validate_answer = await validate_user_input(user_coin_name, message, state)
+    if validate_answer:
+        return message.answer(validate_answer)
     else:
         await message.answer(await phrase_by_user("wait_for_calculations", message.from_user.id))
 
@@ -165,20 +174,25 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
     if description:
         coin_description += description
 
+    print("categories: ", categories)
+
     if not categories or len(categories) == 0:
-        await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id))
+        return await message.answer(
+            await phrase_by_user("error_project_inappropriate_category", message.from_user.id, token=user_coin_name)
+        )
 
     # Получаем или создаём категории в БД
     category_instances = []
     for category_name in categories:
         if category_name not in garbage_categories:
             category_instance, _ = await get_or_create(Category, category_name=category_name)
+            print("category_instance: ", category_instance.category_name)
             category_instances.append(category_instance)
 
     if len(category_instances) == 0:
         return await message.answer(await phrase_by_user("category_in_garbage_list", message.from_user.id))
 
-    new_project, _ = await get_or_create(Project, coin_name=lower_name)
+    new_project, _ = await get_or_create(Project, coin_name=user_coin_name)
 
     # Добавляем связи между проектом и категориями
     for category in category_instances:
@@ -324,7 +338,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                     project_id=new_project.id,
                     defaults={
                         "tvl": last_tvl if last_tvl else 0,
-                        "tvl_fdv": last_tvl / (price * total_supply) if last_tvl and total_supply and price else 0,
                     },
                 )
 
@@ -334,7 +347,6 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
                 ManipulativeMetrics,
                 project_id=new_project.id,
                 defaults={
-                    "fdv_fundraise": (price * total_supply) / fundraise if fundraise else None,
                     "top_100_wallet": top_100_wallets,
                 },
             )
@@ -390,6 +402,7 @@ async def receive_basic_data(message: types.Message, state: FSMContext):
 
 
 @calculate_router.message(CalculateProject.waiting_for_data)
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(3))
 async def receive_data(message: types.Message, state: FSMContext):
     """
     Функция, для обработки выбранного пользователем пункта 'Блок анализа и оценки проектов'.
@@ -400,8 +413,6 @@ async def receive_data(message: types.Message, state: FSMContext):
 
     user_coin_name = message.text.upper().replace(" ", "")
     investors = None
-    price = None
-    total_supply = None
     fundraise = None
     calculation_record = None
     user_data = await get_user_from_redis_or_db(message.from_user.id)
@@ -410,11 +421,10 @@ async def receive_data(message: types.Message, state: FSMContext):
     )
     language = user_data.get("language", "ENG")
 
-    user_input = await validate_user_input(user_coin_name, message, state)
-    if user_input:
-        return await message.answer(user_input)
+    validate_answer = await validate_user_input(user_coin_name, message, state)
+    if validate_answer:
+        return message.answer(validate_answer)
     else:
-        # Сообщаем пользователю, что будут производиться расчеты
         await message.answer(await phrase_by_user("wait_for_calculations", message.from_user.id))
 
     (
@@ -434,7 +444,9 @@ async def receive_data(message: types.Message, state: FSMContext):
         return await message.answer(await phrase_by_user("not_in_top_cmc", message.from_user.id, language=language))
 
     if not categories or len(categories) == 0:
-        return await message.answer(await phrase_by_user("error_project_inappropriate_category", message.from_user.id))
+        return await message.answer(
+            await phrase_by_user("error_project_inappropriate_category", message.from_user.id, token=user_coin_name)
+        )
 
     # Получаем или создаём категории в БД
     category_instances = []
@@ -447,7 +459,7 @@ async def receive_data(message: types.Message, state: FSMContext):
         return await message.answer(await phrase_by_user("category_in_garbage_list", message.from_user.id))
 
     # Получаем проект (если его ещё нет)
-    project_instance, _ = await get_or_create(Project, coin_name=lower_name)
+    project_instance, _ = await get_or_create(Project, coin_name=user_coin_name)
 
     # Добавляем связи между проектом и категориями
     for category in category_instances:
@@ -586,7 +598,6 @@ async def receive_data(message: types.Message, state: FSMContext):
                 project_id=base_project.id,
                 defaults={
                     "tvl": last_tvl if last_tvl else 0,
-                    "tvl_fdv": last_tvl / (price * total_supply) if last_tvl and total_supply and price else 0,
                 },
             )
 
@@ -596,7 +607,6 @@ async def receive_data(message: types.Message, state: FSMContext):
             ManipulativeMetrics,
             project_id=base_project.id,
             defaults={
-                "fdv_fundraise": (price * total_supply) / fundraise if fundraise else None,
                 "top_100_wallet": top_100_wallets,
             },
         )
