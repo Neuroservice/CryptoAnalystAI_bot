@@ -31,6 +31,18 @@ logger = logging.getLogger(__name__)
 os.environ["PGPASSWORD"] = DB_PASSWORD
 
 
+async def backup_database():
+    """Создаёт бэкап базы данных каждый день."""
+    while True:
+        try:
+            await create_backup()
+            logging.info(f"Бэкап создан")
+        except Exception as e:
+            logging.error(f"Ошибка при создании бэкапа: {e}")
+
+        await asyncio.sleep(60 * 60 * 24)
+
+
 async def create_backup():
     """
     Главная функция создания бэкапа базы данных.
