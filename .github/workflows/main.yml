@@ -50,7 +50,7 @@ jobs:
             sudo docker-compose -f docker-compose.yml pull cryptoanalyst_bot_test
             
             sudo docker-compose -f docker-compose.yml run --rm \
-              -e ALEMBIC_URL=${{ secrets.ALEMBIC_URL }} \
+              -e ALEMBIC_URL=${{ secrets.ALEMBIC_URL_TEST }} \
               cryptoanalyst_bot_test alembic upgrade head
             
             sudo docker-compose -f docker-compose.yml up --build -d --force-recreate --no-deps cryptoanalyst_bot_test
