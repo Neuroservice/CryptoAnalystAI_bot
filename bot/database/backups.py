@@ -1,13 +1,14 @@
-import asyncio
 import os
+import pytz
+import boto3
+import asyncio
 import logging
 import subprocess
-import boto3
-import pytz
 
 from datetime import datetime, timedelta
 from botocore.exceptions import NoCredentialsError
 
+from bot.utils.common.consts import LOCAL_BACKUP_DIR, BUCKET, PREFIX
 from bot.utils.common.config import (
     DB_PASSWORD,
     DB_USER,
@@ -19,7 +20,6 @@ from bot.utils.common.config import (
     S3_REGION,
     S3_URL,
 )
-from bot.utils.common.consts import LOCAL_BACKUP_DIR, BUCKET, PREFIX
 from bot.utils.resources.exceptions.exceptions import (
     ExceptionError,
     ValueProcessingError,

@@ -1,14 +1,14 @@
 import logging
-from typing import Optional, Type, Any, Tuple, Dict, Union, Callable
 
+from sqlalchemy.future import select
 from sqlalchemy import Table, insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from typing import Optional, Type, Any, Tuple, Dict, Union, Callable
 
 from bot.database.models import User, Project
-from bot.utils.common.decorators import save_execute
 from bot.utils.common.sessions import redis_client
+from bot.utils.common.decorators import save_execute
 from bot.utils.resources.exceptions.exceptions import (
     DatabaseError,
     DatabaseCreationError,
@@ -103,9 +103,7 @@ async def create(session: AsyncSession, model: Type[Any], **fields: Any) -> Any:
         raise DatabaseCreationError(str(e))
 
 
-@save_execute
 async def get_or_create(
-    session: AsyncSession,
     model: Type[Any],
     defaults: Optional[dict] = None,
     **filters: Any,

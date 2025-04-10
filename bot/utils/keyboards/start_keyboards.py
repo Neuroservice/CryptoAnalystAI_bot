@@ -1,8 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-from bot.utils.resources.buttons.button_strings_handler import (
-    button_text_by_user,
-)
+from bot.utils.resources.buttons.button_strings_handler import button_text_by_user
 
 
 async def main_menu_keyboard(user_id: int):

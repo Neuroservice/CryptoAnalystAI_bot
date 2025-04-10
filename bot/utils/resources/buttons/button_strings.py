@@ -7,6 +7,9 @@ button_strings_dict = {
         "rebalancing_block": "Блок ребалансировки портфеля",
         "analysis_block": "Блок анализа и оценки проектов",
         "listing_price_block": "Блок анализа цены на листинге (бета)",
+        "update_or_create_project": "Добавить или редактировать проект",
+        "add_project": "Добавить новый проект",
+        "update_project": "Обновить существующий проект",
     },
     "ENG": {
         "help_button": "Help",
@@ -16,5 +19,8 @@ button_strings_dict = {
         "rebalancing_block": "Block of portfolio rebalancing",
         "analysis_block": "Block of projects analysis and evaluation",
         "listing_price_block": "Block of price analysis on the listing (beta)",
+        "update_or_create_project": "Add or edit a project",
+        "add_project": "Add a new project",
+        "update_project": "Update an existing project",
     },
 }
