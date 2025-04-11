@@ -107,7 +107,7 @@ async def update_agent_answers():
 
     current_time = datetime.datetime.now(datetime.timezone.utc)
     current_time_naive = current_time.replace(tzinfo=None)
-    one_days_ago = (current_time - datetime.timedelta(days=1)).replace(tzinfo=None)
+    last_edit = (current_time - datetime.timedelta(hours=11)).replace(tzinfo=None)
     current_date = current_time.strftime("%d.%m.%Y")
 
     # Начальные переменные
@@ -115,7 +115,7 @@ async def update_agent_answers():
 
     logging.info("=== Начало update_agent_answers() ===")
     logging.info(f"Текущая дата/время: {current_time.isoformat()}")
-    logging.info(f"Будем обновлять ответы, у которых updated_at <= {one_days_ago.isoformat()}")
+    logging.info(f"Будем обновлять ответы, у которых updated_at <= {last_edit.isoformat()}")
 
     # Загружаем мусорные категории
     logging.info("Загружаем список категорий (garbage_categories)...")
@@ -128,7 +128,7 @@ async def update_agent_answers():
     logging.info("Получаем все устаревшие AgentAnswer (outdated_answers)...")
     outdated_answers = await get_all(
         AgentAnswer,
-        updated_at=lambda col: col <= one_days_ago
+        updated_at=lambda col: col <= last_edit
     )
     logging.info(f"Найдено {len(outdated_answers)} устаревших ответов для обновления")
 
@@ -278,8 +278,8 @@ async def update_agent_answers():
             logging.info(
                 f"[{project.coin_name}] funds_agent_answer: '{funds_agent_answer}' (тип: {type(funds_agent_answer)}, длина: {len(str(funds_agent_answer)) if funds_agent_answer else 0})")
 
-            if not funds_agent_answer or not str(funds_agent_answer).strip() or str(funds_agent_answer).strip() == "0":
-                logging.warning(f"[{project.coin_name}] Пустой или нулевой ответ от funds_agent")
+            if not funds_agent_answer or not str(funds_agent_answer).strip() or str(funds_agent_answer).strip() in ["0", "0%"]:
+                logging.warning(f"[{project.coin_name}] Пустой или нулевой ответ от funds_agent --- {funds_agent_answer}")
                 funds_agent_answer = "0%"
         except Exception as e:
             logging.error(f"[{project.coin_name}] Ошибка получения funds_agent_answer: {e}")
