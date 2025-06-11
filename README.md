@@ -1,7 +1,5 @@
 # 🤖 CryptoAnalystAI Bot
 
-## 🇬🇧 English
-
 ### 1. Project Overview
 CryptoAnalystAI is an advanced Telegram bot that provides insightful crypto analytics powered by GPT-4o-mini and LangChain. Designed for traders, analysts, and enthusiasts, it enables fast research and dialogue on any project.
 
