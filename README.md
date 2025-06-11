@@ -22,35 +22,39 @@ CryptoAnalystAI combines automation with natural interaction. It's accessible, i
 
 ### 5. Required Configuration (.env)
 ```env
-GPT_SECRET_KEY_FASOLKAAI=your_OpenAI_secret_key
-MODEL_NAME=primary_model_name
-MODEL_NAME_MEM=memory_model_name
+API_TOKEN=your_telegram_bot_token_here
+COINMARKETCAP_APIKEY=your_coinmarketcap_api_key_here
+GPT_SECRET_KEY_FASOLKAAI='your_openai_secret_key_here'
+CRYPTORANK_API_KEY=your_cryptorank_api_key_here
 
-TG_TOKEN=telegram_bot_token
-CHANNEL_ID=telegram_channel_id
-CHANNEL_LINK=telegram_channel_link
+DB_ENGINE=postgresql+asyncpg
+DB_HOST=your_database_host_here
+DB_PORT=your_database_port_here
+DB_NAME=your_database_name_here
+DB_USER=your_database_user_here
+DB_PASSWORD=your_database_password_here
+ENGINE_URL=postgresql+asyncpg://your_database_user:your_database_password@your_database_host:your_database_port/your_database_name
 
-SERVICE_ACCOUNT_FILE=path_to_Google_service_account_file
-SPREADSHEET_ID=Google_spreadsheet_id
+PGADMIN_DEFAULT_EMAIL=your_pgadmin_email_here
+PGADMIN_DEFAULT_PASSWORD=your_pgadmin_password_here
 
-GRASPIL_API_KEY=Graspil_API_key
-TARGET_START_ID_LIMIT=target_start_id_limit
-TARGET_START_ID_START=target_start_initial_id
-TARGET_START_ID_BLOCK=target_id_block
+DATABASE_URL=postgresql://your_database_user:your_database_password@your_database_host:your_database_port/your_database_name
 
-GOOGLE_API_KEY=Google_API_key
-SEARCH_ENGINE_GLOBAL_ID=Google_search_engine_id
+REDIS_HOST=your_redis_host_here
+REDIS_PORT=your_redis_port_here
 
-LANGCHAIN_TRACING_V2=True_or_False
-LANGCHAIN_ENDPOINT=Langchain_endpoint
-LANGCHAIN_API_KEY=Langchain_API_key
-LANGCHAIN_PROJECT=Langchain_project_name
+S3_URL=https://s3.your-provider.com
+S3_AWS_STORAGE_BUCKET_NAME=your_bucket_name
+S3_REGION=your_s3_region
+S3_ACCESS_KEY=your_s3_access_key
+S3_SECRET_KEY=your_s3_secret_key
+S3_PUBLIC_PATH_STYLE_URL=https://s3.your-provider.com/your_bucket/
+S3_PUBLIC_VIRTUAL_HOSTED_STYLE_URL=https://your_bucket.s3.your-provider.com
 
-DB_HOST=database_host
-DB_PORT=database_port
-DB_NAME=database_name
-DB_USER=database_user
-DB_PASSWORD=database_user_password
+LANGCHAIN_TRACING_V2=true_or_false
+LANGCHAIN_ENDPOINT="your_langchain_endpoint_here"
+LANGCHAIN_API_KEY="your_langchain_api_key_here"
+LANGCHAIN_PROJECT="your_langchain_project_name_here"
 ```
 
 ### 6. Local Installation
