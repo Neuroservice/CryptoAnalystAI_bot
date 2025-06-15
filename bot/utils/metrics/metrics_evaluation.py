@@ -113,7 +113,6 @@ def analyze_project_metrics(
     """
 
     tvl_score = 0
-    top_100_score = 0
     growth_and_fall_score = 0
     funds_score = 0
 
@@ -184,16 +183,13 @@ def analyze_project_metrics(
 
     # Логика расчета топ-100 кошельков
     if top_100_percentage != "N/A":
-        top_100_score = max(0, int(top_100_percentage) - 70)
         detailed_report += (
             f"\n[Top 100 Wallets Calculation]:\n"
             f"  Процент монет на топ-100 кошельках: {top_100_percentage}%\n"
-            f"  Баллы рассчитываются как: max(0, {top_100_percentage} - 70)\n"
-            f"  Здесь max() возвращает большее из двух значений: либо 0, либо ({top_100_percentage} - 70).\n"
-            f"  Итоговые баллы: {top_100_score}\n"
+            f"  Итоговые баллы: {top_100_percentage}\n"
         )
 
-        top_100_result = f"Проект {'потерял' if top_100_score == 0 else 'получил'} {top_100_score} баллов по показателю процента монет на топ 100 кошельков.\n"
+        top_100_result = f"Проект {'потерял' if top_100_percentage == 0 else 'получил'} {top_100_percentage} баллов по показателю процента монет на топ 100 кошельков.\n"
     else:
         top_100_result = "Данные для расчета процента монет на топ 100 кошельков отсутствуют. 0 баллов.\n"
 
@@ -214,7 +210,7 @@ def analyze_project_metrics(
     report = funds_result + growth_and_fall_result + top_100_result + tvl_result
     detailed_report += report
 
-    total_score = tvl_score + top_100_score + growth_and_fall_score + funds_score
+    total_score = tvl_score + top_100_percentage + growth_and_fall_score + funds_score
     detailed_report += f"\n[Total Score]: {total_score}\n"
 
     return detailed_report, total_score, funds_score, growth_and_fall_score
