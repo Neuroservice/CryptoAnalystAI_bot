@@ -108,8 +108,6 @@ def extract_red_green_flags(text: str, language: str) -> str:
         # Поиск позитивных характеристик
         positive_match = re.search(positive_pattern, text, re.DOTALL)
 
-        print(positive_pattern, negative_pattern, positive_match)
-
         if positive_match:
             green_flags = positive_match.group(1).strip()
             green_flags = re.sub(r'^Положительные характеристики:\s*', '', green_flags)

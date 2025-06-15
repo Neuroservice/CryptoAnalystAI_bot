@@ -110,7 +110,7 @@ PROJECT_DESCRIPTION_PATTERN = r"Описание проекта:\s*(.+?)(?=\n\s*
 POSITIVE_PATTERN_RU = r"(Положительные характеристики:[\s\S]*?)(?=Отрицательные характеристики|Данные для анализа|$)"
 NEGATIVE_PATTERN_RU = r"(Отрицательные характеристики:[\s\S]*?)(?=Данные для анализа|$)"
 POSITIVE_PATTERN_EN = r"(Positive characteristics:[\s\S]*?)(?=Negative characteristics|Analysis data|$)"
-NEGATIVE_PATTERN_EN = r"(Negative characteristics:[\s\S]*?)(?=Analysis data|$)"
+NEGATIVE_PATTERN_EN = r"(Negative characteristics:[\s\S]*?)(?=Data to analyze|$)"
 TOKENOMICS_PATTERN_RU = r"Данные для анализа токеномики:\s*"
 TOKENOMICS_PATTERN_ENG = r"Data for tokenomic analysis:\s*"
 CALCULATIONS_PATTERN_RU = r"(Результаты расчета для.*?)$"
